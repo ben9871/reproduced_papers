@@ -2,9 +2,8 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torchvision.datasets import MNIST
 from torchvision import transforms
-
+from torchvision.datasets import MNIST
 
 batch_size = 100
 num_epochs = 100
@@ -27,9 +26,10 @@ class LinearClassifier(nn.Module):
         self.linear = nn.Linear(input_dim, num_classes)
 
     def forward(self, x):
-        x = self.flatten(x)       # [B, 1, 28, 28] -> [B, 784]
-        x = self.norm(x)          # Normalisation
+        x = self.flatten(x)  # [B, 1, 28, 28] -> [B, 784]
+        x = self.norm(x)  # Normalisation
         return self.linear(x)
+
 
 model = LinearClassifier(28 * 28, 10).to(device)
 criterion = nn.CrossEntropyLoss()
@@ -50,7 +50,7 @@ for epoch in range(num_epochs):
 
         total_loss += loss.item()
 
-    print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss:.4f}")
+    print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {total_loss:.4f}")
 
 model.eval()
 correct = 0
@@ -64,4 +64,3 @@ with torch.no_grad():
         correct += (predicted == y_batch).sum().item()
 
 print(f"Test Accuracy (sans PCA) : {100 * correct / total:.2f}%")
-

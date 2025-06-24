@@ -2,11 +2,11 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 from torch.utils.data import DataLoader
-from torchvision.datasets import MNIST
 from torchvision import transforms
+from torchvision.datasets import MNIST
 
 batch_size = 100
-k = 20  
+k = 20
 num_epochs = 20
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
@@ -17,6 +17,7 @@ test_dataset = MNIST(root="./data", train=False, download=True, transform=transf
 train_loader = DataLoader(train_dataset, batch_size=batch_size, shuffle=False)
 test_loader = DataLoader(test_dataset, batch_size=batch_size, shuffle=False)
 
+
 def extract_flattened_data(loader):
     all_data, all_labels = [], []
     for x, y in loader:
@@ -24,6 +25,7 @@ def extract_flattened_data(loader):
         all_data.append(x)
         all_labels.append(y)
     return torch.cat(all_data), torch.cat(all_labels)
+
 
 X_train, y_train = extract_flattened_data(train_loader)
 X_test, y_test = extract_flattened_data(test_loader)
@@ -47,6 +49,7 @@ class LinearClassifier(nn.Module):
 
     def forward(self, x):
         return self.linear(x)
+
 
 model = LinearClassifier(k, 10).to(device)
 criterion = nn.CrossEntropyLoss()
@@ -74,7 +77,7 @@ for epoch in range(num_epochs):
 
         total_loss += loss.item()
 
-    print(f"Epoch {epoch+1}/{num_epochs}, Loss: {total_loss:.4f}")
+    print(f"Epoch {epoch + 1}/{num_epochs}, Loss: {total_loss:.4f}")
 
 # --- Test ---
 model.eval()
@@ -89,4 +92,3 @@ with torch.no_grad():
         correct += (predicted == y_batch).sum().item()
 
 print(f"Test Accuracy: {100 * correct / total:.2f}%")
-
