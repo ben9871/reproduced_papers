@@ -9,10 +9,10 @@ batch_size = 64
 epochs = 50
 learning_rate = 0.01
 
-# Prétraitement des données
+# data preprocessing
 transform = transforms.Compose([
     transforms.ToTensor(),
-    transforms.Lambda(lambda x: x.view(-1))  
+    transforms.Lambda(lambda x: x.view(-1))])  # Flatten the images
 
 train_dataset = datasets.MNIST(root='./data', train=True, download=True, transform=transform)
 test_dataset = datasets.MNIST(root='./data', train=False, transform=transform)
@@ -27,7 +27,6 @@ class SimpleMNISTModel(nn.Module):
         self.bn = nn.BatchNorm1d(784)
         self.dropout = nn.Dropout(0.2)
         self.fc = nn.Linear(784, 10)
-        
 
     def forward(self, x):
         x = self.bn(x)
