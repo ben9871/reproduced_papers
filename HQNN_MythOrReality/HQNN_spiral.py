@@ -53,8 +53,105 @@ def sort_architecture(nb_features, out_features):
 
     # Sort by parameter count (smallest to largest)
     arch_with_params.sort(key=lambda x: x[0])
+    for param_count, mode, nb_photons, no_bunching in arch_with_params:
+        yield param_count, mode, nb_photons, no_bunching
 
-    return arch_with_params
+
+def evaluate_architecture(
+    nb_features,
+    nb_classes,
+    nb_samples,
+    modes,
+    photons_count,
+    param_count,
+    no_bunching,
+    repetitions,
+    lr,
+    bs,
+    device,
+):
+    """Evaluate a single architecture across multiple repetitions."""
+    all_accs = []
+
+    for _iter in range(repetitions):
+        ### load data ###
+        x_train, x_val, y_train, y_val, input_size, output_features = (
+            load_spiral_dataset(
+                nb_features=nb_features,
+                samples=nb_samples,
+                nb_classes=nb_classes,
+            )
+        )
+        train_dataset = TensorDataset(x_train, y_train)
+        train_loader = DataLoader(train_dataset, batch_size=bs, shuffle=True)
+        val_dataset = TensorDataset(x_val, y_val)
+        val_loader = DataLoader(val_dataset, batch_size=bs)
+
+        # define input state
+        input_state = [0] * modes
+        for k in range(photons_count):
+            input_state[2 * k] = 1
+        print(f"\n - input state: {input_state}")
+        # circuit
+        circuit = create_quantum_circuit(modes, size=input_size)
+        # build QuantumLayer from circuit
+        boson_layer = QuantumLayer(
+            input_size=nb_features,
+            output_size=None,  # but we do not use it
+            circuit=circuit,
+            trainable_parameters=[
+                p.name for p in circuit.get_parameters() if not p.name.startswith("px")
+            ],
+            input_parameters=["px"],
+            input_state=input_state,
+            no_bunching=no_bunching,
+            output_mapping_strategy=OutputMappingStrategy.NONE,
+            device=device,
+        )
+        # build classification layer and initialize the biases to 0
+        boson_output_size = boson_layer.output_size
+        classification_layer = nn.Linear(
+            in_features=boson_output_size,
+            out_features=output_features,
+            bias=True,
+        )
+        nn.init.constant_(classification_layer.bias, 0.0)
+        # learned ScaleLayer for the input features
+        input_layer = ScaleLayer(input_size, scale_type="learned")
+
+        # model
+        q_model = nn.Sequential(input_layer, boson_layer, classification_layer).to(
+            device
+        )
+
+        ### TRAINING ###
+        (
+            q_train_losses,
+            q_val_losses,
+            best_q_acc,
+            q_train_accs,
+            q_val_accs,
+        ) = train_model(
+            q_model,
+            train_loader,
+            val_loader,
+            num_epochs=25,
+            lr=lr,
+            device=device,
+        )
+        print(f" -  best ACC found = {best_q_acc}")
+        all_accs.append(best_q_acc)
+
+    mean_iter = np.mean(all_accs)
+    std_iter = np.std(all_accs)
+    dict_curves = {
+        "train ACC": q_train_accs,
+        "val ACC": q_val_accs,
+        "train loss": q_train_losses,
+        "val loss": q_val_losses,
+    }
+
+    return mean_iter, std_iter, q_model, input_state, dict_curves
 
 
 def main():
@@ -74,135 +171,57 @@ def main():
 
     for nb_features in features_to_try:
         print(f"\n ---- nb_features: {nb_features} ----")
-        above_thresh = False
+        results = None
 
-        print("Ordering the models")
-        arch_with_params = sort_architecture(nb_features, nb_classes)
-        print("Models ordered")
-
-        for _i, (param_count, modes, photons_count, no_bunching) in enumerate(
-            arch_with_params
+        for param_count, modes, photons_count, no_bunching in sort_architecture(
+            nb_features, nb_classes
         ):
-            if not above_thresh:
-                all_accs = []
-                for _iter in range(reproduction):
-                    ### load data ###
-                    x_train, x_val, y_train, y_val, input_size, output_features = (
-                        load_spiral_dataset(
-                            nb_features=nb_features,
-                            samples=nb_samples,
-                            nb_classes=nb_classes,
-                        )
-                    )
-                    train_dataset = TensorDataset(x_train, y_train)
-                    train_loader = DataLoader(
-                        train_dataset, batch_size=bs, shuffle=True
-                    )
-                    val_dataset = TensorDataset(x_val, y_val)
-                    val_loader = DataLoader(val_dataset, batch_size=bs)
-
-                    print(
-                        f"-> moving on to modes {modes}, {photons_count} ({param_count}) parameters"
-                    )
-
-                    # define input state
-                    input_state = [0] * modes
-                    for k in range(photons_count):
-                        input_state[2 * k] = 1
-                    print(f"\n - input state: {input_state}")
-                    # circuit
-                    circuit = create_quantum_circuit(modes, size=input_size)
-                    # build QuantumLayer from circuit
-                    boson_layer = QuantumLayer(
-                        input_size=nb_features,
-                        output_size=None,  # but we do not use it
-                        circuit=circuit,
-                        trainable_parameters=[
-                            p.name
-                            for p in circuit.get_parameters()
-                            if not p.name.startswith("px")
-                        ],
-                        input_parameters=["px"],
-                        input_state=input_state,
-                        no_bunching=no_bunching,
-                        output_mapping_strategy=OutputMappingStrategy.NONE,
-                        device=device,
-                    )
-                    # build classification layer and initialize the biases to 0
-                    boson_output_size = boson_layer.output_size
-                    classification_layer = nn.Linear(
-                        in_features=boson_output_size,
-                        out_features=output_features,
-                        bias=True,
-                    )
-                    nn.init.constant_(classification_layer.bias, 0.0)
-                    # learned ScaleLayer for the input features
-                    input_layer = ScaleLayer(input_size, scale_type="learned")
-
-                    # model
-                    q_model = nn.Sequential(
-                        input_layer, boson_layer, classification_layer
-                    ).to(device)
-
-                    ### TRAINING ###
-                    (
-                        q_train_losses,
-                        q_val_losses,
-                        best_q_acc,
-                        q_train_accs,
-                        q_val_accs,
-                    ) = train_model(
-                        q_model,
-                        train_loader,
-                        val_loader,
-                        num_epochs=25,
-                        lr=lr,
-                        device=device,
-                    )
-                    print(f" -  best ACC found = {best_q_acc}")
-                    all_accs.append(best_q_acc)
-
-                mean_iter = np.mean(all_accs)
-                std_iter = np.std(all_accs)
-                if mean_iter > accuracy_threshold:
-                    print(
-                        f"Convergence obtained for this dataset using {modes} modes and {photons_count} photons."
-                    )
-                    above_thresh = True
-
-                    dict = {
-                        "dataset": "spiral",
-                        "lr": lr,
-                        "bs": bs,
-                        "nb_samples": nb_samples,
-                        "nb_features": nb_features,
-                        "nb_classes": nb_classes,
-                        "modes": modes,
-                        "nb_photons": photons_count,
-                        "no_bunching": no_bunching,
-                        "input_state": input_state,
-                        "binning": "linear",
-                        "embedding": "learned",
-                        "init": "none",
-                        "BEST q ACC": mean_iter,
-                        "BEST q ACC std": std_iter,
-                        "q parameters": count_parameters(q_model),
-                        "q_curves": {
-                            "train ACC": q_train_accs,
-                            "val ACC": q_val_accs,
-                            "train loss": q_train_losses,
-                            "val loss": q_val_losses,
-                        },
-                    }
-
-                    save_experiment_results(
-                        dict, f"MinMax_qNN_bs{bs}-lr{lr}-samples{nb_samples}.json"
-                    )
-                else:
-                    print(f"\n ----- No satisfying results found on {modes} modes")
-                    # no update of the json dictionary
-            else:
+            mean_iter, std_iter, final_model, input_state, curves = (
+                evaluate_architecture(
+                    nb_features,
+                    nb_classes,
+                    nb_samples,
+                    modes,
+                    photons_count,
+                    param_count,
+                    no_bunching,
+                    reproduction,
+                    lr,
+                    bs,
+                    device,
+                )
+            )
+            results = {
+                "dataset": "spiral",
+                "lr": lr,
+                "bs": bs,
+                "nb_samples": nb_samples,
+                "nb_features": nb_features,
+                "nb_classes": nb_classes,
+                "modes": modes,
+                "nb_photons": photons_count,
+                "no_bunching": no_bunching,
+                "input_state": input_state,
+                "binning": "linear",
+                "embedding": "learned",
+                "init": "none",
+                "BEST q ACC": mean_iter,
+                "BEST q ACC std": std_iter,
+                "q parameters": count_parameters(final_model),
+                "q curves": curves,
+            }
+            if mean_iter >= accuracy_threshold:
+                print(
+                    f"\nThreshold achieved: {mean_iter:.2f} ± {std_iter:.2f} using {param_count} parameters"
+                )
                 break
+            else:
+                print(
+                    f"{mean_iter:.2f} < {accuracy_threshold}, moving to next architecture"
+                )
+
+        # save experiments even with latest result
+        save_experiment_results(results, f"HQNN_MM_bs{bs}_lr{lr}.json")
 
 
 if __name__ == "__main__":

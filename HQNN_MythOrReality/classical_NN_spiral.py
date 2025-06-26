@@ -110,101 +110,118 @@ def generate_architectures():
     return architectures
 
 
-arch = generate_architectures()
-print(len(arch))
+def evaluate_architecture(
+    nb_features, hidden_dims, nb_classes, nb_samples, repetitions, lr, bs
+):
+    """Evaluate a single architecture across multiple repetitions."""
+    all_accs = []
+
+    for _iter in range(repetitions):
+        # Create model and data
+        x_train, x_val, y_train, y_val, input_size, output_features = (
+            load_spiral_dataset(
+                nb_features=nb_features,
+                samples=nb_samples,
+                nb_classes=nb_classes,
+            )
+        )
+
+        train_dataset = TensorDataset(x_train, y_train)
+        train_loader = DataLoader(train_dataset, batch_size=bs, shuffle=True)
+        val_dataset = TensorDataset(x_val, y_val)
+        val_loader = DataLoader(val_dataset, batch_size=bs)
+
+        model = MLP(nb_features, hidden_dims, output_features)
+        print(f"This model has {count_parameters(model)} trainable parameters")
+
+        (cl_train_losses, cl_val_losses, best_cl_acc, cl_train_accs, cl_val_accs) = (
+            train_model(model, train_loader, val_loader, num_epochs=25, lr=lr)
+        )
+
+        all_accs.append(best_cl_acc)
+        print(f"Best accuracy = {best_cl_acc}")
+
+    mean_acc = np.mean(all_accs)
+    std_acc = np.std(all_accs)
+
+    return mean_acc, std_acc, model
+
+
+# Early stopping on the architectures with a generator
+def architecture_search_generator(nb_features, architectures, nb_classes):
+    """Generator that yields architectures in order of parameter count."""
+    arch_with_params = []
+    for num_layers, hidden_dims in architectures:
+        temp_model = MLP(nb_features, hidden_dims, nb_classes)
+        param_count = temp_model.count_parameters()
+        arch_with_params.append((param_count, num_layers, hidden_dims))
+
+    # Sort and yield in order
+    arch_with_params.sort(key=lambda x: x[0])
+    for param_count, num_layers, hidden_dims in arch_with_params:
+        yield param_count, num_layers, hidden_dims
 
 
 def main():
-    # dataset
+    # Dataset parameters
     nb_classes = 3
     nb_samples = 1875
     features_to_try = [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110]
-    # experiment
+
+    # Experiment parameters
     acc_threshold = 90
     repetitions = 5
-    # training
+
+    # Training parameters
     lr = 0.001
     bs = 64
+
+    architectures = generate_architectures()
 
     for nb_features in features_to_try:
         print(f"\n ---> Experimenting using {nb_features} features")
 
-        above_acc_threshold = False
-        architectures = generate_architectures_from_paper()
-        # print(architectures)
-        arch_with_params = []
-        for num_layers, hidden_dims in architectures:
-            temp_model = MLP(nb_features, hidden_dims, nb_classes)
-            param_count = temp_model.count_parameters()
-            arch_with_params.append((param_count, num_layers, hidden_dims))
+        result = None
+        for param_count, num_layers, hidden_dims in architecture_search_generator(
+            nb_features, architectures, nb_classes
+        ):
+            print(
+                f"Testing architecture: {num_layers} layers, {hidden_dims} hidden dims, {param_count} params"
+            )
 
-        # Sort by parameter count (smallest to largest)
-        arch_with_params.sort(key=lambda x: x[0])
+            mean_acc, std_acc, final_model = evaluate_architecture(
+                nb_features, hidden_dims, nb_classes, nb_samples, repetitions, lr, bs
+            )
 
-        for _i, (_param_count, _num_layers, hidden_dims) in enumerate(arch_with_params):
-            if not above_acc_threshold:
-                all_accs = []
-                for _iter in range(repetitions):
-                    # Create model
-                    x_train, x_val, y_train, y_val, input_size, output_features = (
-                        load_spiral_dataset(
-                            nb_features=nb_features,
-                            samples=nb_samples,
-                            nb_classes=nb_classes,
-                        )
-                    )
-                    train_dataset = TensorDataset(x_train, y_train)
-                    train_loader = DataLoader(
-                        train_dataset, batch_size=bs, shuffle=True
-                    )
-                    val_dataset = TensorDataset(x_val, y_val)
-                    val_loader = DataLoader(val_dataset, batch_size=bs)
+            result = {
+                "mean_acc": mean_acc,
+                "std_acc": std_acc,
+                "num_layers": num_layers,
+                "hidden_dims": hidden_dims,
+                "param_count": param_count,
+                "model": final_model,
+            }
 
-                    model = MLP(nb_features, hidden_dims, output_features)
-
-                    print(
-                        f"This model has {count_parameters(model)} trainable parameters"
-                    )
-
-                    (
-                        cl_train_losses,
-                        cl_val_losses,
-                        best_cl_acc,
-                        cl_train_accs,
-                        cl_val_accs,
-                    ) = train_model(
-                        model, train_loader, val_loader, num_epochs=25, lr=lr
-                    )
-                    all_accs.append(best_cl_acc)
-                    print(f"Best accuracy = {best_cl_acc}")
-
-                mean_iter = np.mean(all_accs)
-                std_iter = np.std(all_accs)
-                if mean_iter >= acc_threshold:
-                    above_acc_threshold = True
-                    print(
-                        f"\n acc_thresholdold achieved: {mean_iter} +- {std_iter} using {count_parameters(model)} parameters"
-                    )
-                else:
-                    print(
-                        f"{mean_iter} < {acc_threshold} therefore moving on with next model"
-                    )
-            else:
+            if mean_acc >= acc_threshold:
+                print(
+                    f"\nThreshold achieved: {mean_acc:.2f} ± {std_acc:.2f} using {param_count} parameters"
+                )
                 break
+            else:
+                print(f"{mean_acc:.2f} < {acc_threshold}, moving to next architecture")
 
-        # will update the dictionary with biggest architecture and final accuracy if no match found
-        dict = {
+        # Prepare and save results
+        experiment_dict = {
             "dataset": "spiral",
             "nb_features": nb_features,
-            "cl best ACC": mean_iter,
-            "cl best ACC std": std_iter,
-            "nb layers": num_layers,
-            "hidden dims": hidden_dims,
-            "cl parameters": count_parameters(model),
+            "cl best ACC": result["mean_acc"],
+            "cl best ACC std": result["std_acc"],
+            "nb layers": result["num_layers"],
+            "hidden dims": result["hidden_dims"],
+            "cl parameters": result["param_count"],
         }
 
-        # save experiment in json file
-        save_experiment_results(dict, f"clNN_SS_v3_bs{bs}_lr{lr}.json")
+        save_experiment_results(experiment_dict, f"clNN_SS_v4_bs{bs}_lr{lr}.json")
 
 
 if __name__ == "__main__":
