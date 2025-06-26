@@ -1,71 +1,70 @@
-import perceval as pcvl
-import torch
-import torch.nn.functional as F
-from sklearn.metrics import confusion_matrix
-from torch import nn
-from torch.utils.data import Dataset, DataLoader, TensorDataset
-from tqdm import tqdm
-import random
-import numpy as np
-import os
-from torchvision.transforms import ToTensor
-import matplotlib.pyplot as plt
-import seaborn as sns
-from sklearn.metrics import confusion_matrix, ConfusionMatrixDisplay
-from sklearn.manifold import TSNE
 import json
-import pandas as pd
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
+import os
+
+import matplotlib.pyplot as plt
+import numpy as np
+import perceval as pcvl
+import seaborn as sns
+import torch
+from merlin.datasets import spiral
 from sklearn.model_selection import train_test_split
-from matplotlib.colors import ListedColormap
-from sklearn import svm
-from sklearn.datasets import make_classification
-from merlin.datasets import mnist_digits, spiral
+from sklearn.preprocessing import MinMaxScaler
+from torch import nn
+from tqdm import tqdm
 
 ############
 ### data ###
 ############
 
-def load_spiral_dataset(nb_features = 3, samples = 5000, nb_classes=3):
-    X, y, md = spiral.get_data(
+
+def load_spiral_dataset(nb_features=3, samples=5000, nb_classes=3):
+    x, y, md = spiral.get_data(
         num_instances=samples,
         num_features=nb_features,
         num_classes=nb_classes,
     )
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=0.2, random_state=42
+    x_train, x_test, y_train, y_test = train_test_split(
+        x, y, test_size=0.2, random_state=42
     )
-    scaler = StandardScaler()
-    X_train = scaler.fit_transform(X_train)
-    X_test = scaler.transform(X_test)
+    scaler = MinMaxScaler()
+    x_train = scaler.fit_transform(x_train)
+    x_test = scaler.transform(x_test)
 
     # Convert to PyTorch tensors
-    X_train = torch.tensor(X_train, dtype=torch.float32)
-    y_train = torch.tensor(y_train, dtype=torch.long)  # Use long for classification targets
-    X_test = torch.tensor(X_test, dtype=torch.float32)
+    x_train = torch.tensor(x_train, dtype=torch.float32)
+    y_train = torch.tensor(
+        y_train, dtype=torch.long
+    )  # Use long for classification targets
+    x_test = torch.tensor(x_test, dtype=torch.float32)
     y_test = torch.tensor(y_test, dtype=torch.long)
-    #print("giving",X_train.shape, y_train.shape, X_test.shape, y_test.shape)
-    return X_train, X_test, y_train, y_test, nb_features, nb_classes
+    # print("giving",x_train.shape, y_train.shape, x_test.shape, y_test.shape)
+    return x_train, x_test, y_train, y_test, nb_features, nb_classes
+
 
 #####################
 ### Quantum Layer ###
 #####################
 
-def create_quantum_circuit(m, size = 400):
+
+def create_quantum_circuit(m, size=400):
     """Create quantum circuit with specified number of modes
 
-        Args:
-            m (int): number of modes
-            size (int): size of the input data
-            frequency (int): frequency of the repetition of the {encoding layers with input data in phase shifters; trainable generic interferometer}
+    Args:
+        m (int): number of modes
+        size (int): size of the input data
+        frequency (int): frequency of the repetition of the {encoding layers with input data in phase shifters; trainable generic interferometer}
     """
 
     # first trainable generic interferometer
     # here, we train both beam splitters and phase shifters
-    wl = pcvl.GenericInterferometer(m,
-                                    lambda i: pcvl.BS(theta=pcvl.P(f"bs_1_{i}")) // pcvl.PS(pcvl.P(f"ps_1_{i}")) // \
-                                              pcvl.BS(theta=pcvl.P(f"bs_2_{i}")) // pcvl.PS(pcvl.P(f"ps_2_{i}")),
-                                    shape=pcvl.InterferometerShape.RECTANGLE)
+    wl = pcvl.GenericInterferometer(
+        m,
+        lambda i: pcvl.BS(theta=pcvl.P(f"bs_1_{i}"))
+        // pcvl.PS(pcvl.P(f"ps_1_{i}"))
+        // pcvl.BS(theta=pcvl.P(f"bs_2_{i}"))
+        // pcvl.PS(pcvl.P(f"ps_2_{i}")),
+        shape=pcvl.InterferometerShape.RECTANGLE,
+    )
 
     c = pcvl.Circuit(m)
     c.add(0, wl, merge=True)
@@ -74,21 +73,24 @@ def create_quantum_circuit(m, size = 400):
     c_var = pcvl.Circuit(m)
     for i in range(size):
         px = pcvl.P(f"px-{i + 1}")
-        c_var.add(i%m, pcvl.PS(px))
+        c_var.add(i % m, pcvl.PS(px))
     c.add(0, c_var, merge=True)
 
     # second trainable generic interferometer
     # here, we only train the phase shifters
-    wr = pcvl.GenericInterferometer(m,
-                                    lambda i: pcvl.BS() // pcvl.PS(pcvl.P(f"ps_3_{i}")) // \
-                                              pcvl.BS() // pcvl.PS(pcvl.P(f"ps_4_{i}")),
-                                    shape=pcvl.InterferometerShape.RECTANGLE)
-
-
+    wr = pcvl.GenericInterferometer(
+        m,
+        lambda i: pcvl.BS()
+        // pcvl.PS(pcvl.P(f"ps_3_{i}"))
+        // pcvl.BS()
+        // pcvl.PS(pcvl.P(f"ps_4_{i}")),
+        shape=pcvl.InterferometerShape.RECTANGLE,
+    )
 
     c.add(0, wr, merge=True)
 
     return c
+
 
 # count parameters of a model
 def count_parameters(model):
@@ -97,9 +99,10 @@ def count_parameters(model):
 
 # this Module multiplies the input by a given or "learned" parameter
 
+
 class ScaleLayer(nn.Module):
-    def __init__(self, dim, scale_type = "learned"):
-        super(ScaleLayer, self).__init__()
+    def __init__(self, dim, scale_type="learned"):
+        super().__init__()
         # Create a single learnable parameter (initialized to 1.0 by default)
         if scale_type == "learned":
             self.scale = nn.Parameter(torch.rand(dim))
@@ -119,27 +122,28 @@ class ScaleLayer(nn.Module):
 ### training loop ###
 #####################
 
-def train_model(model, train_loader, val_loader, num_epochs = 25, lr=0.01, device = 'cpu'):
+
+def train_model(model, train_loader, val_loader, num_epochs=25, lr=0.01, device="cpu"):
     criterion = nn.CrossEntropyLoss()
-    optimizer = torch.optim.Adam(model.parameters(),lr = lr, betas=(0.8, 0.999))
+    optimizer = torch.optim.Adam(model.parameters(), lr=lr, betas=(0.8, 0.999))
     all_losses = []
     all_test_losses = []
     all_train_accuracies = []
     all_val_accuracies = []
     best_val_acc = 0
     progress_bar = tqdm(range(num_epochs))
-    for epoch in progress_bar:
+    for _epoch in progress_bar:
         model.train()
         total_loss = 0
         total_test_loss = 0
         correct = 0
         total = 0
         train_acc = 0
-        for batch_X, batch_y in train_loader:
+        for batch_x, batch_y in train_loader:
             # Forward pass
-            batch_X = batch_X.to(device)
+            batch_x = batch_x.to(device)
 
-            outputs = model(batch_X.squeeze(0).float())
+            outputs = model(batch_x.squeeze(0).float())
             loss = criterion(outputs, batch_y.to(device))
             # Backward pass and optimization
             optimizer.zero_grad()
@@ -160,11 +164,11 @@ def train_model(model, train_loader, val_loader, num_epochs = 25, lr=0.01, devic
         correct_test = 0
         total_test = 0
         val_acc = 0
-        #for batch_X, batch_y in val_loader:
-        for batch_X, batch_y in val_loader:
-            batch_X = batch_X.to(device)
-            outputs = model(batch_X.squeeze(0).float())
-            test_loss = criterion(outputs, batch_y.to(device)) #.view(-1, 1).float()
+        # for batch_x, batch_y in val_loader:
+        for batch_x, batch_y in val_loader:
+            batch_x = batch_x.to(device)
+            outputs = model(batch_x.squeeze(0).float())
+            test_loss = criterion(outputs, batch_y.to(device))  # .view(-1, 1).float()
             total_test_loss += test_loss.item()
 
             # Compute accuracy
@@ -186,14 +190,22 @@ def train_model(model, train_loader, val_loader, num_epochs = 25, lr=0.01, devic
         all_test_losses.append(avg_test_loss)
         all_train_accuracies.append(train_acc_epoch)
         all_val_accuracies.append(val_acc_epoch)
-        progress_bar.set_postfix({
-            "Test Loss": f"{avg_test_loss:.4f}",
-            "Test Accuracy": f"{val_acc_epoch:.4f}",
-        })
+        progress_bar.set_postfix(
+            {
+                "Test Loss": f"{avg_test_loss:.4f}",
+                "Test Accuracy": f"{val_acc_epoch:.4f}",
+            }
+        )
     """print(
             f'Epoch [{epoch + 1}/{num_epochs}], Train loss: {avg_loss:.4f}, Test loss: {avg_test_loss:.4f}, Train acc: {current_accuracy:.4f}, Test acc: {current_test_accuracy:.4f}, Best val acc: {best_val_acc:.4f}')"""
 
-    return all_losses, all_test_losses, best_val_acc, all_train_accuracies, all_val_accuracies
+    return (
+        all_losses,
+        all_test_losses,
+        best_val_acc,
+        all_train_accuracies,
+        all_val_accuracies,
+    )
 
 
 #######################
@@ -201,6 +213,7 @@ def train_model(model, train_loader, val_loader, num_epochs = 25, lr=0.01, devic
 #######################
 
 # visualize the parameters of the scale layer (useful when parameters are learned)
+
 
 def visualize_scale_parameters(scale_layer):
     # Get the scale parameter data as a numpy array
@@ -212,7 +225,8 @@ def visualize_scale_parameters(scale_layer):
 
     # For a 1D array of parameters (e.g., per feature)
     elif len(scale_data.shape) == 1 or (
-            len(scale_data.shape) > 1 and np.prod(scale_data.shape) == max(scale_data.shape)):
+        len(scale_data.shape) > 1 and np.prod(scale_data.shape) == max(scale_data.shape)
+    ):
         # Reshape to 1D if necessary
         scale_data = scale_data.flatten()
 
@@ -221,22 +235,26 @@ def visualize_scale_parameters(scale_layer):
         # Option 1: Bar plot
         plt.subplot(2, 1, 1)
         plt.bar(range(len(scale_data)), scale_data)
-        plt.title('Learned Scale Parameters')
-        plt.xlabel('Parameter Index')
-        plt.ylabel('Value')
+        plt.title("Learned Scale Parameters")
+        plt.xlabel("Parameter Index")
+        plt.ylabel("Value")
 
         # Option 2: Heatmap (1D version)
         plt.subplot(2, 1, 2)
-        sns.heatmap(scale_data.reshape(1, -1), cmap='viridis', annot=True if len(scale_data) < 20 else False)
-        plt.title('Scale Parameters Heatmap')
-        plt.xlabel('Parameter Index')
+        sns.heatmap(
+            scale_data.reshape(1, -1),
+            cmap="viridis",
+            annot=True if len(scale_data) < 20 else False,
+        )
+        plt.title("Scale Parameters Heatmap")
+        plt.xlabel("Parameter Index")
 
         plt.tight_layout()
-        plt.savefig('scale_parameters.png')
+        plt.savefig("scale_parameters.png")
         plt.show()
 
 
-def save_experiment_results(results, filename='lr_exp.json'):
+def save_experiment_results(results, filename="lr_exp.json"):
     """
     Append experiment results to a JSON file.
 
@@ -244,11 +262,11 @@ def save_experiment_results(results, filename='lr_exp.json'):
         results (dict): Dictionary containing experiment results (with float values)
         filename (str): Path to the JSON file to store results
     """
-    filename = os.path.join("./results",filename)
+    filename = os.path.join("./results", filename)
     # Check if file exists and load existing data
     if os.path.exists(filename):
         try:
-            with open(filename, 'r') as file:
+            with open(filename) as file:
                 all_results = json.load(file)
         except json.JSONDecodeError:
             # Handle case where file exists but is empty or corrupted
@@ -260,7 +278,7 @@ def save_experiment_results(results, filename='lr_exp.json'):
     all_results.append(results)
 
     # Write updated data back to file
-    with open(filename, 'w') as file:
+    with open(filename, "w") as file:
         json.dump(all_results, file, indent=4)
 
     return len(all_results)

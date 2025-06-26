@@ -17,12 +17,17 @@ Here, we implement the same models but it seems that our biggest model cannot cl
 We increase the search space to more neurons in hidden layers, up to 256.
 The search space looks as follows:
 ![Search space for the classical NN](./assets/cl_NN_params.png)
+
+To run the classical experiments ```python3 classical_NN_spiral.py``` 
+
 ### The Hybrid Quantum Neural Networks
 The original paper mentions: _"During the hybrid model search only the quantum layers are varied. We use [3, 4, 5] qubits quantum layers, and for each qubit size, quantum layers of depth [1, 2, 3, ..., 10] are tested, yielding 30 model combinations per feature size."_
 
 For the photonic implementation, we use network from 2 to 24 modes with 1 photon up to modes/2 photons. We use bunching and no bunching modes.
 The search space looks as follows:
 ![Search space for the HQNN](./assets/HQNN_params.png)
+
+To run the HQNN experiments ```python3 HQNN_spiral.py``` 
 
 ### Results
 So far, the results we obtained for the parameter counts are as follows:
