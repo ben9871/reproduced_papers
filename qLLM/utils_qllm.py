@@ -1,8 +1,10 @@
 import json
+import math
 import os
 
 import merlin as ml  # Using our Merlin framework
 import numpy as np
+import perceval as pcvl
 import torch
 import torch.nn as nn
 from sklearn.base import BaseEstimator, ClassifierMixin
@@ -137,14 +139,14 @@ class MLPClassifier(nn.Module):
 
     def __init__(self, input_dim, hidden_dim=100, num_classes=2):
         super().__init__()
-        self.layers = nn.Sequential(
-            nn.Linear(input_dim, hidden_dim),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(hidden_dim, hidden_dim // 2),
-            nn.ReLU(),
-            nn.Dropout(0.2),
-            nn.Linear(hidden_dim // 2, num_classes),
+        self.layers = (
+            nn.Sequential(
+                nn.Linear(input_dim, hidden_dim),
+                nn.ReLU(),
+                nn.Linear(hidden_dim, num_classes),
+            )
+            if hidden_dim > 0
+            else nn.Linear(input_dim, num_classes)
         )
 
     def forward(self, x):
@@ -175,15 +177,21 @@ class MLPClassifierWrapper(BaseEstimator, ClassifierMixin):
         )
         self.model = None
         self.classes_ = None
+        self.train_accuracies = []
+        self.val_accuracies = []
 
-    def fit(self, x, y):
-        """Train the MLP classifier"""
-        # Convert numpy arrays to PyTorch tensors
-        x = torch.tensor(x, dtype=torch.float32).to(self.device)
-
+    def fit(self, x, y, val_x=None, val_y=None):
+        """Train the MLP classifier with optional validation data"""
         # Store unique classes
         self.classes_ = np.unique(y)
+
+        # Convert numpy arrays to PyTorch tensors
+        x = torch.tensor(x, dtype=torch.float32).to(self.device)
         y_tensor = torch.tensor(y, dtype=torch.long).to(self.device)
+
+        if val_x is not None and val_y is not None:
+            val_x = torch.tensor(val_x, dtype=torch.float32).to(self.device)
+            val_y = torch.tensor(val_y, dtype=torch.long).to(self.device)
 
         # Initialize the model
         self.model = MLPClassifier(
@@ -198,14 +206,18 @@ class MLPClassifierWrapper(BaseEstimator, ClassifierMixin):
 
         # Define loss function and optimizer
         criterion = nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(self.model.parameters(), lr=self.lr)
-
+        optimizer = torch.optim.Adam(
+            self.model.parameters(), lr=self.lr, weight_decay=1e-5
+        )
+        best_val = 0
         # Training loop
-        self.model.train()
         for epoch in range(self.epochs):
-            # Mini-batch training
+            # Training phase
+            self.model.train()
             indices = torch.randperm(len(x))
             total_loss = 0
+            correct_train = 0
+            total_train = 0
 
             for i in range(0, len(x), self.batch_size):
                 batch_indices = indices[i : i + self.batch_size]
@@ -223,11 +235,39 @@ class MLPClassifierWrapper(BaseEstimator, ClassifierMixin):
 
                 total_loss += loss.item()
 
+                # Calculate training accuracy
+                _, predicted = torch.max(outputs.data, 1)
+                total_train += batch_y.size(0)
+                correct_train += (predicted == batch_y).sum().item()
+
+            train_accuracy = 100 * correct_train / total_train
+            self.train_accuracies.append(train_accuracy)
+
+            # Validation phase
+            val_accuracy = 0
+            if val_x is not None and val_y is not None:
+                self.model.eval()
+                with torch.no_grad():
+                    val_outputs = self.model(val_x)
+                    _, val_predicted = torch.max(val_outputs.data, 1)
+                    val_accuracy = (
+                        100 * (val_predicted == val_y).sum().item() / val_y.size(0)
+                    )
+                    self.val_accuracies.append(val_accuracy)
+            if val_accuracy > best_val:
+                best_val = val_accuracy
             # Print progress
             if (epoch + 1) % 10 == 0:
                 avg_loss = total_loss / (len(x) // self.batch_size + 1)
-                print(f"Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}")
-
+                if val_x is not None and val_y is not None:
+                    print(
+                        f"Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}, Train Acc: {train_accuracy:.2f}%, Val Acc: {val_accuracy:.2f}%"
+                    )
+                else:
+                    print(
+                        f"Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}, Train Acc: {train_accuracy:.2f}%"
+                    )
+        self.best_val = best_val
         return self
 
     def predict(self, x):
@@ -279,46 +319,94 @@ def replace_setfit_head_with_mlp(
 ##########################################
 
 
+def create_quantum_circuit(m, size=400):
+    """Create quantum circuit with specified number of modes and input size"""
+
+    wl = pcvl.GenericInterferometer(
+        m,
+        lambda i: pcvl.BS()
+        // pcvl.PS(pcvl.P(f"phase_1_{i}"))
+        // pcvl.BS()
+        // pcvl.PS(pcvl.P(f"phase_2_{i}")),
+        shape=pcvl.InterferometerShape.RECTANGLE,
+    )
+
+    c = pcvl.Circuit(m)
+    c.add(0, wl, merge=True)
+
+    c_var = pcvl.Circuit(m)
+    for i in range(size):
+        px = pcvl.P(f"px-{i + 1}")
+        c_var.add(i % m, pcvl.PS(px))
+    print(c_var)
+    c.add(0, c_var, merge=True)
+
+    wr = pcvl.GenericInterferometer(
+        m,
+        lambda i: pcvl.BS()
+        // pcvl.PS(pcvl.P(f"phase_3_{i}"))
+        // pcvl.BS()
+        // pcvl.PS(pcvl.P(f"phase_4_{i}")),
+        shape=pcvl.InterferometerShape.RECTANGLE,
+    )
+
+    c.add(0, wr, merge=True)
+
+    return c
+
+
 class QuantumClassifier(nn.Module):
     def __init__(
-        self, input_dim, hidden_dim=100, modes=10, num_classes=2, input_state=None
+        self,
+        input_dim,
+        hidden_dim=100,
+        modes=10,
+        num_classes=2,
+        input_state=None,
+        device="cpu",
+        no_bunching=False,
     ):
         super().__init__()
+        print(
+            f"Building a model with {modes} modes and {input_state} as an input state and no_bunching = {no_bunching}"
+        )
+        # this layer downscale the inputs to fit in the QLayer
+        self.downscaling_layer = nn.Linear(input_dim, hidden_dim, device=device)
 
-        # This layer downscales the inputs to fit in the QLayer
-        self.downscaling_layer = nn.Linear(input_dim, hidden_dim)
-
-        # Building the QLayer with Merlin
-        experiment = ml.PhotonicBackend(
-            circuit_type=ml.CircuitType.SERIES,
-            n_modes=modes,
-            n_photons=sum(input_state) if input_state else modes // 2,
-            state_pattern=ml.StatePattern.PERIODIC,
+        # building the QLayer with MerLin
+        circuit = create_quantum_circuit(modes, size=hidden_dim)
+        # default input state
+        if input_state is None:
+            input_state = [(i + 1) % 2 for i in range(modes)]
+        photons_count = sum(input_state)
+        # PNR output size
+        output_size_slos = (
+            math.comb(modes + photons_count - 1, photons_count)
+            if not no_bunching
+            else math.comb(modes, photons_count)
         )
 
-        # PNR (Photon Number Resolving) output size
-        # output_size_slos = math.comb(modes + photons_count - 1, photons_count)
-
-        # Create ansatz for the quantum layer
-        ansatz = ml.AnsatzFactory.create(
-            PhotonicBackend=experiment,
+        # build the QLayer with a linear output as in the original paper
+        # "The measurement output of the second module is then passed through a single Linear layer"
+        self.q_circuit = ml.QuantumLayer(
             input_size=hidden_dim,
-            # output_size=output_size_slos,
+            output_size=None,  # but we do not use it
+            circuit=circuit,
+            trainable_parameters=[
+                p.name for p in circuit.get_parameters() if not p.name.startswith("px")
+            ],
+            input_parameters=["px"],
+            input_state=input_state,
             output_mapping_strategy=ml.OutputMappingStrategy.NONE,
+            device=device,
+            no_bunching=no_bunching,
         )
-
-        # Build the QLayer using Merlin
-        self.q_circuit = ml.QuantumLayer(input_size=hidden_dim, ansatz=ansatz)
-
-        # Linear output layer as in the original paper
-        self.output_layer = nn.Linear(self.q_circuit.output_size, num_classes)
+        self.output_layer = nn.Linear(output_size_slos, num_classes, device=device)
 
     def forward(self, x):
-        # Forward pass through the quantum-classical hybrid
-        x = self.downscaling_layer(x)
-        x = torch.sigmoid(x)  # Normalize for quantum layer
-        x = self.q_circuit(x)
-        return self.output_layer(x)
+        # forward pass
+        out = self.output_layer(self.q_circuit(self.downscaling_layer(x)))
+        return out
 
 
 class QLayerTraining(BaseEstimator, ClassifierMixin):
@@ -335,6 +423,7 @@ class QLayerTraining(BaseEstimator, ClassifierMixin):
         batch_size=32,
         device=None,
         input_state=None,
+        no_bunching=False,
     ):
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -356,6 +445,9 @@ class QLayerTraining(BaseEstimator, ClassifierMixin):
         self.is_fitted_ = False
         # Training history
         self.history = {"train_loss": [], "val_loss": [], "val_accuracy": []}
+        self.train_accuracies = []
+        self.val_accuracies = []
+        self.no_bunching = no_bunching
 
     def _initialize_model(self):
         """Initialize or re-initialize the model."""
@@ -365,16 +457,22 @@ class QLayerTraining(BaseEstimator, ClassifierMixin):
             modes=self.modes,
             num_classes=len(self.classes_),
             input_state=self.input_state,
-        ).to(self.device)
+            device=self.device,
+            no_bunching=self.no_bunching,
+        )
 
         print(
-            f"Number of parameters in Quantum head: {sum([p.numel() for p in self.model.parameters()])}"
+            f"Number of parameters in Quantum head: {sum([p.numel() for p in self.model.parameters() if p.requires_grad])}"
         )
+        self.model = self.model.to(self.device)
 
     def _train_epoch(self, train_loader, criterion, optimizer):
         """Train for one epoch."""
         self.model.train()
         epoch_loss = 0
+        correct_train = 0
+        total_train = 0
+
         for x_batch, y_batch in train_loader:
             x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
 
@@ -389,10 +487,38 @@ class QLayerTraining(BaseEstimator, ClassifierMixin):
 
             epoch_loss += loss.item()
 
-        return epoch_loss / len(train_loader)
+            # Calculate training accuracy
+            _, predicted = torch.max(outputs.data, 1)
+            total_train += y_batch.size(0)
+            correct_train += (predicted == y_batch).sum().item()
 
-    def fit(self, x, y):
-        """Train the QLayer with a manual training loop."""
+        train_accuracy = 100 * correct_train / total_train
+        return epoch_loss / len(train_loader), train_accuracy
+
+    def _validate_epoch(self, val_loader, criterion):
+        """Validate for one epoch."""
+        self.model.eval()
+        epoch_loss = 0
+        correct = 0
+        total = 0
+
+        with torch.no_grad():
+            for x_batch, y_batch in val_loader:
+                x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
+
+                outputs = self.model(x_batch)
+                loss = criterion(outputs, y_batch)
+
+                epoch_loss += loss.item()
+                _, predicted = torch.max(outputs.data, 1)
+                total += y_batch.size(0)
+                correct += (predicted == y_batch).sum().item()
+
+        val_accuracy = 100 * correct / total
+        return epoch_loss / len(val_loader), val_accuracy
+
+    def fit(self, x, y, val_x=None, val_y=None):
+        """Train the QLayer with a manual training loop and optional validation data."""
         # Store classes
         self.classes_ = np.unique(y)
 
@@ -407,22 +533,53 @@ class QLayerTraining(BaseEstimator, ClassifierMixin):
             train_dataset, batch_size=self.batch_size, shuffle=True
         )
 
+        # Setup validation data if provided
+        val_loader = None
+        if val_x is not None and val_y is not None:
+            val_x_tensor = torch.tensor(val_x, dtype=torch.float32)
+            val_y_tensor = torch.tensor(val_y, dtype=torch.long)
+            val_dataset = TensorDataset(val_x_tensor, val_y_tensor)
+            val_loader = DataLoader(
+                val_dataset, batch_size=self.batch_size, shuffle=False
+            )
+
         # Loss function and optimizer
         criterion = nn.CrossEntropyLoss()
         optimizer = torch.optim.Adam(
             self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay
         )
+        best_val = 0
 
         # Training loop
         for epoch in range(self.epochs):
             # Train for one epoch
-            train_loss = self._train_epoch(train_loader, criterion, optimizer)
+            train_loss, train_accuracy = self._train_epoch(
+                train_loader, criterion, optimizer
+            )
             self.history["train_loss"].append(train_loss)
+            self.train_accuracies.append(train_accuracy)
 
+            # Validation phase
+            val_loss, val_accuracy = 0, 0
+            if val_loader is not None:
+                val_loss, val_accuracy = self._validate_epoch(val_loader, criterion)
+                self.history["val_loss"].append(val_loss)
+                self.history["val_accuracy"].append(val_accuracy)
+                self.val_accuracies.append(val_accuracy)
+                if val_accuracy > best_val:
+                    best_val = val_accuracy
             if (epoch + 1) % 50 == 0:
-                print(f"Epoch {epoch + 1}/{self.epochs}, Train Loss: {train_loss:.4f}")
+                if val_loader is not None:
+                    print(
+                        f"Epoch {epoch + 1}/{self.epochs}, Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.2f}%, Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.2f}% - Best Val Acc: {best_val:.2f}"
+                    )
+                else:
+                    print(
+                        f"Epoch {epoch + 1}/{self.epochs}, Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.2f}%"
+                    )
 
         self.is_fitted_ = True
+        self.best_val = best_val
         return self
 
     def predict(self, x):
@@ -465,6 +622,7 @@ def create_setfit_with_q_layer(
     num_classes=2,
     epochs=100,
     input_state=None,
+    no_bunching=False,
 ):
     """
     Replace the classification head of a SetFit model with a quantum layer.
@@ -492,6 +650,7 @@ def create_setfit_with_q_layer(
         epochs=epochs,
         input_state=input_state,
         device=device,
+        no_bunching=no_bunching,
     )
 
     return model

@@ -107,6 +107,19 @@ def parse_args():
         help="List of quantum modes to test",
     )
 
+    parser.add_argument(
+        "--no-bunching",
+        action="store_true",
+        help="No bunching parameter for the Quantum Layer",
+    )
+
+    parser.add_argument(
+        "--photons",
+        type=int,
+        default=0,
+        help="Number of photons max (0 stands for modes/2)",
+    )
+
     # Execution parameters
     parser.add_argument("--seed", type=int, default=42, help="Random seed")
     parser.add_argument(
@@ -144,7 +157,7 @@ def load_data(args):
     if args.verbose:
         print(f"\nLoading dataset '{args.dataset}' with paper sampling strategy...")
 
-    dataset = load_dataset(args.dataset)
+    dataset = load_dataset("SetFit/sst2")
 
     # Paper approach: 256 samples from each label {+, -}
     full_train_dataset = dataset["train"]
@@ -193,11 +206,11 @@ def load_data(args):
 
     # Create datasets in the expected format
     train_dataset = {
-        "sentence": [ex["sentence"] for ex in train_data],
+        "sentence": [ex["text"] for ex in train_data],
         "label": [ex["label"] for ex in train_data],
     }
     eval_dataset = {
-        "sentence": [ex["sentence"] for ex in val_data],
+        "sentence": [ex["text"] for ex in val_data],
         "label": [ex["label"] for ex in val_data],
     }
 
@@ -224,7 +237,7 @@ def load_data(args):
         i for i in range(len(full_train_dataset)) if i not in used_indices
     ]
     test_dataset = {
-        "sentence": [full_train_dataset[i]["sentence"] for i in remaining_indices],
+        "sentence": [full_train_dataset[i]["text"] for i in remaining_indices],
         "label": [full_train_dataset[i]["label"] for i in remaining_indices],
     }
 
@@ -386,49 +399,116 @@ def train_classical_heads(
 
     results["LogisticRegression"] = [lg_val_accuracy, lg_test_accuracy]
 
-    # SVM
+    # SVM with varying parameter counts (targeting 296 and 435 parameters)
     if args.verbose:
-        print("\n2. Training SVM head...")
+        print("\n2. Training SVM heads with varying parameter counts...")
 
-    model.model_head = SVC(C=1.0, kernel="linear", gamma="scale", probability=True)
+    # Configuration 1: Target ~296 parameters (moderate regularization)
+    if args.verbose:
+        print("   2a. Training SVM targeting ~296 parameters...")
+
+    model.model_head = SVC(C=1.0, kernel="rbf", gamma="scale", probability=True)
     model.model_head.fit(train_embeddings, train_labels)
 
-    svc_val_accuracy, _ = evaluate(
+    svc_296_val_accuracy, _ = evaluate(
         model, eval_dataset["sentence"], eval_dataset["label"]
     )
-    svc_test_accuracy, _ = evaluate(
+    svc_296_test_accuracy, _ = evaluate(
         model, test_dataset["sentence"], test_dataset["label"]
     )
 
-    if args.verbose:
-        print(f"SVM - Val: {svc_val_accuracy:.4f}, Test: {svc_test_accuracy:.4f}")
+    n_support_vectors_296 = model.model_head.n_support_.sum()
 
-    results["SVC"] = [svc_val_accuracy, svc_test_accuracy]
+    if args.verbose:
+        print(
+            f"   SVM (296 target) - Support vectors: {n_support_vectors_296}, Val: {svc_296_val_accuracy:.4f}, Test: {svc_296_test_accuracy:.4f}"
+        )
+
+    # Configuration 2: Target ~435 parameters (low regularization to use more support vectors)
+    if args.verbose:
+        print("   2b. Training SVM targeting ~435 parameters...")
+
+    model.model_head = SVC(C=100.0, kernel="rbf", gamma="scale", probability=True)
+    model.model_head.fit(train_embeddings, train_labels)
+
+    svc_435_val_accuracy, _ = evaluate(
+        model, eval_dataset["sentence"], eval_dataset["label"]
+    )
+    svc_435_test_accuracy, _ = evaluate(
+        model, test_dataset["sentence"], test_dataset["label"]
+    )
+
+    n_support_vectors_435 = model.model_head.n_support_.sum()
+
+    if args.verbose:
+        print(
+            f"   SVM (435 target) - Support vectors: {n_support_vectors_435}, Val: {svc_435_val_accuracy:.4f}, Test: {svc_435_test_accuracy:.4f}"
+        )
+
+    results["SVC_296"] = [
+        svc_296_val_accuracy,
+        svc_296_test_accuracy,
+        int(n_support_vectors_296),
+    ]
+    results["SVC_435"] = [
+        svc_435_val_accuracy,
+        svc_435_test_accuracy,
+        int(n_support_vectors_435),
+    ]
 
     # MLP
     if args.verbose:
         print("\n3. Training MLP head...")
+    hidden_dims = [0, 48, 96, 144, 192]
+    for hidden_dim in hidden_dims:
+        print(f"\n3. Training MLP head with hidden dimension = {hidden_dim}...")
+        model = replace_setfit_head_with_mlp(
+            model,
+            input_dim=args.embedding_dim,
+            hidden_dim=args.hidden_dim,
+            num_classes=num_classes,
+            epochs=args.head_epochs,
+        )
 
-    model = replace_setfit_head_with_mlp(
-        model,
-        input_dim=args.embedding_dim,
-        hidden_dim=args.hidden_dim,
-        num_classes=num_classes,
-        epochs=args.head_epochs,
-    )
-    model.model_head.fit(train_embeddings, train_labels)
+        # Generate test embeddings for validation during training
+        test_embeddings = []
+        test_labels = test_dataset["label"]
 
-    mlp_val_accuracy, _ = evaluate(
-        model, eval_dataset["sentence"], eval_dataset["label"]
-    )
-    mlp_test_accuracy, _ = evaluate(
-        model, test_dataset["sentence"], test_dataset["label"]
-    )
+        with torch.no_grad():
+            num_batches = (
+                len(test_dataset["sentence"]) + args.batch_size - 1
+            ) // args.batch_size
+            for batch_idx in range(num_batches):
+                start_idx = batch_idx * args.batch_size
+                end_idx = min(
+                    start_idx + args.batch_size, len(test_dataset["sentence"])
+                )
+                batch_texts = test_dataset["sentence"][start_idx:end_idx]
+                batch_embeddings = sentence_transformer.encode(
+                    batch_texts, convert_to_tensor=True
+                )
+                test_embeddings.extend(batch_embeddings.detach().cpu().numpy())
 
-    if args.verbose:
-        print(f"MLP - Val: {mlp_val_accuracy:.4f}, Test: {mlp_test_accuracy:.4f}")
+        test_embeddings = np.array(test_embeddings)
 
-    results["MLP"] = [mlp_val_accuracy, mlp_test_accuracy]
+        # Train with test data as validation
+        model.model_head.fit(
+            train_embeddings, train_labels, test_embeddings, test_labels
+        )
+
+        mlp_val_accuracy, _ = evaluate(
+            model, eval_dataset["sentence"], eval_dataset["label"]
+        )
+        mlp_test_accuracy, _ = evaluate(
+            model, test_dataset["sentence"], test_dataset["label"]
+        )
+        best_test = model.model_head.best_val
+        if args.verbose:
+            print(
+                f"MLP - Val: {mlp_val_accuracy:.4f}, Test: {mlp_test_accuracy:.4f}, Best Test: {best_test}"
+            )
+
+        results[f"MLP-{hidden_dim}"] = [mlp_val_accuracy, mlp_test_accuracy, best_test]
 
     return results, model, num_classes
 
@@ -451,7 +531,9 @@ def train_quantum_heads(
     quantum_results = {}
 
     for mode in args.quantum_modes:
-        photon_max = int(mode // 2)
+        photon_max = int(mode // 2) if args.photons <= 0 else args.photons
+        if args.photons > int(mode // 2):
+            photon_max = int(mode // 2)
 
         for k in range(1, photon_max + 1):
             # Create input state with k photons
@@ -472,10 +554,35 @@ def train_quantum_heads(
                 num_classes=num_classes,
                 epochs=args.head_epochs,
                 input_state=input_state,
+                no_bunching=args.no_bunching,
             )
+            model = model.to(device)
 
-            # Train the quantum head
-            model.model_head.fit(train_embeddings, train_labels)
+            # Generate test embeddings for validation during training
+            test_embeddings = []
+            test_labels = test_dataset["label"]
+
+            with torch.no_grad():
+                num_batches = (
+                    len(test_dataset["sentence"]) + args.batch_size - 1
+                ) // args.batch_size
+                for batch_idx in range(num_batches):
+                    start_idx = batch_idx * args.batch_size
+                    end_idx = min(
+                        start_idx + args.batch_size, len(test_dataset["sentence"])
+                    )
+                    batch_texts = test_dataset["sentence"][start_idx:end_idx]
+                    batch_embeddings = sentence_transformer.encode(
+                        batch_texts, convert_to_tensor=True
+                    )
+                    test_embeddings.extend(batch_embeddings.detach().cpu().numpy())
+
+            test_embeddings = np.array(test_embeddings)
+
+            # Train the quantum head with test data as validation
+            model.model_head.fit(
+                train_embeddings, train_labels, test_embeddings, test_labels
+            )
 
             # Evaluate
             q_val_predictions = model.model_head.predict(
@@ -495,13 +602,17 @@ def train_quantum_heads(
                 .numpy()
             )
             q_test_accuracy = accuracy_score(test_dataset["label"], q_test_predictions)
-
+            best_test = model.model_head.best_val
             if args.verbose:
                 print(
-                    f"   Quantum {mode}-{k} - Val: {q_val_accuracy:.4f}, Test: {q_test_accuracy:.4f}"
+                    f"   Quantum {mode}-{k} - Val: {q_val_accuracy:.4f}, Test: {q_test_accuracy:.4f}, Best Val: {best_test:.4f}"
                 )
 
-            quantum_results[f"{mode}-qlayer-{k}"] = [q_val_accuracy, q_test_accuracy]
+            quantum_results[f"{mode}-qlayer-{k}"] = [
+                q_val_accuracy,
+                q_test_accuracy,
+                best_test,
+            ]
 
     return quantum_results
 
@@ -509,14 +620,18 @@ def train_quantum_heads(
 def plot_results_comparison(results, results_folder):
     """Plot comparison of classical and quantum results"""
     # Extract results for visualization
-    classical_methods = ["LogisticRegression", "SVC", "MLP"]
+    classical_methods_1 = ["LogisticRegression", "SVC_296", "SVC_435"]
+    classical_methods_2 = ["MLP-0", "MLP-48", "MLP-96", "MLP-144", "MLP-192"]
+    classical_methods = classical_methods_1 + classical_methods_2
     classical_val_accs = [results[method][0] for method in classical_methods]
-    classical_test_accs = [results[method][1] for method in classical_methods]
+    classical_test_accs = [results[method][1] for method in classical_methods_1] + [
+        results[method][2] for method in classical_methods_2
+    ]
 
     # Process quantum results
     quantum_configs = list(results["Qlayer"].keys())
     quantum_val_accs = [results["Qlayer"][config][0] for config in quantum_configs]
-    quantum_test_accs = [results["Qlayer"][config][1] for config in quantum_configs]
+    quantum_test_accs = [results["Qlayer"][config][2] for config in quantum_configs]
 
     # Create comparison plot
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
@@ -561,13 +676,25 @@ def print_results_summary(results):
     """Print summary of all results"""
     print("\n=== RESULTS SUMMARY ===")
     print("\nClassical Methods:")
-    classical_methods = ["LogisticRegression", "SVC", "MLP"]
-    classical_val_accs = [results[method][0] for method in classical_methods]
-    classical_test_accs = [results[method][1] for method in classical_methods]
 
-    for i, method in enumerate(classical_methods):
+    # Print LogisticRegression
+    print(
+        f"{'LogisticRegression':20s} - Val: {results['LogisticRegression'][0]:.4f}, Test: {results['LogisticRegression'][1]:.4f}"
+    )
+
+    # Print SVC variants with parameter counts
+    print(
+        f"{'SVC_296':20s} - Val: {results['SVC_296'][0]:.4f}, Test: {results['SVC_296'][1]:.4f} (Support vectors: {results['SVC_296'][2]})"
+    )
+    print(
+        f"{'SVC_435':20s} - Val: {results['SVC_435'][0]:.4f}, Test: {results['SVC_435'][1]:.4f} (Support vectors: {results['SVC_435'][2]})"
+    )
+
+    # Print MLP
+    hidden_dims = [0, 48, 96, 144, 192]
+    for hidden_dim in hidden_dims:
         print(
-            f"{method:20s} - Val: {classical_val_accs[i]:.4f}, Test: {classical_test_accs[i]:.4f}"
+            f"{f'MLP-{hidden_dim}':20s} - Val: {results[f'MLP-{hidden_dim}'][0]:.4f}, Test: {results[f'MLP-{hidden_dim}'][1]:.4f}"
         )
 
     print("\nQuantum Methods (best per mode count):")
@@ -592,7 +719,8 @@ def main():
     """Main training pipeline"""
     args = parse_args()
     device = setup_environment(args)
-
+    trained_body = False
+    trained_cl = True
     # Create results folder for this experiment
     results_folder = create_results_folder()
 
@@ -604,28 +732,31 @@ def main():
 
     # Load data and model
     train_dataset, eval_dataset, test_dataset, features, labels = load_data(args)
+    # "we use the Sentence Transformer pre-trained on paraphrase data"
     model, sentence_transformer = load_model(args, device)
 
-    # Train body with contrastive learning
-    sentence_transformer = train_body_with_contrastive_learning(
-        sentence_transformer, features, labels, args, device
-    )
+    if trained_body:
+        # Train body with contrastive learning
+        sentence_transformer = train_body_with_contrastive_learning(
+            sentence_transformer, features, labels, args, device
+        )
 
     # Generate embeddings
     train_embeddings, train_labels = generate_embeddings(
         sentence_transformer, train_dataset, args
     )
-
+    num_classes = 2
     # Train classical heads
-    results, model, num_classes = train_classical_heads(
-        sentence_transformer,
-        train_embeddings,
-        train_labels,
-        eval_dataset,
-        test_dataset,
-        args,
-        device,
-    )
+    if trained_cl:
+        results, model, num_classes = train_classical_heads(
+            sentence_transformer,
+            train_embeddings,
+            train_labels,
+            eval_dataset,
+            test_dataset,
+            args,
+            device,
+        )
 
     # Train quantum heads
     quantum_results = train_quantum_heads(
@@ -649,7 +780,7 @@ def main():
             "lr": args.learning_rate,
         }
     )
-
+    print(f"\n ==== Results = {results}")
     # Save results to JSON
     save_results(results, results_folder)
 
