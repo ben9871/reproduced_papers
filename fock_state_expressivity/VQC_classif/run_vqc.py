@@ -1,4 +1,8 @@
-from training import train_vqc_multiple_runs, visualize_results, write_summary_statistics
+from training import (
+    train_vqc_multiple_runs,
+    visualize_results,
+    write_summary_statistics,
+)
 
 # Hyperparameters and experimental set-up
 m = 3
@@ -19,10 +23,26 @@ regu_on = "linear"  # ["linear", "all"]
 
 log_wandb = True
 
+
 class Arguments:
-    def __init__(self, m, input_size, initial_state, activation="none", no_bunching=False, num_runs=5, n_epochs=50,
-                 batch_size=32, lr=0.02, alpha=0.2, betas=(0.9, 0.999), circuit="bs_mesh", scale_type="learned",
-                 regu_on="linear", log_wandb=True):
+    def __init__(
+        self,
+        m,
+        input_size,
+        initial_state,
+        activation="none",
+        no_bunching=False,
+        num_runs=5,
+        n_epochs=50,
+        batch_size=32,
+        lr=0.02,
+        alpha=0.2,
+        betas=(0.9, 0.999),
+        circuit="bs_mesh",
+        scale_type="learned",
+        regu_on="linear",
+        log_wandb=True,
+    ):
         self.m = m
         self.input_size = input_size
         self.initial_state = initial_state
@@ -49,8 +69,24 @@ class Arguments:
         self.model_type = type
         return
 
-args = Arguments(m, input_size, initial_state, activation, no_bunching, num_runs, n_epochs, batch_size, lr, alpha,
-                 betas, circuit, scale_type, regu_on, log_wandb)
+
+args = Arguments(
+    m,
+    input_size,
+    initial_state,
+    activation,
+    no_bunching,
+    num_runs,
+    n_epochs,
+    batch_size,
+    lr,
+    alpha,
+    betas,
+    circuit,
+    scale_type,
+    regu_on,
+    log_wandb,
+)
 
 # Train VQC multiple times and show results
 results = train_vqc_multiple_runs(args)
@@ -75,4 +111,3 @@ write_summary_statistics(results, args)"""
 results = train_svm_multiple_runs(args, kernel_type=kernel_type)
 visualize_results(results)
 write_summary_statistics(results, args)"""
-

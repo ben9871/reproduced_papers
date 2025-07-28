@@ -1,10 +1,27 @@
 import random
 import time
+
 from training import train_vqc_multiple_runs
 
+
 class Arguments:
-    def __init__(self, m, input_size, initial_state, activation="none", no_bunching=False, num_runs=5, n_epochs=50,
-                 batch_size=32, lr=0.02, alpha=0.2, betas=(0.9, 0.999), circuit="bs_mesh", scale_type="learned", regu_on="linear"):
+    def __init__(
+        self,
+        m,
+        input_size,
+        initial_state,
+        activation="none",
+        no_bunching=False,
+        num_runs=5,
+        n_epochs=50,
+        batch_size=32,
+        lr=0.02,
+        alpha=0.2,
+        betas=(0.9, 0.999),
+        circuit="bs_mesh",
+        scale_type="learned",
+        regu_on="linear",
+    ):
         self.m = m
         self.input_size = input_size
         self.initial_state = initial_state
@@ -30,6 +47,7 @@ class Arguments:
         self.model_type = type
         return
 
+
 # method: random search
 num_hp_runs = 200
 
@@ -43,7 +61,14 @@ batch_sizes = [15, 30, 60]
 n_epochs = [75, 100, 125]
 activations = ["none", "sigmoid", "softmax"]
 alphas = [0.2, 0.02, 0.002, 0.0002]
-betas = [(0.7, 0.9), (0.8, 0.99), (0.9, 0.999), (0.95, 0.9999), (0.8, 0.999), (0.9, 0.99)]
+betas = [
+    (0.7, 0.9),
+    (0.8, 0.99),
+    (0.9, 0.999),
+    (0.95, 0.9999),
+    (0.8, 0.999),
+    (0.9, 0.99),
+]
 circuits = ["bs_mesh", "general", "bs_basic", "spiral"]
 scale_types = ["/pi", "/2pi", "0.1", "0.5", "learned"]
 regus_on = ["linear", "all"]
@@ -71,14 +96,30 @@ while n < num_hp_runs:
     scale = scale_types[random.randint(0, len(scale_types) - 1)]
     regu_on = regus_on[random.randint(0, len(regus_on) - 1)]
 
-    args = Arguments(m, input_size, initial_state, activation, no_bunching, num_runs, n_epoch, batch_size, learning_rate, alpha,
-                 beta, circuit, scale, regu_on)
+    args = Arguments(
+        m,
+        input_size,
+        initial_state,
+        activation,
+        no_bunching,
+        num_runs,
+        n_epoch,
+        batch_size,
+        learning_rate,
+        alpha,
+        beta,
+        circuit,
+        scale,
+        regu_on,
+    )
 
     s = "----- Hyperparameters information for this run -----\n"
     s += f"m = {args.m}\ninput_size = {args.input_size}\ninitial_state = {args.initial_state}\n\n"
-    s += (f"activation = {args.activation}\nno_bunching = {args.no_bunching}\nnum_runs = {args.num_runs}\nn_epochs = "
-          f"{args.n_epochs}\nbatch_size = {args.batch_size}\nlr = {args.lr}\nalpha = {args.alpha}\nbetas = {args.betas}"
-          f"\ncircuit = {args.circuit}\nscale_type = {args.scale_type}\nregu_on = {args.regu_on}\n")
+    s += (
+        f"activation = {args.activation}\nno_bunching = {args.no_bunching}\nnum_runs = {args.num_runs}\nn_epochs = "
+        f"{args.n_epochs}\nbatch_size = {args.batch_size}\nlr = {args.lr}\nalpha = {args.alpha}\nbetas = {args.betas}"
+        f"\ncircuit = {args.circuit}\nscale_type = {args.scale_type}\nregu_on = {args.regu_on}\n"
+    )
     print(s)
 
     # Train VQC multiple times and show results
@@ -89,4 +130,6 @@ while n < num_hp_runs:
     run_time = time2 - time1
     total_time += run_time
     estimated_time_left = (total_time / n) * (num_hp_runs - n)
-    print(f"\n\n\n{n} / {num_hp_runs} completed. Run time: {run_time}, Total time: {total_time}, Estimated time left: {estimated_time_left} ######################################################################\n\n\n")
+    print(
+        f"\n\n\n{n} / {num_hp_runs} completed. Run time: {run_time}, Total time: {total_time}, Estimated time left: {estimated_time_left} ######################################################################\n\n\n"
+    )

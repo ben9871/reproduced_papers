@@ -6,51 +6,58 @@ including beam splitter meshes, general interferometers, and specialized configu
 All circuits are designed to work with MerLin quantum machine learning framework.
 """
 
-from merlin import QuantumLayer, OutputMappingStrategy
-import perceval as pcvl
-import numpy as np
 import random
+from math import comb
+
+import numpy as np
+import perceval as pcvl
 import torch
 import torch.nn as nn
-from math import comb
+from merlin import OutputMappingStrategy, QuantumLayer
+
 
 def create_vqc_spiral(m, input_size, frequency=1):
     """
     Create quantum circuit with spiral architecture for classification.
-    
+
     Args:
         m (int): Number of modes in the photonic circuit
         input_size (int): Number of input features to encode
         frequency (int): Number of encoding-processing layers
-        
+
     Returns:
         pcvl.Circuit: The constructed spiral quantum circuit
-        
+
     Note:
         Based on spiral dataset classification from Quandela's MerLin notebooks.
     """
-    wl = pcvl.GenericInterferometer(m,
-                                    lambda i: pcvl.BS(theta=pcvl.P(f"bs_1_{i}")) // pcvl.PS(pcvl.P(f"phase_1_{i}")) // \
-                                              pcvl.BS(theta=pcvl.P(f"bs_2_{i}")) // pcvl.PS(pcvl.P(f"phase_2_{i}")),
-                                    shape=pcvl.InterferometerShape.RECTANGLE)
+    wl = pcvl.GenericInterferometer(
+        m,
+        lambda i: pcvl.BS(theta=pcvl.P(f"bs_1_{i}"))
+        // pcvl.PS(pcvl.P(f"phase_1_{i}"))
+        // pcvl.BS(theta=pcvl.P(f"bs_2_{i}"))
+        // pcvl.PS(pcvl.P(f"phase_2_{i}")),
+        shape=pcvl.InterferometerShape.RECTANGLE,
+    )
 
     c = pcvl.Circuit(m)
     c.add(0, wl, merge=True)
-
 
     for f in range(frequency):
         c_var = pcvl.Circuit(m)
         for i in range(input_size):
             px = pcvl.P(f"px-{f}-{i + 1}")
-            c_var.add(i%m, pcvl.PS(px))
+            c_var.add(i % m, pcvl.PS(px))
 
         c.add(0, c_var, merge=True)
-        wr = pcvl.GenericInterferometer(m,
-                                        lambda i: pcvl.BS() // pcvl.PS(pcvl.P(f"phase_3_{i}")) // \
-                                                  pcvl.BS() // pcvl.PS(pcvl.P(f"phase_4_{i}")),
-                                        shape=pcvl.InterferometerShape.RECTANGLE)
-
-
+        wr = pcvl.GenericInterferometer(
+            m,
+            lambda i: pcvl.BS()
+            // pcvl.PS(pcvl.P(f"phase_3_{i}"))
+            // pcvl.BS()
+            // pcvl.PS(pcvl.P(f"phase_4_{i}")),
+            shape=pcvl.InterferometerShape.RECTANGLE,
+        )
 
         c.add(0, wr, merge=True)
 
@@ -60,14 +67,14 @@ def create_vqc_spiral(m, input_size, frequency=1):
 def create_vqc_bs_basic(m, input_size):
     """
     Create basic beam splitter based variational quantum classifier.
-    
+
     Args:
         m (int): Number of modes in the photonic circuit (currently supports m=3)
         input_size (int): Number of input features to encode (currently supports input_size=2)
-        
+
     Returns:
         pcvl.Circuit: The constructed basic beam splitter quantum circuit
-        
+
     Note:
         Currently only supports 3 modes and 2 input features.
     """
@@ -100,37 +107,44 @@ def create_vqc_bs_basic(m, input_size):
 
     return c
 
+
 def create_vqc_bs_mesh(m, input_size):
     """
     Create beam splitter mesh based variational quantum classifier.
-    
+
     Args:
         m (int): Number of modes in the photonic circuit
         input_size (int): Number of input features to encode
-        
+
     Returns:
         pcvl.Circuit: The constructed beam splitter mesh quantum circuit
-        
+
     Note:
         Implementation based on https://perceval.quandela.net/docs/v0.13/notebooks/BS-based_implementation.html
     """
 
-    bs_l = pcvl.GenericInterferometer(m,
-                                lambda idx: pcvl.BS(theta=pcvl.P("theta_l%d" % idx)) // (0, pcvl.PS(phi=np.pi * 2 * random.random())),
-                                shape=pcvl.InterferometerShape.RECTANGLE,
-                                depth=2 * m,
-                                phase_shifter_fun_gen=lambda idx: pcvl.PS(phi=np.pi*2*random.random()))
+    bs_l = pcvl.GenericInterferometer(
+        m,
+        lambda idx: pcvl.BS(theta=pcvl.P(f"theta_l{idx}"))
+        // (0, pcvl.PS(phi=np.pi * 2 * random.random())),
+        shape=pcvl.InterferometerShape.RECTANGLE,
+        depth=2 * m,
+        phase_shifter_fun_gen=lambda idx: pcvl.PS(phi=np.pi * 2 * random.random()),
+    )
 
     c_var = pcvl.Circuit(m)
     for i in range(input_size):
         px = pcvl.P(f"px{i + 1}")
         c_var.add(i + (m - input_size) // 2, pcvl.PS(px))
 
-    bs_r = pcvl.GenericInterferometer(m,
-                                lambda idx: pcvl.BS(theta=pcvl.P("theta_r%d" % idx)) // (0, pcvl.PS(phi=np.pi * 2 * random.random())),
-                                shape=pcvl.InterferometerShape.RECTANGLE,
-                                depth=2 * m,
-                                phase_shifter_fun_gen=lambda idx: pcvl.PS(phi=np.pi*2*random.random()))
+    bs_r = pcvl.GenericInterferometer(
+        m,
+        lambda idx: pcvl.BS(theta=pcvl.P(f"theta_r{idx}"))
+        // (0, pcvl.PS(phi=np.pi * 2 * random.random())),
+        shape=pcvl.InterferometerShape.RECTANGLE,
+        depth=2 * m,
+        phase_shifter_fun_gen=lambda idx: pcvl.PS(phi=np.pi * 2 * random.random()),
+    )
 
     c = pcvl.Circuit(m)
     c.add(0, bs_l, merge=True)
@@ -143,32 +157,40 @@ def create_vqc_bs_mesh(m, input_size):
 def create_vqc_general(m, input_size):
     """
     Create general interferometer based variational quantum classifier.
-    
+
     Args:
         m (int): Number of modes in the photonic circuit
         input_size (int): Number of input features to encode
-        
+
     Returns:
         pcvl.Circuit: The constructed general interferometer quantum circuit
-        
+
     Note:
         Based on https://gitlab.quandela.dev/applications/merlin_notebooks/-/blob/main/classification/IRIS/merlin_classifier.ipynb
     """
 
-    wl = pcvl.GenericInterferometer(m,
-                                    lambda i: pcvl.BS() // pcvl.PS(pcvl.P(f"theta_li{i}")) // \
-                                              pcvl.BS() // pcvl.PS(pcvl.P(f"theta_lo{i}")),
-                                    shape=pcvl.InterferometerShape.RECTANGLE)
+    wl = pcvl.GenericInterferometer(
+        m,
+        lambda i: pcvl.BS()
+        // pcvl.PS(pcvl.P(f"theta_li{i}"))
+        // pcvl.BS()
+        // pcvl.PS(pcvl.P(f"theta_lo{i}")),
+        shape=pcvl.InterferometerShape.RECTANGLE,
+    )
 
     c_var = pcvl.Circuit(m)
     for i in range(input_size):
         px = pcvl.P(f"px{i + 1}")
         c_var.add(i + (m - input_size) // 2, pcvl.PS(px))
 
-    wr = pcvl.GenericInterferometer(m,
-                                    lambda i: pcvl.BS() // pcvl.PS(pcvl.P(f"theta_ri{i}")) // \
-                                              pcvl.BS() // pcvl.PS(pcvl.P(f"theta_ro{i}")),
-                                    shape=pcvl.InterferometerShape.RECTANGLE)
+    wr = pcvl.GenericInterferometer(
+        m,
+        lambda i: pcvl.BS()
+        // pcvl.PS(pcvl.P(f"theta_ri{i}"))
+        // pcvl.BS()
+        // pcvl.PS(pcvl.P(f"theta_ro{i}")),
+        shape=pcvl.InterferometerShape.RECTANGLE,
+    )
 
     c = pcvl.Circuit(m)
     c.add(0, wl, merge=True)
@@ -178,10 +200,19 @@ def create_vqc_general(m, input_size):
     return c
 
 
-def get_vqc(m, input_size, initial_state, no_bunching=False, activation="none", circuit="bs_mesh", visualize=False, scale_type="learned"):
+def get_vqc(
+    m,
+    input_size,
+    initial_state,
+    no_bunching=False,
+    activation="none",
+    circuit="bs_mesh",
+    visualize=False,
+    scale_type="learned",
+):
     """
     Create a complete variational quantum classifier with specified configuration.
-    
+
     Args:
         m (int): Number of modes in the photonic circuit
         input_size (int): Number of input features to encode
@@ -191,10 +222,10 @@ def get_vqc(m, input_size, initial_state, no_bunching=False, activation="none", 
         circuit (str): Circuit type ("bs_mesh", "general", "bs_basic", "spiral")
         visualize (bool): Whether to save circuit visualization
         scale_type (str): Input scaling method
-        
+
     Returns:
         nn.Sequential: Complete VQC model ready for training
-        
+
     Raises:
         ValueError: If unknown circuit type or activation function is specified
     """
@@ -226,15 +257,17 @@ def get_vqc(m, input_size, initial_state, no_bunching=False, activation="none", 
     print(f"Output size of quantum layer: {output_size}")
 
     vqc = QuantumLayer(
-            input_size=input_size,
-            output_size=output_size,
-            circuit=vqc_circuit,
-            trainable_parameters=[p.name for p in vqc_circuit.get_parameters() if not p.name.startswith("px")],
-            input_parameters=["px"],
-            input_state= initial_state, # [1, 0] * 3 for example
-            no_bunching=no_bunching,
-            output_mapping_strategy=OutputMappingStrategy.NONE
-        )
+        input_size=input_size,
+        output_size=output_size,
+        circuit=vqc_circuit,
+        trainable_parameters=[
+            p.name for p in vqc_circuit.get_parameters() if not p.name.startswith("px")
+        ],
+        input_parameters=["px"],
+        input_state=initial_state,  # [1, 0] * 3 for example
+        no_bunching=no_bunching,
+        output_mapping_strategy=OutputMappingStrategy.NONE,
+    )
 
     # The Linear layer acts as the observable and it makes sure the output is 1 dimensional
 
@@ -245,13 +278,19 @@ def get_vqc(m, input_size, initial_state, no_bunching=False, activation="none", 
     elif activation == "sigmoid":
         classification_layer = nn.Linear(vqc.output_size, 1)
         # nn.init.xavier_uniform_(classification_layer.weight)
-        complete_vqc = nn.Sequential(input_layer, vqc, classification_layer, nn.Sigmoid())
+        complete_vqc = nn.Sequential(
+            input_layer, vqc, classification_layer, nn.Sigmoid()
+        )
     elif activation == "softmax":
         classification_layer = nn.Linear(vqc.output_size, 2)
         # nn.init.xavier_uniform_(classification_layer.weight)
-        complete_vqc = nn.Sequential(input_layer, vqc, classification_layer, nn.Softmax(dim=1))
+        complete_vqc = nn.Sequential(
+            input_layer, vqc, classification_layer, nn.Softmax(dim=1)
+        )
     else:
-        raise ValueError(f"Activation function unknown or not implemented: '{activation}'")
+        raise ValueError(
+            f"Activation function unknown or not implemented: '{activation}'"
+        )
 
     return complete_vqc
 
@@ -259,10 +298,10 @@ def get_vqc(m, input_size, initial_state, no_bunching=False, activation="none", 
 def count_parameters(model):
     """
     Count trainable parameters in a PyTorch model.
-    
+
     Args:
         model (nn.Module): PyTorch model to analyze
-        
+
     Returns:
         int: Number of trainable parameters
     """
@@ -284,8 +323,9 @@ class ScaleLayer(nn.Module):
     Returns:
         nn.Module that multiplies the input tensor by a scaling factor
     """
+
     def __init__(self, dim, scale_type="learned"):
-        super(ScaleLayer, self).__init__()
+        super().__init__()
         # Create a single learnable parameter (initialized to 1.0 by default)
         if scale_type == "learned":
             self.scale = nn.Parameter(torch.rand(dim))

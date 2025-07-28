@@ -1,18 +1,35 @@
 import torch.nn as nn
 
+
 def get_mlp_deep(input_size, activation):
     classical_layer_1 = nn.Linear(input_size, 3)
     classical_layer_2 = nn.Linear(3, 2)
     if activation == "none":
-        mlp = nn.Sequential(classical_layer_1, nn.ReLU(), classical_layer_2, nn.ReLU(), nn.Linear(2, 1))
+        mlp = nn.Sequential(
+            classical_layer_1, nn.ReLU(), classical_layer_2, nn.ReLU(), nn.Linear(2, 1)
+        )
     elif activation == "sigmoid":
-        mlp = nn.Sequential(classical_layer_1, nn.ReLU(), classical_layer_2, nn.ReLU(), nn.Linear(2, 1),
-                                     nn.Sigmoid())
+        mlp = nn.Sequential(
+            classical_layer_1,
+            nn.ReLU(),
+            classical_layer_2,
+            nn.ReLU(),
+            nn.Linear(2, 1),
+            nn.Sigmoid(),
+        )
     elif activation == "softmax":
-        mlp = nn.Sequential(classical_layer_1, nn.ReLU(), classical_layer_2, nn.ReLU(), nn.Linear(2, 2),
-                                     nn.Softmax(dim=1))
+        mlp = nn.Sequential(
+            classical_layer_1,
+            nn.ReLU(),
+            classical_layer_2,
+            nn.ReLU(),
+            nn.Linear(2, 2),
+            nn.Softmax(dim=1),
+        )
     else:
-        raise ValueError(f"Activation function unknown or not implemented: '{activation}'")
+        raise ValueError(
+            f"Activation function unknown or not implemented: '{activation}'"
+        )
 
     return mlp
 
@@ -22,13 +39,15 @@ def get_mlp_wide(input_size, activation):
     if activation == "none":
         mlp = nn.Sequential(classical_layer_1, nn.ReLU(), nn.Linear(4, 1))
     elif activation == "sigmoid":
-        mlp = nn.Sequential(classical_layer_1, nn.ReLU(), nn.Linear(4, 1),
-                                     nn.Sigmoid())
+        mlp = nn.Sequential(classical_layer_1, nn.ReLU(), nn.Linear(4, 1), nn.Sigmoid())
     elif activation == "softmax":
-        mlp = nn.Sequential(classical_layer_1, nn.ReLU(), nn.Linear(4, 2),
-                                     nn.Softmax(dim=1))
+        mlp = nn.Sequential(
+            classical_layer_1, nn.ReLU(), nn.Linear(4, 2), nn.Softmax(dim=1)
+        )
     else:
-        raise ValueError(f"Activation function unknown or not implemented: '{activation}'")
+        raise ValueError(
+            f"Activation function unknown or not implemented: '{activation}'"
+        )
 
     return mlp
 

@@ -1,11 +1,13 @@
-import matplotlib.pyplot as plt
-import matplotlib.image as mpimg
 import os
-import numpy as np
-import torch
 from datetime import datetime
 
-def combine_saved_figures(q_approx=True, path='./results/'):
+import matplotlib.image as mpimg
+import matplotlib.pyplot as plt
+import numpy as np
+import torch
+
+
+def combine_saved_figures(q_approx=True, path="./results/"):
     r_values = [1, 10, 100]
     gamma_values = list(range(1, 11))  # gamma from 1 to 10
 
@@ -15,38 +17,46 @@ def combine_saved_figures(q_approx=True, path='./results/'):
         for j, gamma in enumerate(gamma_values):
             sigma = 1.0 / gamma
             if q_approx:
-                filename = f'q_rand_kitchen_sinks_R_{r}_sigma_{sigma}.png'
+                filename = f"q_rand_kitchen_sinks_R_{r}_sigma_{sigma}.png"
             else:
-                filename = f'classical_rand_kitchen_sinks_R_{r}_sigma_{sigma}.png'
-            filepath = os.path.join('./results/', filename)
+                filename = f"classical_rand_kitchen_sinks_R_{r}_sigma_{sigma}.png"
+            filepath = os.path.join("./results/", filename)
 
             if os.path.exists(filepath):
                 img = mpimg.imread(filepath)
                 ax = axes[i, j]
                 ax.imshow(img)
-                ax.axis('off')  # Hide axis ticks
+                ax.axis("off")  # Hide axis ticks
                 if i == 0:
-                    ax.set_title(f'γ = {gamma}', fontsize=10)
+                    ax.set_title(f"γ = {gamma}", fontsize=10)
                 if j == 0:
-                    ax.text(0, 0.5, f'R = {r}', fontsize=10,
-                            va='center', ha='right', transform=ax.transAxes)
+                    ax.text(
+                        0,
+                        0.5,
+                        f"R = {r}",
+                        fontsize=10,
+                        va="center",
+                        ha="right",
+                        transform=ax.transAxes,
+                    )
             else:
                 print(f"Warning: {filepath} not found.")
 
     plt.tight_layout()
-    #plt.subplots_adjust(left=0.01)
+    # plt.subplots_adjust(left=0.01)
     plt.subplots_adjust(left=0.1, wspace=0.05, hspace=0.1)
     if q_approx:
-        q_dir = os.path.join(path, 'q_rand_kitchen_sinks_overall.png')
+        q_dir = os.path.join(path, "q_rand_kitchen_sinks_overall.png")
         plt.savefig(q_dir, dpi=600)
     else:
-        dir = os.path.join(path, 'rand_kitchen_sinks_overall.png')
+        dir = os.path.join(path, "rand_kitchen_sinks_overall.png")
         plt.savefig(dir, dpi=600)
     plt.show()
     plt.close()
     return
 
-def save_hyperparameters(hp, filepath='./results/'):
+
+def save_hyperparameters(hp, filepath="./results/"):
     """
     Save hyperparameters to a text file in a visually pleasing format.
 
@@ -55,10 +65,10 @@ def save_hyperparameters(hp, filepath='./results/'):
         filepath: Path where to save the file
     """
     # Create results directory if it doesn't exist
-    dir = os.path.join(filepath, 'q_rand_kitchen_sinks_hps.txt')
+    dir = os.path.join(filepath, "q_rand_kitchen_sinks_hps.txt")
     os.makedirs(os.path.dirname(dir), exist_ok=True)
 
-    with open(dir, 'w') as f:
+    with open(dir, "w") as f:
         # Header
         f.write("=" * 80 + "\n")
         f.write("QUANTUM RANDOM KITCHEN SINKS HYPERPARAMETERS\n")
@@ -87,7 +97,7 @@ def save_hyperparameters(hp, filepath='./results/'):
         if isinstance(hp.z_q_matrix_scaling, str):
             z_val = hp.z_q_matrix_scaling
         else:
-            z_val = f'{hp.z_q_matrix_scaling:>10.6f}'
+            z_val = f"{hp.z_q_matrix_scaling:>10.6f}"
         f.write(f"Z Q matrix scaling:      {z_val}\n")
         f.write(f"Train hybrid model:      {str(hp.train_hybrid_model):>10}\n")
         f.write(f"Hybrid model data:      {str(hp.hybrid_model_data):>10}\n")
@@ -150,6 +160,7 @@ def save_hyperparameters(hp, filepath='./results/'):
 
     print(f"Hyperparameters saved to: {dir}")
     return
+
 
 def create_experiment_dir(base_dir):
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")

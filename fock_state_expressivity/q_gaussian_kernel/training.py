@@ -1,28 +1,42 @@
+import time
+
+import matplotlib.pyplot as plt
+import numpy as np
 import torch
 import torch.nn as nn
 import tqdm
-import numpy as np
-from sklearn.metrics import mean_squared_error
-from data import prepare_data, get_visual_sample
-from model import create_quantum_layer
-import matplotlib.pyplot as plt
 import wandb
-from sklearn.svm import SVC
-from sklearn.metrics import accuracy_score
-import time
+from data import get_visual_sample, prepare_data
 from matplotlib.patches import Patch
+from model import create_quantum_layer
+from sklearn.metrics import accuracy_score, mean_squared_error
+from sklearn.svm import SVC
 
 
-def train_model(model, X_train, y_train, model_name, args):
+def train_model(model, x_train, y_train, model_name, args):
     """Train a model and return training metrics"""
     if args.optimizer == "adagrad":
-        optimizer = torch.optim.Adagrad(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        optimizer = torch.optim.Adagrad(
+            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+        )
     elif args.optimizer == "adam":
-        optimizer = torch.optim.Adam(model.parameters(), lr=args.lr, betas=args.betas, weight_decay=args.weight_decay)
+        optimizer = torch.optim.Adam(
+            model.parameters(),
+            lr=args.lr,
+            betas=args.betas,
+            weight_decay=args.weight_decay,
+        )
     elif args.optimizer == "adamw":
-        optimizer = torch.optim.AdamW(model.parameters(), lr=args.lr, betas=args.betas, weight_decay=args.weight_decay)
+        optimizer = torch.optim.AdamW(
+            model.parameters(),
+            lr=args.lr,
+            betas=args.betas,
+            weight_decay=args.weight_decay,
+        )
     elif args.optimizer == "sgd":
-        optimizer = torch.optim.SGD(model.parameters(), lr=args.lr, weight_decay=args.weight_decay)
+        optimizer = torch.optim.SGD(
+            model.parameters(), lr=args.lr, weight_decay=args.weight_decay
+        )
 
     criterion = nn.MSELoss()
 
@@ -33,17 +47,17 @@ def train_model(model, X_train, y_train, model_name, args):
 
     pbar = tqdm.tqdm(range(args.num_epochs), desc=f"Training {model_name}")
     for epoch in pbar:
-        permutation = torch.randperm(X_train.size()[0])
+        permutation = torch.randperm(x_train.size()[0])
         total_loss = 0
 
-        for i in range(0, X_train.size()[0], args.batch_size):
+        for i in range(0, x_train.size()[0], args.batch_size):
             if args.shuffle_train:
-                indices = permutation[i:i + args.batch_size]
-                batch_x, batch_y = X_train[indices], y_train[indices]
+                indices = permutation[i : i + args.batch_size]
+                batch_x, batch_y = x_train[indices], y_train[indices]
             else:
                 start_index = i
                 end_index = i + args.batch_size
-                batch_x = X_train[start_index:end_index]
+                batch_x = x_train[start_index:end_index]
                 batch_y = y_train[start_index:end_index]
 
             outputs = model(batch_x)
@@ -55,28 +69,31 @@ def train_model(model, X_train, y_train, model_name, args):
 
             total_loss += loss.item()
 
-        avg_loss = total_loss / (X_train.size()[0] // args.batch_size)
+        avg_loss = total_loss / (x_train.size()[0] // args.batch_size)
         losses.append(avg_loss)
 
         # Evaluation
         model.eval()
         with torch.no_grad():
-            train_outputs = model(X_train)
+            train_outputs = model(x_train)
             train_mse = mean_squared_error(y_train.numpy(), train_outputs)
             train_mses.append(train_mse)
 
             wandb.log({"train_mse": train_mse, "epoch": epoch})
 
-            pbar.set_description(f"Training {model_name} - Loss: {avg_loss:.4f}, Train MSE: {train_mse:.4f}")
+            pbar.set_description(
+                f"Training {model_name} - Loss: {avg_loss:.4f}, Train MSE: {train_mse:.4f}"
+            )
 
         model.train()
 
     return {
-        'losses': losses,
-        'train_mses': train_mses,
+        "losses": losses,
+        "train_mses": train_mses,
     }
 
-def train_models_multiple_runs(num_photons, colors, X_train, ys_info, args):
+
+def train_models_multiple_runs(num_photons, colors, x_train, ys_info, args):
     """Train all models multiple times and return results"""
     all_results = {}
     ys = ys_info["ys"]
@@ -88,7 +105,9 @@ def train_models_multiple_runs(num_photons, colors, X_train, ys_info, args):
         results = {}
         models = []
         for n, color in zip(num_photons, colors):
-            print(f"\nTraining Q-Gaussian kernel with {n} photons ({args.num_runs} runs) for Gaussian with {name}:")
+            print(
+                f"\nTraining Q-Gaussian kernel with {n} photons ({args.num_runs} runs) for Gaussian with {name}:"
+            )
             pending_models = []
             model_runs = []
 
@@ -114,14 +133,20 @@ def train_models_multiple_runs(num_photons, colors, X_train, ys_info, args):
                         "no_bunching": args.no_bunching,
                         "optimizer": args.optimizer,
                         "shuffle_train": args.shuffle_train,
-                    }
+                    },
                 )
 
                 # Create a fresh instance of the model for each run
                 mzi = create_quantum_layer(n, args)
 
-                print(f"  Run {run+1}/{args.num_runs}...")
-                run_results = train_model(mzi, torch.tensor(X_train, dtype=torch.float).unsqueeze(-1), torch.tensor(y, dtype=torch.float), f"MZI_{n}-run{run+1}", args)
+                print(f"  Run {run + 1}/{args.num_runs}...")
+                run_results = train_model(
+                    mzi,
+                    torch.tensor(x_train, dtype=torch.float).unsqueeze(-1),
+                    torch.tensor(y, dtype=torch.float),
+                    f"MZI_{n}-run{run + 1}",
+                    args,
+                )
                 pending_models.append(mzi)
                 model_runs.append(run_results)
 
@@ -129,7 +154,9 @@ def train_models_multiple_runs(num_photons, colors, X_train, ys_info, args):
                 wandb.finish()
 
             # Find and keep the best model for each number of photons
-            index = torch.argmin(torch.tensor([model_run["train_mses"][-1] for model_run in model_runs]))
+            index = torch.argmin(
+                torch.tensor([model_run["train_mses"][-1] for model_run in model_runs])
+            )
 
             models.append(pending_models[index])
             # Store all runs for this model
@@ -144,7 +171,10 @@ def train_models_multiple_runs(num_photons, colors, X_train, ys_info, args):
 
     return all_results, unique_id
 
-def visualize_learned_function(results, num_photons, x_on_pi, delta, ys_info, args, unique_id):
+
+def visualize_learned_function(
+    results, num_photons, x_on_pi, delta, ys_info, args, unique_id
+):
     """Visualize learned function of different models to compare them with the target function, a Gaussian"""
     wandb.init(
         project="Q-Gaussian kernels - Gan paper",
@@ -163,7 +193,7 @@ def visualize_learned_function(results, num_photons, x_on_pi, delta, ys_info, ar
             "no_bunching": args.no_bunching,
             "optimizer": args.optimizer,
             "shuffle_train": args.shuffle_train,
-        }
+        },
     )
 
     mses = []
@@ -190,28 +220,40 @@ def visualize_learned_function(results, num_photons, x_on_pi, delta, ys_info, ar
             model.eval()
             with torch.no_grad():
                 output = model(torch.tensor(delta, dtype=torch.float).unsqueeze(-1))
-            axis.plot(x_on_pi, output.detach().numpy(), label=f"n = {circuit_name[4:]}", color=color, linewidth=1)
+            axis.plot(
+                x_on_pi,
+                output.detach().numpy(),
+                label=f"n = {circuit_name[4:]}",
+                color=color,
+                linewidth=1,
+            )
 
         axis.scatter(x_on_pi, y, s=10, color="k")
 
-        axis.set_xlabel('x / pi')
-        axis.set_ylabel('y')
+        axis.set_xlabel("x / pi")
+        axis.set_ylabel("y")
         axis.grid(True)
         if i == 0 and j == 0:
             axis.legend(loc="upper right")
-        axis.title.set_text(fr"$\sigma$ = {sigma}")
+        axis.title.set_text(rf"$\sigma$ = {sigma}")
         i += 1
         j += 1
-    fig.suptitle("Approximating Gaussian kernels of different standard deviations\nwith 2 mode circuits of varying number of photons (n)", fontsize=14)
+    fig.suptitle(
+        "Approximating Gaussian kernels of different standard deviations\nwith 2 mode circuits of varying number of photons (n)",
+        fontsize=14,
+    )
     # To save the figure locally
-    #plt.savefig(f"./learned_q_gaussian_kernels.png")
+    # plt.savefig(f"./learned_q_gaussian_kernels.png")
 
     wandb.log({"learned_functions": wandb.Image(fig)})
     assert len(mses) == len(circuit_names) * len(sigmas) * args.num_runs
-    wandb.log({"Mean final MSE": torch.mean(torch.tensor(mses, dtype=torch.float)).item()})
+    wandb.log(
+        {"Mean final MSE": torch.mean(torch.tensor(mses, dtype=torch.float)).item()}
+    )
     wandb.finish()
-    #plt.show()
+    # plt.show()
     return
+
 
 def save_models(results, num_photons, ys_info):
     ys = ys_info["ys"]
@@ -219,14 +261,18 @@ def save_models(results, num_photons, ys_info):
     sigmas = [1.00, 0.50, 0.33, 0.25]
     circuit_names = [f"MZI_{n}" for n in num_photons]
 
-    for y, y_name, sigma in zip(ys, y_names, sigmas):
+    for _y, y_name, sigma in zip(ys, y_names, sigmas):
         y_models = results[f"{y_name}"]["models"]
         for circuit_name, model in zip(circuit_names, y_models):
-            torch.save(model.state_dict(), f'./models/n{circuit_name[4:]}_std{sigma}.pth')
+            torch.save(
+                model.state_dict(), f"./models/n{circuit_name[4:]}_std{sigma}.pth"
+            )
 
     return
 
+
 # For classification
+
 
 def calculate_delta(x1, x2):
     """
@@ -239,14 +285,15 @@ def calculate_delta(x1, x2):
     assert x1.ndim == 2 and x2.ndim == 2, "Inputs must be 2D tensors"
 
     # Use broadcasting to compute pairwise squared Euclidean distances
-    diff = x1[:, None, :] - x2[None, :, :]     # shape (n1, n2, d)
-    delta = torch.sum(diff ** 2, dim=2)        # shape (n1, n2)
+    diff = x1[:, None, :] - x2[None, :, :]  # shape (n1, n2, d)
+    delta = torch.sum(diff**2, dim=2)  # shape (n1, n2)
 
     # Optional sanity checks
     assert delta.shape[0] == x1.size(0), "First dimension of delta is off"
     assert delta.shape[1] == x2.size(0), "Second dimension of delta is off"
 
     return delta
+
 
 def get_kernel(model, delta):
     """
@@ -256,15 +303,16 @@ def get_kernel(model, delta):
     model.eval()
     with torch.no_grad():
         flat_input = delta.view(-1, 1)  # shape (n1 * n2, 1)
-        output = model(flat_input)     # shape (n1 * n2, 1) or (n1 * n2,)
+        output = model(flat_input)  # shape (n1 * n2, 1) or (n1 * n2,)
         kernel_matrix = output.view(delta.shape)
     return kernel_matrix
 
-def train_svm(k_train, k_test, y_train, y_test, kernel='precomputed', gamma=0.5):
-    if kernel == 'precomputed':
-        clf = SVC(kernel='precomputed')
-    elif kernel == 'rbf':
-        clf = SVC(kernel='rbf', gamma=gamma)
+
+def train_svm(k_train, k_test, y_train, y_test, kernel="precomputed", gamma=0.5):
+    if kernel == "precomputed":
+        clf = SVC(kernel="precomputed")
+    elif kernel == "rbf":
+        clf = SVC(kernel="rbf", gamma=gamma)
     else:
         raise ValueError(f"Unknown kernel type: {kernel}")
 
@@ -273,15 +321,28 @@ def train_svm(k_train, k_test, y_train, y_test, kernel='precomputed', gamma=0.5)
     accuracy = accuracy_score(y_test.numpy(), y_pred)
     return accuracy
 
-def train_classif(args, scaling_factor, ys_info, num_photons, type='quantum'):
+
+def train_classif(args, scaling_factor, ys_info, num_photons, type="quantum"):
     initial_time = time.time()
     x_train, x_test, y_train, y_test = prepare_data(scaling_factor=scaling_factor)
     # Visualize training data
-    get_visual_sample(x_train, y_train, x_test, y_test, title=["Circular dataset", "Moon dataset", "Blob dataset"])
-    accs = {"circular_acc": [], "moon_acc": [], "blob_acc": [], "std_name": [], "n_photons": []}
+    get_visual_sample(
+        x_train,
+        y_train,
+        x_test,
+        y_test,
+        title=["Circular dataset", "Moon dataset", "Blob dataset"],
+    )
+    accs = {
+        "circular_acc": [],
+        "moon_acc": [],
+        "blob_acc": [],
+        "std_name": [],
+        "n_photons": [],
+    }
     std_names = ys_info["names"]
 
-    if type == 'quantum':
+    if type == "quantum":
         for std_name in std_names:
             for i in range(5):
                 n_photons = (i + 1) * 2
@@ -306,9 +367,27 @@ def train_classif(args, scaling_factor, ys_info, num_photons, type='quantum'):
                 kernel_test_blob = get_kernel(model, delta_test_blob)
 
                 # Train SVM
-                circular_acc = train_svm(kernel_train_circ, kernel_test_circ, y_train[0], y_test[0], kernel='precomputed')
-                moon_acc = train_svm(kernel_train_moon, kernel_test_moon, y_train[1], y_test[1], kernel='precomputed')
-                blob_acc = train_svm(kernel_train_blob, kernel_test_blob, y_train[2], y_test[2], kernel='precomputed')
+                circular_acc = train_svm(
+                    kernel_train_circ,
+                    kernel_test_circ,
+                    y_train[0],
+                    y_test[0],
+                    kernel="precomputed",
+                )
+                moon_acc = train_svm(
+                    kernel_train_moon,
+                    kernel_test_moon,
+                    y_train[1],
+                    y_test[1],
+                    kernel="precomputed",
+                )
+                blob_acc = train_svm(
+                    kernel_train_blob,
+                    kernel_test_blob,
+                    y_train[2],
+                    y_test[2],
+                    kernel="precomputed",
+                )
 
                 accs["circular_acc"].append(circular_acc)
                 accs["moon_acc"].append(moon_acc)
@@ -316,19 +395,25 @@ def train_classif(args, scaling_factor, ys_info, num_photons, type='quantum'):
                 accs["std_name"].append(std_name)
                 accs["n_photons"].append(n_photons)
 
-    elif type == 'rbf':
+    elif type == "rbf":
         for std_name in std_names:
             std = float(std_name[-4:])
             gamma = 1.0 / (2 * std**2)
-            circular_acc = train_svm(x_train[0], x_test[0], y_train[0], y_test[0], kernel='rbf', gamma=gamma)
-            moon_acc = train_svm(x_train[1], x_test[1], y_train[1], y_test[1], kernel='rbf', gamma=gamma)
-            blob_acc = train_svm(x_train[2], x_test[2], y_train[2], y_test[2], kernel='rbf', gamma=gamma)
+            circular_acc = train_svm(
+                x_train[0], x_test[0], y_train[0], y_test[0], kernel="rbf", gamma=gamma
+            )
+            moon_acc = train_svm(
+                x_train[1], x_test[1], y_train[1], y_test[1], kernel="rbf", gamma=gamma
+            )
+            blob_acc = train_svm(
+                x_train[2], x_test[2], y_train[2], y_test[2], kernel="rbf", gamma=gamma
+            )
 
-            accs['circular_acc'].append(circular_acc)
-            accs['moon_acc'].append(moon_acc)
-            accs['blob_acc'].append(blob_acc)
-            accs['std_name'].append(std_name)
-            accs['n_photons'].append(-1)
+            accs["circular_acc"].append(circular_acc)
+            accs["moon_acc"].append(moon_acc)
+            accs["blob_acc"].append(blob_acc)
+            accs["std_name"].append(std_name)
+            accs["n_photons"].append(-1)
 
     else:
         raise ValueError(f"Unknown kernel type: {type}")
@@ -336,17 +421,13 @@ def train_classif(args, scaling_factor, ys_info, num_photons, type='quantum'):
     final_time = time.time()
     return accs, final_time - initial_time
 
+
 def visualize_accuracies(q_results, classical_results):
     fig, axs = plt.subplots(2, 2, figsize=(10, 8))
     plt.subplots_adjust(hspace=0.4, wspace=0.3)
 
     # Map each std to a subplot index
-    std_to_pos = {
-        1.0: (0, 0),
-        0.5: (0, 1),
-        0.33: (1, 0),
-        0.25: (1, 1)
-    }
+    std_to_pos = {1.0: (0, 0), 0.5: (0, 1), 0.33: (1, 0), 0.25: (1, 1)}
 
     datasets = ["circular", "moon", "blob"]
     quantum_colors = ["red", "blue", "green"]
@@ -364,7 +445,7 @@ def visualize_accuracies(q_results, classical_results):
 
         # Get quantum data for this std
         std_indices = [j for j, s in enumerate(q_results["std_name"]) if s == std_str]
-        n_photon_vals = sorted(set([q_results["n_photons"][j] for j in std_indices]))
+        n_photon_vals = sorted({q_results["n_photons"][j] for j in std_indices})
 
         num_groups = len(n_photon_vals) + 1  # +1 for classical comparison
         positions = np.arange(num_groups)
@@ -384,22 +465,18 @@ def visualize_accuracies(q_results, classical_results):
             for j, y in enumerate(y_vals):
                 if j < len(n_photon_vals):
                     # Quantum bar
-                    axis.bar(
-                        x_pos[j], y,
-                        width=bar_width,
-                        color=quantum_colors[k]
-                    )
+                    axis.bar(x_pos[j], y, width=bar_width, color=quantum_colors[k])
                 else:
                     # Classical bar
                     axis.bar(
-                        x_pos[j], y,
+                        x_pos[j],
+                        y,
                         width=bar_width,
                         color=quantum_colors[k],
                     )
                 # Add text above each bar
                 axis.text(
-                    x_pos[j], y + 0.01, f"{y:.2f}",
-                    ha='center', va='bottom', fontsize=6
+                    x_pos[j], y + 0.01, f"{y:.2f}", ha="center", va="bottom", fontsize=6
                 )
 
         x_labels = [str(n) + " photons" for n in n_photon_vals] + ["Classical"]
@@ -414,14 +491,14 @@ def visualize_accuracies(q_results, classical_results):
         classical_start = positions[-1] - bar_width / 2  # Left edge of classical bars
         axis.axvline(
             x=classical_start - 0.12,  # small offset for aesthetics
-            color='black',
-            linestyle='--',
-            linewidth=1
+            color="black",
+            linestyle="--",
+            linewidth=1,
         )
 
     plt.suptitle(
         "SVM classification accuracy across datasets\ncomparing approximated and exact Gaussian kernels",
-        fontsize=14
+        fontsize=14,
     )
     handles, labels = axs[0, 0].get_legend_handles_labels()
     legend_patches = [
@@ -431,13 +508,15 @@ def visualize_accuracies(q_results, classical_results):
 
     fig.legend(
         handles=legend_patches,
-        loc='center left',
+        loc="center left",
         bbox_to_anchor=(1.0, 0.5),
-        title="Dataset"
+        title="Dataset",
     )
-    #fig.legend(handles, labels, loc='center left', bbox_to_anchor=(1.0, 0.5), title="Dataset")
+    # fig.legend(handles, labels, loc='center left', bbox_to_anchor=(1.0, 0.5), title="Dataset")
     plt.tight_layout(rect=[0, 0, 0.95, 1])
-    plt.savefig("./results/svm_accuracies_quantum_kernel.png", bbox_inches='tight', dpi=600)
-    '''plt.show()
-    plt.clf()'''
+    plt.savefig(
+        "./results/svm_accuracies_quantum_kernel.png", bbox_inches="tight", dpi=600
+    )
+    """plt.show()
+    plt.clf()"""
     return

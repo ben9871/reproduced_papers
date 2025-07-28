@@ -1,12 +1,33 @@
 import numpy as np
 import torch
 
+
 class Hyperparameters:
-    def __init__(self, n_samples=200, noise=0.2, random_state=42, scaling='Standard', test_prop=0.2, num_photon=10,
-                 output_mapping_strategy='NONE', no_bunching=False, circuit='mzi', batch_size=30, optimizer='adam',
-                 learning_rate=0.001, betas=(0.9, 0.999), weight_decay=0.02, num_epochs=50, C=1.0, r=1, gamma=1,
-                 train_hybrid_model=True, pre_encoding_scaling=1.0/np.pi, z_q_matrix_scaling='1/sqrt(R)',
-                 hybrid_model_data='Default'):
+    def __init__(
+        self,
+        n_samples=200,
+        noise=0.2,
+        random_state=42,
+        scaling="Standard",
+        test_prop=0.2,
+        num_photon=10,
+        output_mapping_strategy="NONE",
+        no_bunching=False,
+        circuit="mzi",
+        batch_size=30,
+        optimizer="adam",
+        learning_rate=0.001,
+        betas=(0.9, 0.999),
+        weight_decay=0.02,
+        num_epochs=50,
+        c=1.0,
+        r=1,
+        gamma=1,
+        train_hybrid_model=True,
+        pre_encoding_scaling=1.0 / np.pi,
+        z_q_matrix_scaling="1/sqrt(R)",
+        hybrid_model_data="Default",
+    ):
         self.n_samples = n_samples
         self.noise = noise
         self.random_state = random_state
@@ -22,7 +43,7 @@ class Hyperparameters:
         self.betas = betas
         self.weight_decay = weight_decay
         self.num_epochs = num_epochs
-        self.C = C
+        self.c = c
         self.r = r
         self.gamma = gamma
         self.train_hybrid_model = train_hybrid_model
@@ -36,11 +57,11 @@ class Hyperparameters:
 
     def set_z_q_matrix_scaling_value(self):
         if isinstance(self.z_q_matrix_scaling, str):
-            if self.z_q_matrix_scaling == '1/sqrt(R)':
-                self.z_q_matrix_scaling_value = torch.tensor(1.0/ np.sqrt(self.r))
-            elif self.z_q_matrix_scaling == 'sqrt(R)':
+            if self.z_q_matrix_scaling == "1/sqrt(R)":
+                self.z_q_matrix_scaling_value = torch.tensor(1.0 / np.sqrt(self.r))
+            elif self.z_q_matrix_scaling == "sqrt(R)":
                 self.z_q_matrix_scaling_value = torch.tensor(np.sqrt(self.r))
-            elif self.z_q_matrix_scaling == 'sqrt(R) + 3':
+            elif self.z_q_matrix_scaling == "sqrt(R) + 3":
                 self.z_q_matrix_scaling_value = torch.tensor(np.sqrt(self.r) + 3)
             else:
                 raise ValueError('z_q_matrix_scaling must be "1/sqrt(R)" or "sqrt(R)"')
