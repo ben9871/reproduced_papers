@@ -23,7 +23,7 @@ from utils_qllm import (
 def create_results_folder():
     """Create a timestamped results folder and return its path"""
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    results_folder = f"results/experiment_{timestamp}"
+    results_folder = f"results-final/experiment_{timestamp}"
     os.makedirs(results_folder, exist_ok=True)
     return results_folder
 
@@ -39,6 +39,28 @@ def save_results(results, results_folder):
     """Save experiment results to JSON file"""
     with open(f"{results_folder}/results.json", "w") as f:
         json.dump(results, f, indent=2)
+
+
+def save_individual_quantum_result(mode, photons, result, results_folder):
+    """Save individual quantum experiment result to prevent data loss"""
+    individual_result = {
+        "mode": mode,
+        "photons": photons,
+        "config": f"{mode}-qlayer-{photons}",
+        "val_accuracy": result[0],
+        "test_accuracy": result[1],
+        "best_val": result[2],
+        "timestamp": datetime.now().isoformat(),
+    }
+
+    # Save to individual result file
+    individual_file = f"{results_folder}/quantum_individual_results.json"
+    with open(individual_file, "a") as f:
+        f.write(json.dumps(individual_result) + "\n")
+
+    print(
+        f"Saved individual result for {mode} modes, {photons} photons to {individual_file}"
+    )
 
 
 def parse_args():
@@ -118,6 +140,19 @@ def parse_args():
         type=int,
         default=0,
         help="Number of photons max (0 stands for modes/2)",
+    )
+
+    parser.add_argument(
+        "--photons-max",
+        action="store_true",
+        help="If True then max photons = 3",
+    )
+
+    parser.add_argument(
+        "--lr-q",
+        type=float,
+        default=0.001,
+        help="Learning rate for the quantum head",
     )
 
     # Execution parameters
@@ -355,14 +390,28 @@ def generate_embeddings(sentence_transformer, train_dataset, args):
     if args.verbose:
         print(f"Embeddings shape: {train_embeddings.shape}")
         print(f"Labels shape: {train_labels.shape}")
-
-    return train_embeddings, train_labels
+    # scaling on the embeddings
+    global_train_max = train_embeddings.max()
+    global_train_min = train_embeddings.min()
+    # min to 0 and max to 1
+    train_embeddings_scaled = (train_embeddings - global_train_min) / (
+        global_train_max - global_train_min
+    )
+    return (
+        train_embeddings,
+        train_embeddings_scaled,
+        train_labels,
+        global_train_max,
+        global_train_min,
+    )
 
 
 def train_classical_heads(
     sentence_transformer,
     train_embeddings,
     train_labels,
+    global_train_max,
+    global_train_min,
     eval_dataset,
     test_dataset,
     args,
@@ -381,16 +430,25 @@ def train_classical_heads(
     if args.verbose:
         print("\n1. Training Logistic Regression head...")
 
+    # eval embeddings
+    eval_embeddings = sentence_transformer.encode(eval_dataset["sentence"])
+    eval_embeddings = (eval_embeddings - global_train_min) / (
+        global_train_max - global_train_min
+    )
+    eval_embeddings = torch.tensor(np.clip(eval_embeddings, 0, 1))
+    # test embeddings
+    test_embeddings = sentence_transformer.encode(test_dataset["sentence"])
+    test_embeddings = (test_embeddings - global_train_min) / (
+        global_train_max - global_train_min
+    )
+    test_embeddings = torch.tensor(np.clip(test_embeddings, 0, 1))
+
     model = SetFitModel.from_pretrained(args.model_name)
     model.model_body = sentence_transformer
     model.model_head.fit(train_embeddings, train_labels)
 
-    lg_val_accuracy, _ = evaluate(
-        model, eval_dataset["sentence"], eval_dataset["label"]
-    )
-    lg_test_accuracy, _ = evaluate(
-        model, test_dataset["sentence"], test_dataset["label"]
-    )
+    lg_val_accuracy, _ = evaluate(model, eval_embeddings, eval_dataset["label"])
+    lg_test_accuracy, _ = evaluate(model, test_embeddings, test_dataset["label"])
 
     if args.verbose:
         print(
@@ -410,12 +468,8 @@ def train_classical_heads(
     model.model_head = SVC(C=1.0, kernel="rbf", gamma="scale", probability=True)
     model.model_head.fit(train_embeddings, train_labels)
 
-    svc_296_val_accuracy, _ = evaluate(
-        model, eval_dataset["sentence"], eval_dataset["label"]
-    )
-    svc_296_test_accuracy, _ = evaluate(
-        model, test_dataset["sentence"], test_dataset["label"]
-    )
+    svc_296_val_accuracy, _ = evaluate(model, eval_embeddings, eval_dataset["label"])
+    svc_296_test_accuracy, _ = evaluate(model, test_embeddings, test_dataset["label"])
 
     n_support_vectors_296 = model.model_head.n_support_.sum()
 
@@ -431,12 +485,8 @@ def train_classical_heads(
     model.model_head = SVC(C=100.0, kernel="rbf", gamma="scale", probability=True)
     model.model_head.fit(train_embeddings, train_labels)
 
-    svc_435_val_accuracy, _ = evaluate(
-        model, eval_dataset["sentence"], eval_dataset["label"]
-    )
-    svc_435_test_accuracy, _ = evaluate(
-        model, test_dataset["sentence"], test_dataset["label"]
-    )
+    svc_435_val_accuracy, _ = evaluate(model, eval_embeddings, eval_dataset["label"])
+    svc_435_test_accuracy, _ = evaluate(model, test_embeddings, test_dataset["label"])
 
     n_support_vectors_435 = model.model_head.n_support_.sum()
 
@@ -465,14 +515,14 @@ def train_classical_heads(
         model = replace_setfit_head_with_mlp(
             model,
             input_dim=args.embedding_dim,
-            hidden_dim=args.hidden_dim,
+            hidden_dim=hidden_dim,
             num_classes=num_classes,
             epochs=args.head_epochs,
         )
 
         # Generate test embeddings for validation during training
         test_embeddings = []
-        test_labels = test_dataset["label"]
+        eval_labels = eval_dataset["label"]
 
         with torch.no_grad():
             num_batches = (
@@ -490,25 +540,33 @@ def train_classical_heads(
                 test_embeddings.extend(batch_embeddings.detach().cpu().numpy())
 
         test_embeddings = np.array(test_embeddings)
-
-        # Train with test data as validation
+        test_embeddings = (test_embeddings - global_train_min) / (
+            global_train_max - global_train_min
+        )
+        test_embeddings = torch.tensor(np.clip(test_embeddings, 0, 1))
+        # Train with validation data (convert tensor back to numpy for consistent processing)
+        eval_embeddings_numpy = (
+            eval_embeddings.cpu().numpy()
+            if isinstance(eval_embeddings, torch.Tensor)
+            else eval_embeddings
+        )
         model.model_head.fit(
-            train_embeddings, train_labels, test_embeddings, test_labels
+            train_embeddings, train_labels, eval_embeddings_numpy, eval_labels
         )
 
-        mlp_val_accuracy, _ = evaluate(
-            model, eval_dataset["sentence"], eval_dataset["label"]
-        )
-        mlp_test_accuracy, _ = evaluate(
-            model, test_dataset["sentence"], test_dataset["label"]
-        )
-        best_test = model.model_head.best_val
+        # Fallback to using the predict method
+        mlp_val_predictions = model.model_head.predict(eval_embeddings_numpy)
+        mlp_val_accuracy = accuracy_score(eval_dataset["label"], mlp_val_predictions)
+        mlp_test_accuracy, _ = evaluate(model, test_embeddings, test_dataset["label"])
+        best_val = (
+            model.model_head.best_val / 100.0
+        )  # Convert from percentage to decimal
         if args.verbose:
             print(
-                f"MLP - Val: {mlp_val_accuracy:.4f}, Test: {mlp_test_accuracy:.4f}, Best Test: {best_test}"
+                f"MLP - Val: {mlp_val_accuracy:.4f}, Test: {mlp_test_accuracy:.4f}, Best Val: {best_val:.4f}"
             )
 
-        results[f"MLP-{hidden_dim}"] = [mlp_val_accuracy, mlp_test_accuracy, best_test]
+        results[f"MLP-{hidden_dim}"] = [mlp_val_accuracy, mlp_test_accuracy, best_val]
 
     return results, model, num_classes
 
@@ -517,12 +575,15 @@ def train_quantum_heads(
     model,
     sentence_transformer,
     train_embeddings,
+    global_train_max,
+    global_train_min,
     train_labels,
     eval_dataset,
     test_dataset,
     args,
     num_classes,
     device,
+    results_folder,
 ):
     """Train quantum classification heads"""
     if args.verbose:
@@ -534,7 +595,8 @@ def train_quantum_heads(
         photon_max = int(mode // 2) if args.photons <= 0 else args.photons
         if args.photons > int(mode // 2):
             photon_max = int(mode // 2)
-
+        if args.photons_max:
+            photon_max = 3
         for k in range(1, photon_max + 1):
             # Create input state with k photons
             input_state = [0] * mode
@@ -555,12 +617,14 @@ def train_quantum_heads(
                 epochs=args.head_epochs,
                 input_state=input_state,
                 no_bunching=args.no_bunching,
+                lr=args.lr_q,
             )
+            # Move model to device BEFORE training to avoid parameter issues
             model = model.to(device)
+            print("\n -> Model sent to device")
 
             # Generate test embeddings for validation during training
             test_embeddings = []
-            test_labels = test_dataset["label"]
 
             with torch.no_grad():
                 num_batches = (
@@ -576,43 +640,56 @@ def train_quantum_heads(
                         batch_texts, convert_to_tensor=True
                     )
                     test_embeddings.extend(batch_embeddings.detach().cpu().numpy())
-
+            # normalization
             test_embeddings = np.array(test_embeddings)
+            test_embeddings = (test_embeddings - global_train_min) / (
+                global_train_max - global_train_min
+            )
+            test_embeddings = np.clip(test_embeddings, 0, 1)
+            # Val dataset
+            eval_embeddings = sentence_transformer.encode(eval_dataset["sentence"])
+            eval_embeddings = (eval_embeddings - global_train_min) / (
+                global_train_max - global_train_min
+            )
+            eval_embeddings = torch.tensor(np.clip(eval_embeddings, 0, 1))
+            print(f" -> test embeddings obtained: {test_embeddings.shape}")
 
             # Train the quantum head with test data as validation
+            print("\n Training the quantum head")
             model.model_head.fit(
-                train_embeddings, train_labels, test_embeddings, test_labels
+                train_embeddings, train_labels, eval_embeddings, eval_dataset["label"]
             )
 
-            # Evaluate
-            q_val_predictions = model.model_head.predict(
-                sentence_transformer.encode(
-                    eval_dataset["sentence"], convert_to_tensor=True
-                )
-                .cpu()
-                .numpy()
-            )
+            # Fallback to using the predict method
+            q_val_predictions = model.model_head.predict(eval_embeddings.cpu().numpy())
             q_val_accuracy = accuracy_score(eval_dataset["label"], q_val_predictions)
 
-            q_test_predictions = model.model_head.predict(
-                sentence_transformer.encode(
-                    test_dataset["sentence"], convert_to_tensor=True
-                )
-                .cpu()
-                .numpy()
+            # Test evaluation using the same method as MLP
+            test_embeddings_tensor = torch.tensor(test_embeddings, dtype=torch.float32)
+            q_test_accuracy, _ = evaluate(
+                model, test_embeddings_tensor, test_dataset["label"]
             )
-            q_test_accuracy = accuracy_score(test_dataset["label"], q_test_predictions)
-            best_test = model.model_head.best_val
+            best_val_decimal = (
+                model.model_head.best_val / 100.0
+            )  # Convert from percentage to decimal
             if args.verbose:
                 print(
-                    f"   Quantum {mode}-{k} - Val: {q_val_accuracy:.4f}, Test: {q_test_accuracy:.4f}, Best Val: {best_test:.4f}"
+                    f"   Quantum {mode}-{k} - Val: {q_val_accuracy:.4f}, Test: {q_test_accuracy:.4f}, Best Val: {best_val_decimal:.4f}"
                 )
 
             quantum_results[f"{mode}-qlayer-{k}"] = [
                 q_val_accuracy,
                 q_test_accuracy,
-                best_test,
+                best_val_decimal,
             ]
+
+            # Save individual result immediately after each experiment
+            save_individual_quantum_result(
+                mode,
+                k,
+                [q_val_accuracy, q_test_accuracy, best_val_decimal],
+                results_folder,
+            )
 
     return quantum_results
 
@@ -631,7 +708,7 @@ def plot_results_comparison(results, results_folder):
     # Process quantum results
     quantum_configs = list(results["Qlayer"].keys())
     quantum_val_accs = [results["Qlayer"][config][0] for config in quantum_configs]
-    quantum_test_accs = [results["Qlayer"][config][2] for config in quantum_configs]
+    quantum_test_accs = [results["Qlayer"][config][1] for config in quantum_configs]
 
     # Create comparison plot
     fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(15, 6))
@@ -742,16 +819,24 @@ def main():
         )
 
     # Generate embeddings
-    train_embeddings, train_labels = generate_embeddings(
-        sentence_transformer, train_dataset, args
-    )
+    (
+        train_embeddings_not_scaled,
+        train_embeddings,
+        train_labels,
+        global_train_max,
+        global_train_min,
+    ) = generate_embeddings(sentence_transformer, train_dataset, args)
+
     num_classes = 2
+    results = {}  # Initialize results dictionary
     # Train classical heads
     if trained_cl:
         results, model, num_classes = train_classical_heads(
             sentence_transformer,
             train_embeddings,
             train_labels,
+            global_train_max,
+            global_train_min,
             eval_dataset,
             test_dataset,
             args,
@@ -763,12 +848,15 @@ def main():
         model,
         sentence_transformer,
         train_embeddings,
+        global_train_max,
+        global_train_min,
         train_labels,
         eval_dataset,
         test_dataset,
         args,
         num_classes,
         device,
+        results_folder,
     )
 
     # Combine results

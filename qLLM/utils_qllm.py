@@ -1,3 +1,4 @@
+import copy
 import json
 import math
 import os
@@ -92,7 +93,7 @@ class ModelWrapper(nn.Module):
 ## evaluation function ##
 
 
-def evaluate(model, texts, labels):
+def evaluate(model, embeddings, labels):
     """
     Evaluate SetFit model on given texts and labels.
 
@@ -105,7 +106,7 @@ def evaluate(model, texts, labels):
         tuple: (accuracy, predictions)
     """
     batch_size = 16
-    num_samples = len(texts)
+    num_samples = embeddings.shape[0]
     num_batches = (num_samples + batch_size - 1) // batch_size
 
     all_embeddings = []
@@ -115,13 +116,14 @@ def evaluate(model, texts, labels):
             start_idx = batch_idx * batch_size
             end_idx = min(start_idx + batch_size, num_samples)
 
-            batch_texts = texts[start_idx:end_idx]
+            # batch_texts = texts[start_idx:end_idx]
 
             # Get embeddings
-            batch_embeddings = model.model_body.encode(
+            """batch_embeddings = model.model_body.encode(
                 batch_texts, convert_to_tensor=True
-            )
-            batch_embeddings_cpu = batch_embeddings.detach().cpu().numpy()
+            )"""
+            batch_embeddings = embeddings[start_idx:end_idx]
+            batch_embeddings_cpu = batch_embeddings  # .detach().cpu().numpy()
 
             all_embeddings.extend(batch_embeddings_cpu)
 
@@ -209,7 +211,14 @@ class MLPClassifierWrapper(BaseEstimator, ClassifierMixin):
         optimizer = torch.optim.Adam(
             self.model.parameters(), lr=self.lr, weight_decay=1e-5
         )
+
+        # Add learning rate scheduler based on validation loss
+        """scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6
+        )"""
+
         best_val = 0
+        self.best_model_state_dict = None
         # Training loop
         for epoch in range(self.epochs):
             # Training phase
@@ -245,10 +254,12 @@ class MLPClassifierWrapper(BaseEstimator, ClassifierMixin):
 
             # Validation phase
             val_accuracy = 0
+            # val_loss = 0
             if val_x is not None and val_y is not None:
                 self.model.eval()
                 with torch.no_grad():
                     val_outputs = self.model(val_x)
+                    # val_loss = criterion(val_outputs, val_y).item()
                     _, val_predicted = torch.max(val_outputs.data, 1)
                     val_accuracy = (
                         100 * (val_predicted == val_y).sum().item() / val_y.size(0)
@@ -256,17 +267,26 @@ class MLPClassifierWrapper(BaseEstimator, ClassifierMixin):
                     self.val_accuracies.append(val_accuracy)
             if val_accuracy > best_val:
                 best_val = val_accuracy
+                self.best_model_state_dict = copy.deepcopy(self.model.state_dict())
+
+            # Step the scheduler with validation loss (if validation data is provided)
+            """if val_x is not None and val_y is not None:
+                scheduler.step(val_loss)
+            """
             # Print progress
             if (epoch + 1) % 10 == 0:
                 avg_loss = total_loss / (len(x) // self.batch_size + 1)
                 if val_x is not None and val_y is not None:
                     print(
-                        f"Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}, Train Acc: {train_accuracy:.2f}%, Val Acc: {val_accuracy:.2f}%"
+                        f"Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}, Train Acc: {train_accuracy:.2f}%, Val Acc: {val_accuracy:.2f}% (Best Val: {best_val:.2f}%)  [lr = {optimizer.param_groups[0]['lr']}]"
                     )
                 else:
                     print(
                         f"Epoch [{epoch + 1}/{self.epochs}], Loss: {avg_loss:.4f}, Train Acc: {train_accuracy:.2f}%"
                     )
+        if self.best_model_state_dict is not None:
+            self.model.load_state_dict(self.best_model_state_dict)
+            print(f"Best model loaded with validation accuracy: {best_val:.2f}%")
         self.best_val = best_val
         return self
 
@@ -388,6 +408,8 @@ class QuantumClassifier(nn.Module):
 
         # build the QLayer with a linear output as in the original paper
         # "The measurement output of the second module is then passed through a single Linear layer"
+        self.sig = nn.Sigmoid()
+        print("\n -> self.q_circuit")
         self.q_circuit = ml.QuantumLayer(
             input_size=hidden_dim,
             output_size=None,  # but we do not use it
@@ -401,11 +423,17 @@ class QuantumClassifier(nn.Module):
             device=device,
             no_bunching=no_bunching,
         )
+        self.bn = nn.LayerNorm(output_size_slos).requires_grad_(False)  # works OK
+        print(f"\n -- Building the Linear layer with output size = {num_classes} -- ")
         self.output_layer = nn.Linear(output_size_slos, num_classes, device=device)
 
     def forward(self, x):
         # forward pass
-        out = self.output_layer(self.q_circuit(self.downscaling_layer(x)))
+        out = self.downscaling_layer(x)
+        # casts the input to [0,1] + use q_circuit
+        out = self.q_circuit(self.sig(out))
+        out_scaled = out  # self.bn(out) #(out - out.mean(dim = 1, keepdim=True)) / (out.std(dim = 1, keepdim=True)+1e-6)
+        out = self.output_layer(out_scaled)
         return out
 
 
@@ -462,7 +490,7 @@ class QLayerTraining(BaseEstimator, ClassifierMixin):
         )
 
         print(
-            f"Number of parameters in Quantum head: {sum([p.numel() for p in self.model.parameters() if p.requires_grad])}"
+            f"\n ---- Number of parameters in Quantum head: {sum([p.numel() for p in self.model.parameters() if p.requires_grad])}"
         )
         self.model = self.model.to(self.device)
 
@@ -521,6 +549,7 @@ class QLayerTraining(BaseEstimator, ClassifierMixin):
         """Train the QLayer with a manual training loop and optional validation data."""
         # Store classes
         self.classes_ = np.unique(y)
+        print(f"\n -- Self.classes_ = {self.classes_} --")
 
         # Initialize model
         self._initialize_model()
@@ -548,36 +577,59 @@ class QLayerTraining(BaseEstimator, ClassifierMixin):
         optimizer = torch.optim.Adam(
             self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay
         )
+
+        # Add learning rate scheduler based on validation loss
+        scheduler = torch.optim.lr_scheduler.ReduceLROnPlateau(
+            optimizer, mode="min", factor=0.5, patience=5, min_lr=1e-6
+        )
+
+        print(
+            f"\n Set up the optimizer with lr: {self.lr} and weight_decay = {self.weight_decay}"
+        )
         best_val = 0
+        self.best_model_state_dict = None
 
         # Training loop
+        print("Entering in the training loop")
         for epoch in range(self.epochs):
             # Train for one epoch
+            # print("\n -- train step ...")
             train_loss, train_accuracy = self._train_epoch(
                 train_loader, criterion, optimizer
             )
+            # print("\n --- train step done ---")
             self.history["train_loss"].append(train_loss)
             self.train_accuracies.append(train_accuracy)
 
             # Validation phase
             val_loss, val_accuracy = 0, 0
             if val_loader is not None:
+                # print("\n -- val step ...")
                 val_loss, val_accuracy = self._validate_epoch(val_loader, criterion)
+                # print("\n --- val step done ---")
                 self.history["val_loss"].append(val_loss)
                 self.history["val_accuracy"].append(val_accuracy)
                 self.val_accuracies.append(val_accuracy)
                 if val_accuracy > best_val:
                     best_val = val_accuracy
-            if (epoch + 1) % 50 == 0:
-                if val_loader is not None:
-                    print(
-                        f"Epoch {epoch + 1}/{self.epochs}, Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.2f}%, Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.2f}% - Best Val Acc: {best_val:.2f}"
-                    )
-                else:
-                    print(
-                        f"Epoch {epoch + 1}/{self.epochs}, Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.2f}%"
-                    )
+                    self.best_model_state_dict = copy.deepcopy(self.model.state_dict())
 
+                # Step the scheduler with validation loss
+                scheduler.step(val_loss)
+
+            # if (epoch + 1) % 50 == 0:
+            if val_loader is not None:
+                print(
+                    f"Epoch {epoch + 1}/{self.epochs}, Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.2f}%, Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.2f}% - Best Val Acc: {best_val:.2f} - [lr = {optimizer.param_groups[0]['lr']}]"
+                )
+            else:
+                print(
+                    f"Epoch {epoch + 1}/{self.epochs}, Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.2f}%"
+                )
+
+        if self.best_model_state_dict is not None:
+            self.model.load_state_dict(self.best_model_state_dict)
+            print(f"Best model loaded with validation accuracy: {best_val:.2f}%")
         self.is_fitted_ = True
         self.best_val = best_val
         return self
@@ -591,6 +643,9 @@ class QLayerTraining(BaseEstimator, ClassifierMixin):
         with torch.no_grad():
             outputs = self.model(x_tensor)
             _, predicted = torch.max(outputs, 1)
+            print(
+                f"Output and predicted in predict of shape and classes {outputs.shape} and {predicted.shape} and {self.classes_}"
+            )
 
         return self.classes_[predicted.cpu().numpy()]
 
@@ -621,6 +676,7 @@ def create_setfit_with_q_layer(
     modes=10,
     num_classes=2,
     epochs=100,
+    lr=0.001,
     input_state=None,
     no_bunching=False,
 ):
@@ -651,8 +707,9 @@ def create_setfit_with_q_layer(
         input_state=input_state,
         device=device,
         no_bunching=no_bunching,
+        lr=lr,
     )
-
+    print(f"\n -> Model with {modes} modes and input_state = {input_state} initialized")
     return model
 
 
