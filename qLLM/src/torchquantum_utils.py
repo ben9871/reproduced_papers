@@ -18,6 +18,7 @@ import torchquantum as tq
 from matplotlib.patches import Circle, FancyBboxPatch, Rectangle
 
 
+### Tool to visualize the circuits ###
 class QuantumCircuitVisualizer:
     """
     Visualizer for quantum circuits in the hybrid model
@@ -438,6 +439,20 @@ class QuantumCircuitVisualizer:
         ax.spines["left"].set_visible(False)
 
 
+#####################
+### Data Encoding ###
+#####################
+
+### Amplitude encoding ###
+"""
+Quote: The classical data values are embedded into the amplitudes of the quantum state.
+Specifically, a classical vector x is encoded as:  |ψ(x)⟩ =  n  X  i=1  xi |i⟩
+Since the process is simulated, the state can be directly “loaded” without explicitly
+constructing a quantum circuit to prepare |ψ(x)⟩.
+"""
+
+
+# this is the amplitude used for the first classical module (sPQC - Theta_c)
 class AmplitudeEncodingModule(tq.QuantumModule):
     """
     Amplitude encoding module for embedding classical feature vectors
@@ -482,6 +497,64 @@ class AmplitudeEncodingModule(tq.QuantumModule):
         #  the state can be "loaded" directly by setting the amplitudes, bypassing
         #  the need for explicit quantum circuit construction with initialization gates (quantum simulation)
         return amplitudes
+
+
+### Angle encoding ###
+"""
+Quote: In this scheme, classical data determines the phases of qubits.
+The qubits are rotated around the Bloch sphere by an angle proportional to the respective data values  x = x1 x2 . . . xn  ⊤.
+An example of angular encoding, using the y-axis is:  |ψ(x)⟩ = RY (x1) ⊗ RY (x2) ⊗ · · · ⊗ RY (xn) |0⟩⊗n
+"""
+
+
+class AngleEncodingModule(tq.QuantumModule):
+    """Angle encoding module for loading latent vector into QPU"""
+
+    def __init__(self, n_qubits: int):
+        super().__init__()
+        self.n_qubits = n_qubits
+
+        # RY rotation gates for angle encoding
+        self.ry_gates = tq.QuantumModuleList()
+        for _ in range(n_qubits):
+            self.ry_gates.append(tq.RY(has_params=False, trainable=False))
+
+    def forward(
+        self, qdev: tq.QuantumDevice, latent_vector: torch.Tensor
+    ) -> tq.QuantumDevice:
+        """Encode latent vector using angle encoding"""
+        batch_size = latent_vector.shape[0]
+
+        # Reset quantum device to |0...0> state
+        qdev.reset_states(batch_size)
+
+        # Apply RY rotations with angles from latent vector
+        for i, ry_gate in enumerate(self.ry_gates):
+            if i < latent_vector.shape[1]:
+                # Use latent vector values as rotation angles
+                angles = latent_vector[:, i]
+                ry_gate(qdev, wires=i, params=angles)
+
+        return qdev
+
+
+#####################################
+### Parametrized Quantum Circuits ###
+#####################################
+
+# simulated PQC whose expectation values of the observables (Pauli-Z) are computed exactly and used as a latent representation.
+# the paper states that this is equivalent to an autoencoder
+"""
+Quote: the ansatz used as a fundamental building block in the quantum circuit,
+which consists of layers with varying connectivity spanning the width of the circuit.
+This design facilitates operation on hardware platforms that can operate beyond nearest neighbor pairs of qubits
+Fig2.png presents this ansatz : The ansatz (left) consists of layers with
+- increasing connectivity C across the width of the circuit.
+- Each block Ui is defined as a combination of a controlled NOT and a single-qubit rotation RY through angle θi around the Y-axis
+Fig3.png presents the complete set-up
+This simulated PQC contains a variable number of E parallel encoders which encode
+the embedding vectors from SetFit of dimension equal to 768 into output vectors of dimension Qc
+"""
 
 
 class SimulatedQuantumEncoder(tq.QuantumModule):
@@ -593,6 +666,16 @@ class SimulatedQuantumEncoder(tq.QuantumModule):
         )
 
 
+### multi-encoder design ###
+"""
+Quote: This approach allows for a more manageable increase in sPQC complexity as the PQC grows.
+Using a single encoder with an EQ qubit PQC results in O(2EQ) memory complexity.
+By employing E encoders, each with Q qubits, the memory complexity of the multi-encoder sPQC becomes O(E2Q),
+This module is implemented on QPU and contains a flexible data re-uploading module with a variable number N of repetitions
+"""
+
+
+# TODO: implement data reuploading
 class MultiEncoderSimulatedQuantumBlock(nn.Module):
     """
     Multi-encoder design for studying scaling behavior of sPQC
@@ -876,38 +959,7 @@ class ScalabilityStudyModel(nn.Module):
         )
 
 
-# Import previous classes that are still needed
-class AngleEncodingModule(tq.QuantumModule):
-    """Angle encoding module for loading latent vector into QPU"""
-
-    def __init__(self, n_qubits: int):
-        super().__init__()
-        self.n_qubits = n_qubits
-
-        # RY rotation gates for angle encoding
-        self.ry_gates = tq.QuantumModuleList()
-        for _ in range(n_qubits):
-            self.ry_gates.append(tq.RY(has_params=False, trainable=False))
-
-    def forward(
-        self, qdev: tq.QuantumDevice, latent_vector: torch.Tensor
-    ) -> tq.QuantumDevice:
-        """Encode latent vector using angle encoding"""
-        batch_size = latent_vector.shape[0]
-
-        # Reset quantum device to |0...0> state
-        qdev.reset_states(batch_size)
-
-        # Apply RY rotations with angles from latent vector
-        for i, ry_gate in enumerate(self.ry_gates):
-            if i < latent_vector.shape[1]:
-                # Use latent vector values as rotation angles
-                angles = latent_vector[:, i]
-                ry_gate(qdev, wires=i, params=angles)
-
-        return qdev
-
-
+# TODO: verify implementation with respect to IV.D. in paper
 class QuantumPQC(tq.QuantumModule):
     """Parameterized Quantum Circuit (PQC) for actual QPU execution"""
 
@@ -944,9 +996,7 @@ class QuantumPQC(tq.QuantumModule):
 
             self.quantum_layers.append(layer_blocks)
             self.cnot_connection_patterns.append(cnot_pairs)
-        print(
-            f"\n ############### \n Quantum Layers {self.quantum_layers} \n ###############"
-        )
+        # print(f"\n ############### \n Quantum Layers {self.quantum_layers} \n ###############")
         # Measurement
         self.measure = tq.MeasureAll(tq.PauliZ)
 
@@ -1049,6 +1099,368 @@ def run_scaling_experiment(
         print(f"Model parameters: {results[fusion_method]['model_parameters']}")
 
     return results
+
+
+def demonstrate_circuit_visualization():
+    """
+    Comprehensive demonstration of circuit visualization capabilities
+    """
+    print("=== Quantum Circuit Visualization Demo ===\n")
+
+    # Initialize visualizer
+    visualizer = QuantumCircuitVisualizer()
+
+    # 1. Simple amplitude encoding circuit
+    simple_config = {
+        "n_qubits": 3,
+        "n_layers": 2,
+        "connectivity": 1,
+        "encoding_type": "amplitude",
+    }
+
+    print("1. Drawing simple amplitude encoding circuit...")
+    fig1 = visualizer.draw_circuit(simple_config, "Simple Amplitude Encoding Circuit")
+    plt.show()
+
+    # 2. Complex angle encoding circuit
+    complex_config = {
+        "n_qubits": 6,
+        "n_layers": 4,
+        "connectivity": 3,
+        "encoding_type": "angle",
+    }
+
+    print("2. Drawing complex angle encoding circuit...")
+    fig2 = visualizer.draw_circuit(complex_config, "Complex Angle Encoding Circuit")
+    plt.show()
+
+    # 3. Multi-encoder architecture
+    encoder_configs = [
+        {"n_qubits": 3, "n_layers": 2, "connectivity": 1},
+        {"n_qubits": 4, "n_layers": 3, "connectivity": 2},
+        {"n_qubits": 5, "n_layers": 3, "connectivity": 2},
+    ]
+
+    quantum_config = {"n_qubits": 6, "n_layers": 3, "connectivity": 2}
+
+    print("3. Drawing multi-encoder architecture...")
+    fig3 = visualizer.draw_multi_encoder_architecture(
+        encoder_configs, quantum_config, fusion_method="concatenate"
+    )
+    plt.show()
+
+    return fig1, fig2, fig3
+
+
+def test_gradient_propagation():
+    """
+    Test gradient propagation through quantum circuits with dummy inputs and outputs.
+    Verifies that gradients flow properly through all trainable quantum parameters.
+    """
+    print("=== Gradient Propagation Test ===\n")
+
+    # Test parameters
+    batch_size = 4
+    n_qubits = 4
+    n_layers = 3
+    n_classes = 2
+    llm_output_dim = 16  # Small dimension for testing
+
+    # Create dummy input data
+    dummy_llm_features = torch.randn(batch_size, llm_output_dim, requires_grad=True)
+    dummy_targets = torch.randint(0, n_classes, (batch_size,))
+
+    print("Testing with:")
+    print(f"  Batch size: {batch_size}")
+    print(f"  LLM features dimension: {llm_output_dim}")
+    print(f"  Number of qubits: {n_qubits}")
+    print(f"  Number of layers: {n_layers}")
+    print(f"  Number of classes: {n_classes}\n")
+
+    # Test 1: SimulatedQuantumEncoder gradient propagation
+    print("1. Testing SimulatedQuantumEncoder gradient propagation...")
+
+    encoder = SimulatedQuantumEncoder(
+        n_qubits=n_qubits, n_layers=n_layers, connectivity=2
+    )
+
+    # Forward pass
+    encoder_output = encoder(dummy_llm_features)
+
+    # Create a simple loss (sum of all outputs)
+    encoder_loss = encoder_output.sum()
+
+    # Backward pass
+    encoder_loss.backward()
+
+    # Check gradients
+    has_gradients = []
+    gradient_norms = []
+
+    for name, param in encoder.named_parameters():
+        if param.requires_grad:
+            has_grad = param.grad is not None
+            has_gradients.append(has_grad)
+            if has_grad:
+                grad_norm = param.grad.norm().item()
+                gradient_norms.append(grad_norm)
+                print(f"    {name}: grad_norm = {grad_norm:.6f}")
+            else:
+                print(f"    {name}: NO GRADIENT")
+
+    encoder_grad_success = all(has_gradients) and len(gradient_norms) > 0
+    print(
+        f"    SimulatedQuantumEncoder gradient test: {'PASS' if encoder_grad_success else 'FAIL'}"
+    )
+    print(
+        f"    Average gradient norm: {sum(gradient_norms) / len(gradient_norms):.6f}\n"
+    )
+
+    # Test 2: QuantumPQC gradient propagation
+    print("2. Testing QuantumPQC gradient propagation...")
+
+    # Reset gradients
+    dummy_llm_features.grad = None if dummy_llm_features.grad is not None else None
+
+    pqc = QuantumPQC(n_qubits=n_qubits, n_layers=n_layers, connectivity=2)
+    qdev = tq.QuantumDevice(n_wires=n_qubits, bsz=batch_size)
+
+    # Create angle encoder
+    angle_encoder = AngleEncodingModule(n_qubits)
+
+    # Prepare quantum input (truncate or pad to match n_qubits)
+    quantum_input = (
+        dummy_llm_features[:, :n_qubits]
+        if dummy_llm_features.shape[1] >= n_qubits
+        else torch.cat(
+            [
+                dummy_llm_features,
+                torch.zeros(
+                    batch_size,
+                    n_qubits - dummy_llm_features.shape[1],
+                    requires_grad=True,
+                ),
+            ],
+            dim=1,
+        )
+    )
+
+    # Forward pass through angle encoding and PQC
+    qdev = angle_encoder(qdev, quantum_input)
+    pqc_output = pqc(qdev)
+
+    # Create loss
+    pqc_loss = pqc_output.sum()
+
+    # Backward pass
+    pqc_loss.backward()
+
+    # Check gradients for PQC
+    pqc_has_gradients = []
+    pqc_gradient_norms = []
+
+    for name, param in pqc.named_parameters():
+        if param.requires_grad:
+            has_grad = param.grad is not None
+            pqc_has_gradients.append(has_grad)
+            if has_grad:
+                grad_norm = param.grad.norm().item()
+                pqc_gradient_norms.append(grad_norm)
+                print(f"    {name}: grad_norm = {grad_norm:.6f}")
+            else:
+                print(f"    {name}: NO GRADIENT")
+
+    pqc_grad_success = all(pqc_has_gradients) and len(pqc_gradient_norms) > 0
+    print(f"    QuantumPQC gradient test: {'PASS' if pqc_grad_success else 'FAIL'}")
+    if pqc_gradient_norms:
+        print(
+            f"    Average gradient norm: {sum(pqc_gradient_norms) / len(pqc_gradient_norms):.6f}\n"
+        )
+
+    # Test 3: End-to-end ScalabilityStudyModel gradient propagation
+    print("3. Testing end-to-end ScalabilityStudyModel gradient propagation...")
+
+    # Create a simple encoder configuration
+    encoder_configs = [
+        {"n_qubits": 3, "n_layers": 2, "connectivity": 1},
+        {"n_qubits": 4, "n_layers": 2, "connectivity": 1},
+    ]
+    quantum_pqc_config = {"n_qubits": n_qubits, "n_layers": 2, "connectivity": 1}
+
+    model = ScalabilityStudyModel(
+        llm_output_dim=llm_output_dim,
+        encoder_configs=encoder_configs,
+        quantum_pqc_config=quantum_pqc_config,
+        fusion_method="concatenate",
+        n_classes=n_classes,
+    )
+
+    # Create fresh input with gradients
+    model_input = torch.randn(batch_size, llm_output_dim, requires_grad=True)
+
+    # Forward pass
+    model_output = model(model_input)
+
+    # Create classification loss
+    criterion = torch.nn.CrossEntropyLoss()
+    model_loss = criterion(model_output, dummy_targets)
+
+    # Backward pass
+    model_loss.backward()
+
+    # Check gradients for all model components
+    print("    Checking gradients for model components:")
+
+    total_params = 0
+    total_with_grads = 0
+    component_grad_norms = {}
+
+    # Check multi-encoder gradients
+    multi_encoder_grads = []
+    for _name, param in model.multi_encoder_sqb.named_parameters():
+        if param.requires_grad:
+            total_params += 1
+            if param.grad is not None:
+                total_with_grads += 1
+                grad_norm = param.grad.norm().item()
+                multi_encoder_grads.append(grad_norm)
+
+    if multi_encoder_grads:
+        component_grad_norms["multi_encoder"] = sum(multi_encoder_grads) / len(
+            multi_encoder_grads
+        )
+        print(
+            f"      Multi-encoder: avg grad_norm = {component_grad_norms['multi_encoder']:.6f}"
+        )
+
+    # Check quantum PQC gradients
+    quantum_pqc_grads = []
+    for _name, param in model.quantum_pqc.named_parameters():
+        if param.requires_grad:
+            total_params += 1
+            if param.grad is not None:
+                total_with_grads += 1
+                grad_norm = param.grad.norm().item()
+                quantum_pqc_grads.append(grad_norm)
+
+    if quantum_pqc_grads:
+        component_grad_norms["quantum_pqc"] = sum(quantum_pqc_grads) / len(
+            quantum_pqc_grads
+        )
+        print(
+            f"      Quantum PQC: avg grad_norm = {component_grad_norms['quantum_pqc']:.6f}"
+        )
+
+    # Check output layer gradients
+    output_grads = []
+    for _name, param in model.output_layer.named_parameters():
+        if param.requires_grad:
+            total_params += 1
+            if param.grad is not None:
+                total_with_grads += 1
+                grad_norm = param.grad.norm().item()
+                output_grads.append(grad_norm)
+
+    if output_grads:
+        component_grad_norms["output_layer"] = sum(output_grads) / len(output_grads)
+        print(
+            f"      Output layer: avg grad_norm = {component_grad_norms['output_layer']:.6f}"
+        )
+
+    # Check input gradient (end-to-end gradient flow)
+    input_grad_success = model_input.grad is not None
+    if input_grad_success:
+        input_grad_norm = model_input.grad.norm().item()
+        print(f"      Input gradient: grad_norm = {input_grad_norm:.6f}")
+    else:
+        print("      Input gradient: NO GRADIENT")
+
+    model_grad_success = (total_with_grads == total_params) and input_grad_success
+    print(f"    End-to-end gradient test: {'PASS' if model_grad_success else 'FAIL'}")
+    print(f"    Parameters with gradients: {total_with_grads}/{total_params}")
+    print(f"    Loss value: {model_loss.item():.6f}\n")
+
+    # Test 4: Gradient flow through different fusion methods
+    print("4. Testing gradient flow through different fusion methods...")
+
+    fusion_methods = ["concatenate", "average", "weighted"]
+    fusion_results = {}
+
+    for fusion_method in fusion_methods:
+        print(f"    Testing fusion method: {fusion_method}")
+
+        # Create model with current fusion method
+        fusion_model = ScalabilityStudyModel(
+            llm_output_dim=llm_output_dim,
+            encoder_configs=encoder_configs[:2],  # Use fewer encoders for speed
+            quantum_pqc_config=quantum_pqc_config,
+            fusion_method=fusion_method,
+            n_classes=n_classes,
+        )
+
+        # Fresh input
+        fusion_input = torch.randn(batch_size, llm_output_dim, requires_grad=True)
+
+        # Forward and backward pass
+        fusion_output = fusion_model(fusion_input)
+        fusion_loss = criterion(fusion_output, dummy_targets)
+        fusion_loss.backward()
+
+        # Count gradients
+        fusion_params_with_grads = sum(
+            1
+            for param in fusion_model.parameters()
+            if param.requires_grad and param.grad is not None
+        )
+        fusion_total_params = sum(
+            1 for param in fusion_model.parameters() if param.requires_grad
+        )
+
+        fusion_results[fusion_method] = {
+            "params_with_grads": fusion_params_with_grads,
+            "total_params": fusion_total_params,
+            "loss": fusion_loss.item(),
+            "input_has_grad": fusion_input.grad is not None,
+        }
+
+        success = (
+            fusion_params_with_grads == fusion_total_params
+        ) and fusion_input.grad is not None
+        print(
+            f"      {fusion_method}: {'PASS' if success else 'FAIL'} "
+            f"({fusion_params_with_grads}/{fusion_total_params} params)"
+        )
+
+    # Summary
+    print("\n=== Gradient Propagation Test Summary ===")
+    print(f"1. SimulatedQuantumEncoder: {'PASS' if encoder_grad_success else 'FAIL'}")
+    print(f"2. QuantumPQC: {'PASS' if pqc_grad_success else 'FAIL'}")
+    print(f"3. End-to-end model: {'PASS' if model_grad_success else 'FAIL'}")
+
+    fusion_all_pass = all(
+        result["params_with_grads"] == result["total_params"]
+        and result["input_has_grad"]
+        for result in fusion_results.values()
+    )
+    print(f"4. Fusion methods: {'PASS' if fusion_all_pass else 'FAIL'}")
+
+    overall_success = (
+        encoder_grad_success
+        and pqc_grad_success
+        and model_grad_success
+        and fusion_all_pass
+    )
+    print(
+        f"\nOverall gradient propagation test: {'PASS' if overall_success else 'FAIL'}"
+    )
+
+    return {
+        "encoder_test": encoder_grad_success,
+        "pqc_test": pqc_grad_success,
+        "model_test": model_grad_success,
+        "fusion_tests": fusion_results,
+        "overall_success": overall_success,
+    }
 
 
 # Example usage with visualization
@@ -1177,53 +1589,5 @@ if __name__ == "__main__":
     print(f"Latent representation shape: {latent_repr.shape}")
     print(f"Latent values: {latent_repr}")
 
-
-def demonstrate_circuit_visualization():
-    """
-    Comprehensive demonstration of circuit visualization capabilities
-    """
-    print("=== Quantum Circuit Visualization Demo ===\n")
-
-    # Initialize visualizer
-    visualizer = QuantumCircuitVisualizer()
-
-    # 1. Simple amplitude encoding circuit
-    simple_config = {
-        "n_qubits": 3,
-        "n_layers": 2,
-        "connectivity": 1,
-        "encoding_type": "amplitude",
-    }
-
-    print("1. Drawing simple amplitude encoding circuit...")
-    fig1 = visualizer.draw_circuit(simple_config, "Simple Amplitude Encoding Circuit")
-    plt.show()
-
-    # 2. Complex angle encoding circuit
-    complex_config = {
-        "n_qubits": 6,
-        "n_layers": 4,
-        "connectivity": 3,
-        "encoding_type": "angle",
-    }
-
-    print("2. Drawing complex angle encoding circuit...")
-    fig2 = visualizer.draw_circuit(complex_config, "Complex Angle Encoding Circuit")
-    plt.show()
-
-    # 3. Multi-encoder architecture
-    encoder_configs = [
-        {"n_qubits": 3, "n_layers": 2, "connectivity": 1},
-        {"n_qubits": 4, "n_layers": 3, "connectivity": 2},
-        {"n_qubits": 5, "n_layers": 3, "connectivity": 2},
-    ]
-
-    quantum_config = {"n_qubits": 6, "n_layers": 3, "connectivity": 2}
-
-    print("3. Drawing multi-encoder architecture...")
-    fig3 = visualizer.draw_multi_encoder_architecture(
-        encoder_configs, quantum_config, fusion_method="concatenate"
-    )
-    plt.show()
-
-    return fig1, fig2, fig3
+    print("\n \n \n Testing gradient descent:")
+    test_gradient_propagation()
