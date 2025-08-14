@@ -58,16 +58,16 @@ Ours:
 4. Algo 4: Quantum random kitchen sinks
 
 Theirs:
-![q_gauss_kernel_to_reproduce](./q_rand_kitchen_sinks/results/Classification-RKS.png)
+![q_gauss_kernel_to_reproduce](./q_random_kitchen_sinks/results/Classification-RKS.png)
 
 Ours:
-![q_gauss_kernel_reproduced](./q_rand_kitchen_sinks/results/q_rand_kitchen_sinks_overall_example.png)
+![q_gauss_kernel_reproduced](./q_random_kitchen_sinks/results/q_rand_kitchen_sinks_overall_example.png)
 
 ## Usage
 For usage, refer to the README inside of every section folder for information on its respective content.
 
 ## Roadmap
-In the future, one goal for this reproduction would be to find out why are our Gaussian kernel fits are less accurate than the ones presented in the paper (Algo 2: Quantum Gaussian kernel sampler).
+In the future, one goal for this reproduction would be to explain why are our Gaussian kernel fits are less accurate than the ones presented in the paper (Algo 2: Quantum Gaussian kernel sampler) and fix this issue.
 
 ## Further content
 For anyone interested, a complete report about this implementation was conducted and is available [here](https://www.overleaf.com/read/wptkwqtzybfy#f3f928).
