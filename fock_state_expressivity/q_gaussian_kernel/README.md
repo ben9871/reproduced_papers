@@ -16,7 +16,7 @@ The experiments demonstrate that quantum circuits can learn to approximate Gauss
 - **Circuit architecture**: Different interferometer designs show varying approximation capabilities
 - **Photon number**: Circuits with more photons have a tendency for better fits on Gaussians with smaller standard deviation
 - **Training dynamics**: Quantum kernel learning presents unique optimization challenges compared to classical methods
-- **Approximation accuracy**: Our Gaussian kernel fits are less accurate than those presented in the reference paper, indicating that further investigation is needed
+- **Approximation accuracy**: Our Gaussian kernel fits are less accurate than those presented in the reference paper
 
 ## Files Structure
 
@@ -26,7 +26,6 @@ The experiments demonstrate that quantum circuits can learn to approximate Gauss
 - `hyperparameters.py` - Configuration management for experiments
 - `run_gaussian_sampler.py` - Main execution script for kernel learning
 - `use_q_gauss_kernel.py` - Utilities for applying learned quantum kernels
-- `print_circuits.py` - Circuit visualization utilities
 - `q_gaussian_kernel.ipynb` - Interactive notebook with detailed analysis
 
 ## Usage
@@ -62,7 +61,6 @@ Key findings include:
 - Quantum circuits can successfully approximate Gaussian kernel functions
 - Circuits with more photons have a tendency for better fits on Gaussians with smaller standard deviation
 - Our implementation could not fit the Gaussians as accurately as seen in the reference paper, requiring further investigation
-- The quantum kernel approach provides a novel perspective on kernel methods in machine learning
 
 ## Dependencies
 

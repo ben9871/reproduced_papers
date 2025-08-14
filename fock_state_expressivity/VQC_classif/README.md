@@ -7,9 +7,9 @@ This experiment demonstrates the use of linear quantum photonic circuits for bin
 The implementation includes:
 - **Multiple VQC architectures**: beam splitter meshes, general interferometers, basic and spiral circuits
 - **Three synthetic datasets**: linearly separable, circular, and moon-shaped data
-- **Performance comparison**: VQC vs classical methods (SVM, MLP)
+- **Performance comparison**: VQC vs classical methods (MLP, SVM)
 - **Decision boundary visualization**: Visual analysis of learned decision boundaries
-- **Hyperparameter optimization**: Grid search for optimal model hyperparameters
+- **Hyperparameter optimization**: Random search
 
 ## Key Results
 
@@ -23,7 +23,6 @@ The experiments validate that **increasing the number of photons increases circu
 - `classical_models.py` - Classical baseline models for comparison
 - `run_vqc.py` - Main execution script for experiments
 - `run_vqc_hp_search.py` - Hyperparameter search script
-- `utils.py` - Utility functions for data processing
 - `VQC_classification.ipynb` - Interactive notebook with detailed analysis
 
 ## Usage
