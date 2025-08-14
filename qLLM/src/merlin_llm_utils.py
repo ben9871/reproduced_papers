@@ -1,5 +1,5 @@
 """
-Quantum model training utilities for qLLM experiments using MerLin.
+Photonic model training utilities for qLLM experiments using MerLin.
 """
 
 import copy
