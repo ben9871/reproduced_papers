@@ -1,5 +1,5 @@
-## Reproduction of [Fock state-enhanced expressivity of quantum machine learning models](https://arxiv.org/abs/2107.05224)
-
+# Reproduction of [Fock state-enhanced expressivity of quantum machine learning models](https://arxiv.org/abs/2107.05224)
+By Beng Yee Gan, Daniel Leykam, Dimitris G. Angelakis
 ## Description
 This paper proposes a data encoding scheme for photonic quantum circuits. It elaborates on the theory behind its choice and present a small experiment to validate it. In addition, it presents three binary classification algorithms that utilize the presented encoding. This reproduction focuses on the four experiments displayed in this paper:
 1. Theory validation experiment: Expressivity of variational quantum circuit (VQC) on a Fourier series fitting task
@@ -34,33 +34,41 @@ Here are some more specific results, presented in figures that we have reproduce
 1. Fitting of VQC on Fourier series
 
 Theirs:
+
 ![VQC_fourier_series_to_reproduce](./VQC_fourier_series/results/Fitting_example_and_DOF.png)
 
 Ours:
+
 ![VQC_fourier_series_reproduced](./VQC_fourier_series/results/expressive_power_of_the_VQC.png)
 
 2. Algo 1: VQC for classification
 
 Theirs:
+
 ![VQC_classif_to_reproduce](./VQC_classif/results/variational_classification.png)
 
 Ours:
+
 ![VQC_classif_reproduced](./VQC_classif/results/combined_decision_boundaries.png)
 
 3. Algo 2: Quantum Gaussian kernel sampler
 
 Theirs:
+
 ![q_gauss_kernel_to_reproduce](./q_gaussian_kernel/results/Gaussian_kernel-kernel_methods.png)
 
 Ours:
+
 ![q_gauss_kernel_reproduced](./q_gaussian_kernel/results/learned_gauss_kernels_best_hps.png)
 
 4. Algo 4: Quantum random kitchen sinks
 
 Theirs:
+
 ![q_gauss_kernel_to_reproduce](./q_random_kitchen_sinks/results/Classification-RKS.png)
 
 Ours:
+
 ![q_gauss_kernel_reproduced](./q_random_kitchen_sinks/results/q_rand_kitchen_sinks_overall_example.png)
 
 ## Usage

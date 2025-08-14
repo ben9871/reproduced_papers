@@ -4,9 +4,6 @@
 *.txt
 *.DS_Store
 *.pth
-quantum_reservoir/
-utils/
-notebooks/
 *__pycache__
 
 
