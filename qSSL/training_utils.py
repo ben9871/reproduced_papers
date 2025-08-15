@@ -8,51 +8,71 @@ import torch.nn as nn
 import torch.nn.functional as f
 from tqdm import tqdm
 
-
-class InfoNCELoss(nn.Module):
-    def __init__(self, temperature=0.5):
+class InfoNCELossFromPaper(torch.nn.Module):
+    def __init__(self, temperature=0.07):
         super().__init__()
         self.temperature = temperature
 
-    def forward(self, x1, x2):
-        """
-        Corrected InfoNCE implementation.
+    def forward(self, out_1, out_2):
 
-        Args:
-            x1: First augmented views, shape (batch_size, feature_dim)
-            x2: Second augmented views, shape (batch_size, feature_dim)
-        """
-        # Normalize features for better stability
-        x1 = f.normalize(x1, dim=1)
-        x2 = f.normalize(x2, dim=1)
+        out = torch.cat([out_1, out_2], dim=0)
+        batch_size = out_1.shape[0]
+        # InfoNCE Loss
 
-        batch_size = x1.shape[0]
-        features = torch.cat([x1, x2], dim=0)  # Shape: (2*batch_size, feature_dim)
+        # [2*B, 2*B]
+        sim_matrix = torch.exp(torch.mm(out, out.t().contiguous()) / self.temperature)
+        mask = (torch.ones_like(sim_matrix) - torch.eye(2 * batch_size, device=sim_matrix.device)).type(torch.bool)
+        # [2*B, 2*B-1]
+        sim_matrix = sim_matrix.masked_select(mask).view(2 * batch_size, -1)
+        # compute loss
+        pos_sim = torch.exp(torch.sum(out_1 * out_2, dim=-1) / self.temperature)
+        # [2*B]
+        pos_sim = torch.cat([pos_sim, pos_sim], dim=0)
 
-        # Compute similarity matrix
-        similarity_matrix = torch.matmul(features, features.T) / self.temperature
-
-        # Create correct labels for positive pairs
-        # For sample i in first half: positive is sample i in second half (index i+batch_size)
-        # For sample i in second half: positive is sample i-batch_size in first half
-        labels = torch.cat(
-            [
-                torch.arange(
-                    batch_size, 2 * batch_size
-                ),  # [batch_size, ..., 2*batch_size-1]
-                torch.arange(0, batch_size),  # [0, 1, ..., batch_size-1]
-            ]
-        ).to(features.device)
-
-        # Remove self-similarities by masking diagonal
-        mask = torch.eye(2 * batch_size, dtype=bool, device=features.device)
-        similarity_matrix.masked_fill_(mask, -9e15)
-
-        # Compute InfoNCE loss using cross-entropy
-        loss = f.cross_entropy(similarity_matrix, labels)
+        loss = (- torch.log(pos_sim / sim_matrix.sum(dim=-1))).mean()
 
         return loss
 
+class  InfoNCELoss(torch.nn.Module):
+    def __init__(self, temperature=0.07):
+        super().__init__()
+        self.temperature = temperature
+
+    def forward(self, z1, z2):
+        """
+        Efficient vectorized InfoNCE implementation.
+        """
+        z1 = f.normalize(z1, dim=1)
+        z2 = f.normalize(z2, dim=1)
+        batch_size = z1.shape[0]
+        device = z1.device
+
+        # Compute similarity matrices
+        sim_11 = torch.matmul(z1, z1.T) / self.temperature
+        sim_22 = torch.matmul(z2, z2.T) / self.temperature
+        sim_12 = torch.matmul(z1, z2.T) / self.temperature
+
+        # Positive pairs are on the diagonal of sim_12
+        pos_sim = torch.diag(sim_12)
+
+        # Negatives: all similarities except the positive pair and self-similarities
+        # For z1: negatives are other z1s + all z2s except the corresponding one
+        neg_sim_1 = torch.cat([
+            sim_11.masked_fill(torch.eye(batch_size, device=device).bool(), float('-inf')),
+            sim_12.masked_fill(torch.eye(batch_size, device=device).bool(), float('-inf'))
+        ], dim=1)
+        
+        # For z2: negatives are other z2s + all z1s except the corresponding one  
+        neg_sim_2 = torch.cat([
+            sim_12.T.masked_fill(torch.eye(batch_size, device=device).bool(), float('-inf')),
+            sim_22.masked_fill(torch.eye(batch_size, device=device).bool(), float('-inf'))
+        ], dim=1)
+
+        # InfoNCE loss using logsumexp for numerical stability
+        loss_1 = -pos_sim + torch.logsumexp(neg_sim_1, dim=1)
+        loss_2 = -pos_sim + torch.logsumexp(neg_sim_2, dim=1)
+
+        return ((loss_1.mean() + loss_2.mean()) / 2).unsqueeze(0)
 
 def training_step(model, train_loader, optimizer):
     pbar = tqdm(train_loader)
@@ -72,8 +92,9 @@ def training_step(model, train_loader, optimizer):
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=1.0)
 
         optimizer.step()
-        total_loss += loss.item()
-        pbar.set_postfix({"Loss": f"{loss.item():.4f}"})
+        loss_scalar = loss.item() if loss.dim() == 0 else loss[0].item()
+        total_loss += loss_scalar
+        pbar.set_postfix({"Loss": f"{loss_scalar:.4f}"})
 
     return total_loss / len(train_loader)
 

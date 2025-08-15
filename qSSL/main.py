@@ -1,3 +1,7 @@
+# Main training script for Quantum Self-Supervised Learning (qSSL)
+# This script implements the complete training pipeline for both classical and quantum SSL methods
+# Based on "Quantum Self-Supervised Learning" by Jaderberg et al. (2022)
+
 import argparse
 
 import torch
@@ -7,21 +11,23 @@ from model import QSSL
 from torchsummary import summary
 from training_utils import linear_evaluation, save_results_to_json, train
 
+# Command-line argument parser for configuring the experiment
 parser = argparse.ArgumentParser(description="PyTorch Quantum self-sup training")
-# dataset
+
+# ========== Dataset Configuration ==========
 parser.add_argument(
     "-d", "--datadir", metavar="DIR", default="./data", help="path to dataset"
 )
 parser.add_argument("-cl", "--classes", type=int, default=2, help="Number of classes")
-# training
+# ========== Training Configuration ==========
 parser.add_argument(
-    "-e", "--epochs", type=int, default=2, help="Number of epochs for training"
+    "-e", "--epochs", type=int, default=2, help="Number of epochs for SSL pre-training"
 )
 parser.add_argument(
-    "-le", "--le-epochs", type=int, default=100, help="Number of epochs for training"
+    "-le", "--le-epochs", type=int, default=100, help="Number of epochs for linear evaluation"
 )
 parser.add_argument("-bs", "--batch_size", type=int, default=128, help="Batch size")
-# the SSL model
+# ========== SSL Model Configuration ==========
 parser.add_argument(
     "-bn",
     "--batch_norm",
@@ -29,7 +35,7 @@ parser.add_argument(
     default=False,
     help="Set if we use BatchNorm after compression of the encoder",
 )
-# Contrastive Loss
+# ========== Contrastive Loss Configuration ==========
 parser.add_argument(
     "-ld", "--loss_dim", type=int, default=128, help="Dimension of the loss space"
 )
@@ -38,37 +44,38 @@ parser.add_argument(
     "--temperature",
     type=float,
     default=0.07,
-    help="Temperature of the InfoNCELoss",
+    help="Temperature parameter for InfoNCE loss (lower = harder negatives)",
 )
-# quantum SSL
+# ========== Quantum SSL Configuration (MerLin) ==========
 parser.add_argument(
     "-w",
     "--width",
     type=int,
     default=8,
-    help="Dimension of the features encoded in the QNN",
+    help="Dimension of the features encoded in the quantum neural network",
 )
 parser.add_argument(
     "--merlin",
     action="store_true",
     default=False,
-    help="Set if we use Quantum SSL with MerLin",
+    help="Use Quantum SSL with MerLin photonic framework",
 )
-parser.add_argument("-m", "--modes", type=int, default=10, help="Number of modes")
+parser.add_argument("-m", "--modes", type=int, default=10, help="Number of photonic modes in quantum circuit")
 parser.add_argument(
     "-bunch",
     "--no_bunching",
     action="store_true",
     default=False,
-    help="No bunching mode",
+    help="Disable photon bunching in quantum circuit",
 )
 
-# Qiskit SSL (from https://github.com/bjader/QSSL)
+# ========== Quantum SSL Configuration (Qiskit) ==========
+# Based on implementation from https://github.com/bjader/QSSL
 parser.add_argument(
     "--qiskit",
     action="store_true",
     default=False,
-    help="Set if we use Quantum SSL with Qiskit",
+    help="Use Quantum SSL with Qiskit quantum computing framework",
 )
 parser.add_argument(
     "--layers",
@@ -119,39 +126,43 @@ parser.add_argument(
 if __name__ == "__main__":
     args = parser.parse_args()
 
-    # Load SSL training data
+    # ========== Phase 1: Self-Supervised Learning ==========
+    # Load SSL training data with heavy augmentations for contrastive learning
     train_dataset = load_transformed_data(args)
-    print(f"\n Loaded a train dataset of shape {len(train_dataset)}")
+    print(f"\n Loaded SSL training dataset with {len(train_dataset)} samples")
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True
     )
 
-    # Define model
+    # Initialize the QSSL model (quantum or classical based on args)
     model = QSSL(args)
+    # Display model architecture summary for two CIFAR-10 images (query and key)
     summary(model, [(3, 32, 32), (3, 32, 32)])
     print(
-        f"Number of parameters in model = {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
+        f"Total trainable parameters in SSL model: {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
     )
 
-    # Train SSL model
+    # Train the SSL model using contrastive learning on augmented image pairs
     model, ssl_training_losses, results_dir = train(model, train_loader, args)
 
-    # Build model for linear evaluation
+    # ========== Phase 2: Linear Evaluation ==========
+    # Build model for linear evaluation with frozen feature extractor
     frozen_model = nn.Sequential(
-        model.backbone,
-        model.comp,
-        model.representation_network,
-        nn.Linear(model.rep_net_output_size, args.classes),
+        model.backbone,        # ResNet18 backbone (frozen)
+        model.comp,           # Compression layer (frozen)
+        model.representation_network,  # Quantum/classical rep network (frozen)
+        nn.Linear(model.rep_net_output_size, args.classes),  # Linear classifier (trainable)
     )
     print(
-        f"Number of parameters in model = {sum(p.numel() for p in frozen_model[2].parameters() if p.requires_grad) + sum(p.numel() for p in frozen_model[-1].parameters() if p.requires_grad)}"
+        f"Trainable parameters in linear evaluation: {sum(p.numel() for p in frozen_model[2].parameters() if p.requires_grad) + sum(p.numel() for p in frozen_model[-1].parameters() if p.requires_grad)}"
     )
+    # Freeze all layers except the final linear classifier
     frozen_model.requires_grad_(False)
     frozen_model[-1].requires_grad_(True)
 
-    # Load linear evaluation data
+    # Load linear evaluation data with minimal augmentations
     train_dataset, eval_dataset = load_finetuning_data(args)
-    print(f"\n Loaded a train dataset of shape {len(train_dataset)}")
+    print(f"\n Loaded linear evaluation datasets: {len(train_dataset)} train, {len(eval_dataset)} validation")
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True
     )
@@ -159,12 +170,13 @@ if __name__ == "__main__":
         eval_dataset, batch_size=args.batch_size, shuffle=True
     )
 
-    # Perform linear evaluation
+    # Perform linear evaluation to assess quality of learned representations
     model, ft_train_losses, ft_val_losses, ft_train_accs, ft_val_accs = (
         linear_evaluation(frozen_model, train_loader, val_loader, args, results_dir)
     )
 
-    # Save results to JSON
+    # ========== Save Experiment Results ==========
+    # Save comprehensive results including SSL losses and linear evaluation metrics
     save_results_to_json(
         args,
         ssl_training_losses,

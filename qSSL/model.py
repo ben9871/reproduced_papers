@@ -1,176 +1,234 @@
+# Model definitions for Quantum Self-Supervised Learning (qSSL)
+# Supports both quantum (MerLin/Qiskit) and classical representation networks
+# Based on "Quantum Self-Supervised Learning" by Jaderberg et al. (2022)
+
 import math
 import sys
 
-import perceval as pcvl
+import perceval as pcvl  # Photonic quantum computing library
 import torch
 import torch.nn as nn
 import torchvision
-from merlin import OutputMappingStrategy, QuantumLayer
+from merlin import OutputMappingStrategy, QuantumLayer  # MerLin quantum layer
 from training_utils import InfoNCELoss
 
+# Add path for Qiskit quantum neural network implementation
 sys.path.append("./qnn")
 from qnet import QNet
 
 
 def create_quantum_circuit(modes=10, feature_size=10):
-    # first trainable circuit
+    """
+    Create a photonic quantum circuit for feature encoding and processing.
+    
+    Args:
+        modes (int): Number of photonic modes in the circuit
+        feature_size (int): Dimension of input features to encode
+    
+    Returns:
+        pcvl.Circuit: Complete photonic circuit with trainable parameters
+    """
+    # First trainable interferometer - processes input photons
     pre_circuit = pcvl.GenericInterferometer(
         modes,
         lambda i: (
-            pcvl.BS()  # theta=pcvl.P(f"bs_1_{i}")
-            .add(0, pcvl.PS(pcvl.P(f"phase_train_1_{i}")))
-            .add(0, pcvl.BS())  # theta=pcvl.P(f"bs_1_{i}")
-            .add(0, pcvl.PS(pcvl.P(f"phase_train_2_{i}")))
+            pcvl.BS()  # Beam splitter for photon interference
+            .add(0, pcvl.PS(pcvl.P(f"phase_train_1_{i}")))  # Trainable phase shifter
+            .add(0, pcvl.BS())  # Second beam splitter
+            .add(0, pcvl.PS(pcvl.P(f"phase_train_2_{i}")))  # Second trainable phase shifter
         ),
     )
-    # data encoding in phase shifters (sandwhich)
+    # Data encoding layer - embed classical features into quantum states
+    # Uses phase encoding: classical data modulates phase shifters
     var = pcvl.Circuit(modes)
     for k in range(0, feature_size):
+        # Distribute features across available modes using modulo operation
         var.add(k % modes, pcvl.PS(pcvl.P(f"feature-{k}")))
 
-    # second trainable circuit
+    # Second trainable interferometer - processes encoded features
     post_circuit = pcvl.GenericInterferometer(
         modes,
         lambda i: (
-            pcvl.BS()  # theta=pcvl.P(f"bs_1_{i}")
-            .add(0, pcvl.PS(pcvl.P(f"phase_train_3_{i}")))
-            .add(0, pcvl.BS())  # theta=pcvl.P(f"bs_1_{i}")
-            .add(0, pcvl.PS(pcvl.P(f"phase_train_4_{i}")))
+            pcvl.BS()  # Beam splitter for quantum processing
+            .add(0, pcvl.PS(pcvl.P(f"phase_train_3_{i}")))  # Trainable phase shifter
+            .add(0, pcvl.BS())  # Second beam splitter
+            .add(0, pcvl.PS(pcvl.P(f"phase_train_4_{i}")))  # Second trainable phase shifter
         ),
     )
 
+    # Combine all components into complete quantum circuit
+    # Structure: pre_processing -> data_encoding -> post_processing
     circuit = pcvl.Circuit(modes)
-
-    circuit.add(0, pre_circuit, merge=True)
-    circuit.add(0, var, merge=True)
-    circuit.add(0, post_circuit, merge=True)
+    
+    circuit.add(0, pre_circuit, merge=True)   # Add first trainable layer
+    circuit.add(0, var, merge=True)           # Add data encoding layer
+    circuit.add(0, post_circuit, merge=True)  # Add second trainable layer
 
     return circuit
 
 
 def initialize_resnet_kaiming(model):
-    """Apply Kaiming initialization to ResNet model"""
+    """
+    Apply Kaiming (He) initialization to ResNet model components.
+    This initialization is specifically designed for ReLU activations and helps
+    prevent vanishing/exploding gradients during training.
+    
+    Args:
+        model: PyTorch model to initialize
+    """
     for m in model.modules():
         if isinstance(m, nn.Conv2d):
+            # Kaiming normal initialization for convolutional layers
             nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
         elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+            # Initialize normalization layer weights to 1, biases to 0
             nn.init.constant_(m.weight, 1)
             nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.Linear):
+            # Kaiming normal initialization for linear layers
             nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
 
 
 class QSSL(nn.Module):
+    """
+    Quantum Self-Supervised Learning model that supports both quantum and classical
+    representation networks for contrastive learning.
+    
+    Architecture:
+    1. ResNet18 backbone for feature extraction
+    2. Compression layer to reduce feature dimension
+    3. Representation network (quantum or classical)
+    4. Projection head for contrastive loss computation
+    """
     def __init__(
         self,
         args,
     ):
         super().__init__()
+        # Determine which framework is being used for logging
         framework_used = "Quantum (MerLin)" if args.merlin else "Classical ResNet18"
         framework_used = "Quantum (Qiskit)" if args.qiskit else framework_used
         print(f"\n Defining the SSL model with \n -{framework_used} \n - ")
-        # backbone
-        self.width = args.width
-        # backbone with FC = Identity
+        # ========== Backbone Network ==========
+        self.width = args.width  # Feature dimension after compression
+        
+        # ResNet18 backbone for feature extraction from images
+        # zero_init_residual=True improves training stability
         self.backbone = torchvision.models.resnet18(
             pretrained=False, zero_init_residual=True
         )
-        # initialisation following Jaderberg et al.
+        # Apply Kaiming initialization as specified in Jaderberg et al.
         initialize_resnet_kaiming(self.backbone)
 
-        backbone_features = self.backbone.fc.in_features
+        # Remove the final classification layer and replace with identity
+        backbone_features = self.backbone.fc.in_features  # Get ResNet18 output dimension (512)
         self.backbone.fc = nn.Identity()
-        # compressing layer to map to self.width dimension
+        
+        # Compression layer: map ResNet features to quantum-compatible dimension
         self.comp = nn.Linear(backbone_features, self.width)
 
-        # building the representation network
-        self.merlin = args.merlin
-        self.qiskit = args.qiskit
-        self.batch_norm = args.batch_norm
-        self.bn = nn.BatchNorm2d(self.width)
+        # ========== Representation Network Configuration ==========
+        self.merlin = args.merlin      # Use MerLin quantum framework
+        self.qiskit = args.qiskit      # Use Qiskit quantum framework
+        self.batch_norm = args.batch_norm  # Apply batch norm after compression
+        self.bn = nn.BatchNorm2d(self.width)  # Batch normalization layer
 
-        # photonic circuit
+        # ========== Quantum Representation Network (MerLin) ==========
         if self.merlin:
             print("\n -> Building the quantum representation network with MerLin")
-            self.modes = args.modes
-            self.no_bunching = args.no_bunching
+            self.modes = args.modes              # Number of photonic modes
+            self.no_bunching = args.no_bunching  # Photon bunching configuration
+            
+            # Create photonic quantum circuit for feature processing
             self.circuit = create_quantum_circuit(
                 modes=self.modes, feature_size=self.width
             )
 
+            # Define initial photon state: alternating pattern of 0s and 1s
             input_state = [(i + 1) % 2 for i in range(args.modes)]
-            print(f"input state: {input_state} and no bunching: {self.no_bunching}")
+            print(f"Initial photon state: {input_state}, bunching disabled: {self.no_bunching}")
 
+            # Create quantum layer using MerLin framework
             self.representation_network = QuantumLayer(
-                input_size=self.width,
-                output_size=None,  # math.comb(args.modes+photon_count-1,photon_count), # but we do not use it
-                circuit=self.circuit,
+                input_size=self.width,     # Classical input dimension
+                output_size=None,          # Auto-compute based on quantum measurements
+                circuit=self.circuit,      # Photonic circuit defined above
                 trainable_parameters=[
                     p.name
                     for p in self.circuit.get_parameters()
-                    if not p.name.startswith("feature")
+                    if not p.name.startswith("feature")  # Only circuit params, not data encoding
                 ],
-                input_parameters=["feature"],
-                input_state=input_state,
-                no_bunching=self.no_bunching,
-                output_mapping_strategy=OutputMappingStrategy.NONE,
+                input_parameters=["feature"],  # Parameters that encode classical data
+                input_state=input_state,       # Initial quantum state
+                no_bunching=self.no_bunching,  # Photon statistics configuration
+                output_mapping_strategy=OutputMappingStrategy.NONE,  # Raw quantum output
             )
 
             self.rep_net_output_size = self.representation_network.output_size
 
+        # ========== Quantum Representation Network (Qiskit) ==========
         elif self.qiskit:
-            # from https://github.com/bjader/QSSL
+            # Implementation based on https://github.com/bjader/QSSL
             print("\n -> Building the quantum representation network with Qiskit")
             self.representation_network = QNet(
-                n_qubits=self.width,
-                encoding=args.encoding,
-                ansatz_type=args.q_ansatz,
-                layers=args.layers,
-                sweeps_per_layer=args.q_sweeps,
-                activation_function_type=args.activation,
-                shots=args.shots,
-                backend_type=args.q_backend,
-                save_statevectors=args.save_dhs,
+                n_qubits=self.width,                    # Number of qubits = feature dimension
+                encoding=args.encoding,                 # Data encoding method (e.g., 'vector')
+                ansatz_type=args.q_ansatz,             # Variational ansatz architecture
+                layers=args.layers,                     # Number of circuit layers
+                sweeps_per_layer=args.q_sweeps,        # Ansatz repetitions per layer
+                activation_function_type=args.activation,  # Quantum activation function
+                shots=args.shots,                       # Number of measurement shots
+                backend_type=args.q_backend,           # Quantum simulator type
+                save_statevectors=args.save_dhs,       # Save quantum states for analysis
             )
-            self.rep_net_output_size = self.width
+            self.rep_net_output_size = self.width  # Output size equals input for Qiskit
+        # ========== Classical Representation Network ==========
         else:
-            mapping_paper = True
+            mapping_paper = True  # Use paper's classical baseline architecture
             print("\n -> Building the classical representation network ")
+            
+            # Option 1: Parameter-matched classical network (for fair comparison)
             if not mapping_paper:
-                ### TO COMPARE TO MERLIN ###
-                # we want to create a classical representation network with similar # of parameters to the QLayer with 10 modes, 5 photons
-                # compute the number of parameters in a quantum network given 10 modes and 5 photons
+                # Create classical MLP with similar parameter count to quantum network
+                # This ensures fair comparison between quantum and classical approaches
+                
+                # Calculate quantum network parameters for reference
                 circuit = create_quantum_circuit(modes=10, feature_size=8)
                 nb_trainable_params = len(
                     [
                         p.name
                         for p in circuit.get_parameters()
-                        if not p.name.startswith("feature")
+                        if not p.name.startswith("feature")  # Only trainable circuit parameters
                     ]
                 )
+                # Compute quantum output dimension based on photon statistics
                 output_size = (
                     math.comb(10, 5) if args.no_bunching else math.comb(10 + 5 - 1, 5)
                 )
+                # Total quantum parameters: circuit + projection layer
                 total_parameters = (
                     nb_trainable_params + output_size * self.width
-                )  # circuit + first layer of the proj
-                # number of parameters in classical repnet
+                )
+                # Classical MLP parameters for comparison
                 classical_params = (
                     self.width * self.width + self.width
-                ) * 3  # rep + first layer of the proj
-                # difference
+                ) * 3  # Three layers with biases
+                # Parameter difference to match
                 diff = total_parameters - classical_params
                 print(
-                    f"--> Difference would be: {diff} (for {total_parameters} parameters for QNN)"
+                    f"--> Parameter difference: {diff} (total quantum params: {total_parameters})"
                 )
 
+                # Build classical MLP to match quantum parameter count
                 layers = []
+                # First two hidden layers with self-connections
                 for _i in range(2):
                     layers.append(nn.Linear(self.width, self.width, bias=True))
                     layers.append(nn.LeakyReLU())
-                # add another layer + activation to increase MLP size (TODO: have a more regular MLP)
+                
+                # Additional layer to consume remaining parameters
                 catching_output_size = int(diff / self.width - 1)
                 layers.append(nn.Linear(self.width, catching_output_size, bias=True))
                 layers.append(nn.LeakyReLU())
@@ -181,59 +239,73 @@ class QSSL(nn.Module):
                 )
                 self.rep_net_output_size = catching_output_size
 
+            # Option 2: Paper's classical baseline architecture
             else:
-                ### TO MAP THE PAPER ###
+                # Simple MLP matching the paper's classical baseline
                 layers = []
                 for _i in range(args.layers):
                     layers.append(nn.Linear(args.width, args.width, bias=True))
                     layers.append(nn.LeakyReLU())
                 self.representation_network = nn.Sequential(*layers)
-                self.rep_net_output_size = args.width
-        # self.fc = nn.Linear(self.rep_net_output_size, args.classes)
-
-        self.loss_dim = args.loss_dim
-        # projector to the loss space
+                self.rep_net_output_size = args.width  # Output dimension matches input
+        # ========== Contrastive Learning Components ==========
+        self.loss_dim = args.loss_dim  # Dimension of contrastive loss space
+        
+        # Projection head: maps representations to contrastive loss space
+        # This is a key component in contrastive learning (SimCLR, MoCo, etc.)
         self.proj = nn.Sequential(
-            nn.Linear(self.rep_net_output_size, self.width),
-            nn.BatchNorm1d(self.width),
-            nn.ReLU(),
-            nn.Linear(self.width, self.loss_dim),
+            nn.Linear(self.rep_net_output_size, self.width),  # Project to intermediate dim
+            nn.BatchNorm1d(self.width),                      # Normalize features
+            nn.ReLU(),                                        # Non-linear activation
+            nn.Linear(self.width, self.loss_dim),            # Final projection to loss space
         )
 
-        self.normalize = nn.Sigmoid()
-        self.temperature = args.temperature
-        # contrastive loss
+        self.normalize = nn.Sigmoid()  # Normalization function (if needed)
+        self.temperature = args.temperature  # Temperature parameter for InfoNCE loss
+        
+        # InfoNCE contrastive loss function
         self.criterion = InfoNCELoss(temperature=self.temperature)
 
     def forward(self, y1, y2):
-        # Encoder and MLP layer for compression
+        """
+        Forward pass for contrastive learning with two augmented views.
+        
+        Args:
+            y1, y2: Two augmented views of the same batch of images
+        
+        Returns:
+            loss: InfoNCE contrastive loss between the two views
+        """
+        # ========== Feature Extraction ==========
+        # Extract features using ResNet backbone + compression
         x1 = self.comp(self.backbone(y1))
         x2 = self.comp(self.backbone(y2))
-        # print(f"\n After encoder x1 = {x1}")
-        # BatchNorm if needed
+        
+        # Optional batch normalization after compression
         if self.batch_norm:
             x1 = self.bn(x1)
             x2 = self.bn(x2)
-            # print(f"\n After Batch Norm x1 = {x1}")
-        # Sigmoid before Representation Network
+            
+        # ========== Feature Preprocessing ==========
+        # Apply sigmoid activation before quantum/classical representation network
+        # This ensures features are in [0,1] range, suitable for quantum encoding
         x1 = torch.sigmoid(x1)
         x2 = torch.sigmoid(x2)
-        # print(f"\n After sigmoid Norm x1 = {x1}")
-        # in the original code they use x = x * np.pi
+        # Note: Original implementation scales by π for phase encoding
+        
+        # ========== Representation Learning ==========
+        # Process through quantum or classical representation network
         z1 = self.representation_network(x1)
         z2 = self.representation_network(x2)
-        # print(f"\n After representation network z1 = {z1}")
-        # projection to loss space
+        
+        # ========== Contrastive Loss Computation ==========
+        # Project representations to contrastive loss space
         z1 = self.proj(z1)
         z2 = self.proj(z2)
-        # print(f"\n After projection z1 = {z1}")
 
-        # L2 normalize features before contrastive loss
-        z1 = nn.functional.normalize(z1, p=2, dim=1)
-        z2 = nn.functional.normalize(z2, p=2, dim=1)
-
-        # Contrastive loss on the concatenated features (along batch dimension)
-        z = torch.cat((z1, z2), dim=0)
-        loss = self.criterion(z)
-        # print(f"\n --- Loss = {loss} --- \n")
+        # Compute InfoNCE contrastive loss between the two views
+        # The loss encourages similar representations for augmented versions
+        # of the same image while pushing apart different images
+        loss = self.criterion(z1, z2)
+        
         return loss
