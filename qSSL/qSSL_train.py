@@ -22,6 +22,9 @@ from qSSL_utils import (
     load_transformed_data,
 )
 from tqdm import tqdm
+import sys
+sys.path.append("./qnn")
+from qnet import QNet
 
 # parser
 parser = argparse.ArgumentParser(description="PyTorch Quantum self-sup training")
@@ -33,6 +36,9 @@ parser.add_argument("-cl", "--classes", type=int, default=2, help="Number of cla
 # training
 parser.add_argument(
     "-e", "--epochs", type=int, default=10, help="Number of epochs for training"
+)
+parser.add_argument(
+    "-le", "--le-epochs", type=int, default=10, help="Number of epochs for training"
 )
 parser.add_argument("-bs", "--batch_size", type=int, default=128, help="Batch size")
 # the SSL model
@@ -78,6 +84,32 @@ parser.add_argument(
     help="No bunching mode",
 )
 
+# Qiskit SSL (from https://github.com/bjader/QSSL)
+parser.add_argument(
+    "--qiskit",
+    action="store_true",
+    default=False,
+    help="Set if we use Quantum SSL",
+)
+parser.add_argument('--layers', type=int, default=2,
+                    help='Number of layers in the test network (default: 2).')
+parser.add_argument('--q_backend', type=str, default='qasm_simulator',
+                    help='Type of backend simulator to run quantum circuits on (default: qasm_simulator)')
+
+parser.add_argument('--encoding', type=str, default='vector',
+                    help='Data encoding method (default: vector)')
+parser.add_argument('--q_ansatz', type=str, default='sim_circ_14_half',
+                    help='Variational ansatz method (default: sim_circ_14_half)')
+parser.add_argument('--q_sweeps', type=int, default=1,
+                    help='Number of ansatz sweeeps.')
+parser.add_argument('--activation', type=str, default='null',
+                    help='Quantum layer activation function type (default: null)')
+parser.add_argument('--shots', type=int, default=100,
+                    help='Number of shots for quantum circuit evaluations.')
+parser.add_argument('--save-dhs', action='store_true',
+                    help='If enabled, compute the Hilbert-Schmidt distance of the quantum statevectors belonging to'
+                         ' each class. Only works for -q and --classes 2.')
+
 
 #####################
 ### the SSL model ###
@@ -102,6 +134,7 @@ class QSSL(nn.Module):
 
         # building the representation network
         self.quantum = args.quantum
+        self.qiskit = args.qiskit
         self.batch_norm = args.batch_norm
         self.bn = nn.BatchNorm2d(self.width)
 
@@ -134,6 +167,13 @@ class QSSL(nn.Module):
 
             self.rep_net_output_size = self.representation_network.output_size
 
+        elif self.qiskit:
+            #from https://github.com/bjader/QSSL
+            self.representation_network = QNet(n_qubits=self.width, encoding=args.encoding, ansatz_type=args.q_ansatz,
+                                          layers=args.layers, sweeps_per_layer=args.q_sweeps,
+                                          activation_function_type=args.activation, shots=args.shots,
+                                          backend_type=args.q_backend, save_statevectors=args.save_dhs)
+            self.rep_net_output_size = self.width
         else:
             print("\n -> Building the classical representation network ")
             # we want to create a classical representation network with similar # of parameters to the QLayer with 10 modes, 5 photons
@@ -235,6 +275,7 @@ class QSSL(nn.Module):
 def training_step(model, train_loader, optimizer):
     pbar = tqdm(train_loader)
     total_loss = 0.0
+    iter = 0
     for (x1, x2), _target in pbar:
         loss = model(x1, x2)
 
@@ -252,7 +293,9 @@ def training_step(model, train_loader, optimizer):
         optimizer.step()
         total_loss += loss.item()
         pbar.set_postfix({"Loss": f"{loss.item():.4f}"})
-
+        iter+=1
+        if iter>3:
+            return total_loss / (iter + 1)
     return total_loss / len(train_loader)
 
 
@@ -271,7 +314,7 @@ def fine_tune(model, train_loader, val_loader, args):
     criterion = nn.CrossEntropyLoss()
     train_losses, val_losses = [], []
     train_accs, val_accs = [], []
-    for epoch in range(args.epochs):
+    for epoch in range(args.le_epochs):
         # training
         model.train()
         pbar = tqdm(train_loader)
@@ -325,7 +368,7 @@ def fine_tune(model, train_loader, val_loader, args):
         val_accs.append(avg_val_acc)
 
         print(
-            f"Epoch {epoch+1}/{args.epochs}: Train Acc = {avg_train_acc:.4f}, Val Acc = {avg_val_acc:.4f}"
+            f"Epoch {epoch+1}/{args.le_epochs}: Train Acc = {avg_train_acc:.4f}, Val Acc = {avg_val_acc:.4f}"
         )
 
     return model, train_losses, val_losses, train_accs, val_accs

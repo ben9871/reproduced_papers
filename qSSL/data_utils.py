@@ -134,7 +134,7 @@ def load_finetuning_data(args):
 
 
 class InfoNCELoss(torch.nn.Module):
-    def __init__(self, temperature=0.5):
+    def __init__(self, temperature=0.07):
         super().__init__()
         self.temperature = temperature
 
