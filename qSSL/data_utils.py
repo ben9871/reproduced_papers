@@ -1,16 +1,10 @@
 import random
-
 import numpy as np
-import perceval as pcvl
 import torch
 import torchvision
 from PIL import ImageFilter
 from torch.utils.data import Subset
 from torchvision import transforms
-
-#####################
-### data handling ###
-#####################
 
 
 class TwoCropsTransform:
@@ -126,99 +120,3 @@ def load_finetuning_data(args):
     )
 
     return train_dataset, val_dataset
-
-
-####################
-### InfoNCE Loss ###
-####################
-
-
-class InfoNCELoss(torch.nn.Module):
-    def __init__(self, temperature=0.07):
-        super().__init__()
-        self.temperature = temperature
-
-    def forward(self, features):
-        """
-        Args:
-            features: Tensor of shape (2 * batch_size, feature_dim).
-                      The first half are augmented views of instances in the batch.
-                      The second half are corresponding positive pairs.
-
-        Returns:
-            torch.Tensor: Scalar loss value.
-        """
-        batch_size = features.shape[0] // 2
-        # create pseudo labels
-        labels = torch.cat([torch.arange(batch_size) for _ in range(2)], dim=0)
-        labels = (
-            (labels.unsqueeze(0) == labels.unsqueeze(1)).float().to(features.device)
-        )
-        # sim(z_i,z_j)/tau
-        similarity_matrix = torch.matmul(features, features.T) / self.temperature
-
-        # mask to remove self-comparisons
-        mask = torch.eye(labels.shape[0], dtype=torch.bool).to(features.device)
-        similarity_matrix = similarity_matrix.masked_fill(mask, float("-inf"))
-        # print(f"\n Similarity matrix:\n{similarity_matrix}")
-        # exp(sim(z_i,z_j)/tau)
-        sim_exp = torch.exp(similarity_matrix)
-        # exp(sim(z_i,z_j)/tau) - same indices
-        sim_exp_sum = sim_exp.sum(dim=1, keepdim=True) - torch.exp(
-            similarity_matrix.diagonal().view(-1, 1)
-        )
-        # - log( # exp(sim(z_i,z_j)/tau) / sum )
-        log_prob = similarity_matrix - torch.log(sim_exp_sum + 1e-8)
-
-        pos_indices = torch.arange(batch_size).to(features.device)
-        pos_pairs = torch.cat([pos_indices + batch_size, pos_indices]).to(
-            features.device
-        )
-        # Apply softmax to get probabilities
-        loss = -log_prob[torch.arange(2 * batch_size), pos_pairs].mean()
-        """loss = -torch.log(
-            F.softmax(similarity_matrix, dim=1) * labels
-        ).sum(dim=1) / labels.sum(dim=1)"""
-        # print(f"Loss: {loss}")
-        return loss.mean()
-
-
-##########################
-### Quantum SSL models ###
-##########################
-
-
-def create_quantum_circuit(modes=10, feature_size=10):
-    # first trainable circuit
-    pre_circuit = pcvl.GenericInterferometer(
-        modes,
-        lambda i: (
-            pcvl.BS()  # theta=pcvl.P(f"bs_1_{i}")
-            .add(0, pcvl.PS(pcvl.P(f"phase_train_1_{i}")))
-            .add(0, pcvl.BS())  # theta=pcvl.P(f"bs_1_{i}")
-            .add(0, pcvl.PS(pcvl.P(f"phase_train_2_{i}")))
-        ),
-    )
-    # data encoding in phase shifters (sandwhich)
-    var = pcvl.Circuit(modes)
-    for k in range(0, feature_size):
-        var.add(k % modes, pcvl.PS(pcvl.P(f"feature-{k}")))
-
-    # second trainable circuit
-    post_circuit = pcvl.GenericInterferometer(
-        modes,
-        lambda i: (
-            pcvl.BS()  # theta=pcvl.P(f"bs_1_{i}")
-            .add(0, pcvl.PS(pcvl.P(f"phase_train_3_{i}")))
-            .add(0, pcvl.BS())  # theta=pcvl.P(f"bs_1_{i}")
-            .add(0, pcvl.PS(pcvl.P(f"phase_train_4_{i}")))
-        ),
-    )
-
-    circuit = pcvl.Circuit(modes)
-
-    circuit.add(0, pre_circuit, merge=True)
-    circuit.add(0, var, merge=True)
-    circuit.add(0, post_circuit, merge=True)
-
-    return circuit
