@@ -5,7 +5,7 @@ Training from the paper, available at the following repo: https://github.com/pti
 import time
 
 import torch
-import torch.nn.functional as F
+import torch.nn.functional as F  # noqa: N812
 
 
 #####################################################################################################################
@@ -19,25 +19,25 @@ def to_density_matrix(batch_vectors, device):
         index += 1
     return out
 
-def normalize_DM(density_matrix):
+def normalize_dm(density_matrix):
     traces = density_matrix.diagonal(dim1=-2, dim2=-1).sum(-1)
     traces = traces.view(density_matrix.shape[0], 1, 1)
     return (density_matrix / traces)
 
 
-def train_network_2D(batch_size, d, network, train_loader, criterion, output_scale, optimizer, device):
+def train_network_2d(batch_size, d, network, train_loader, criterion, output_scale, optimizer, device):
     network.train()  # put in train mode: we will modify the weights of the network
     train_loss = 0  # initialize the loss
     train_accuracy = 0  # initialize the accuracy
 
     # loop on the batches in the train dataset
-    for batch_idx, (data, target) in enumerate(train_loader):
+    for _batch_idx, (data, target) in enumerate(train_loader):
         temp_batch_size = data.size(0)
         optimizer.zero_grad()  # important step to reset gradients to zero
         data = data.to(device)
         init_density_matrix = to_density_matrix(
             F.normalize(data.squeeze().resize(data.shape[0], d ** 2), p=2, dim=1).to(device), device)
-        output = network(normalize_DM(init_density_matrix))  # we run the network on the data
+        output = network(normalize_dm(init_density_matrix))  # we run the network on the data
 
         # training
         # print(output)
@@ -53,21 +53,21 @@ def train_network_2D(batch_size, d, network, train_loader, criterion, output_sca
         train_accuracy += acc  # increment accuracy of whole test set
 
     train_accuracy /= len(train_loader.dataset)  # compute mean accuracy
-    train_loss /= (batch_idx + 1)  # mean loss
+    train_loss /= (_batch_idx + 1)  # mean loss
     return train_loss, train_accuracy
 
 
-def test_network_2D(batch_size, d, network, test_loader, criterion, output_scale, device):
+def test_network_2d(batch_size, d, network, test_loader, criterion, output_scale, device):
     network.eval()  # put in eval mode: we will not modify the weights of the network
     train_loss = 0  # initialize the loss
     train_accuracy = 0  # initialize the accuracy
-    for batch_idx, (data, target) in enumerate(test_loader):
+    for _batch_idx, (data, target) in enumerate(test_loader):
         temp_batch_size = data.size(0)
         # Run the network and compute the loss
         data = data.to(device)
         init_density_matrix = to_density_matrix(
             F.normalize(data.squeeze().resize(data.shape[0], d ** 2), p=2, dim=1).to(device), device)
-        output = network(normalize_DM(init_density_matrix))  # we run the network on the data
+        output = network(normalize_dm(init_density_matrix))  # we run the network on the data
         loss = criterion(output*output_scale, target.resize(temp_batch_size).to(device))  # we compare output to the target and compute the loss, using the chosen loss function
         train_loss += loss.item()  # we increment the total train loss
         pred = output.argmax(dim=1, keepdim=True)  # the class chosen by the network is the highest output
@@ -75,7 +75,7 @@ def test_network_2D(batch_size, d, network, test_loader, criterion, output_scale
         train_accuracy += acc  # increment accuracy of whole test set
 
     train_accuracy /= len(test_loader.dataset)  # compute mean accuracy
-    train_loss /= (batch_idx + 1)  # mean loss
+    train_loss /= (_batch_idx + 1)  # mean loss
     return train_loss, train_accuracy
 
 
@@ -88,7 +88,7 @@ def train_globally(batch_size, d, network, reduced_train_loader, reduced_test_lo
     total_params = sum(p.numel() for p in network.parameters())
     print(f"Start training! Number of network total parameters: {total_params}")
 
-    test_loss, test_accuracy = test_network_2D(batch_size, d, network, reduced_test_loader, criterion, output_scale, device)
+    test_loss, test_accuracy = test_network_2d(batch_size, d, network, reduced_test_loader, criterion, output_scale, device)
     print(f'Evaluation on test set: Loss = {test_loss:.6f}, accuracy = {test_accuracy * 100:.4f} %')
 
     # training step
@@ -98,7 +98,7 @@ def train_globally(batch_size, d, network, reduced_train_loader, reduced_test_lo
     testing_accuracy_list = [test_accuracy]
     for epoch in range(train_epochs):
         start = time.time()
-        train_loss, train_accuracy = train_network_2D(batch_size, d, network, reduced_train_loader, criterion, output_scale,
+        train_loss, train_accuracy = train_network_2d(batch_size, d, network, reduced_train_loader, criterion, output_scale,
                                                       optimizer, device)
         training_loss_list.append(train_loss)
         training_accuracy_list.append(train_accuracy)
@@ -106,7 +106,7 @@ def train_globally(batch_size, d, network, reduced_train_loader, reduced_test_lo
         print(
             f'Epoch {epoch}: Loss = {train_loss:.6f}, accuracy = {train_accuracy * 100:.4f} %, time={(end - start):.4f}s')
         if epoch % test_interval == 0 and epoch != 0:
-            test_loss, test_accuracy = test_network_2D(batch_size, d, network, reduced_test_loader, criterion, output_scale, device)
+            test_loss, test_accuracy = test_network_2d(batch_size, d, network, reduced_test_loader, criterion, output_scale, device)
             testing_loss_list.append(test_loss)
             testing_accuracy_list.append(test_accuracy)
             print(f'Evaluation on test set: Loss = {test_loss:.6f}, accuracy = {test_accuracy * 100:.4f} %')
@@ -121,13 +121,13 @@ def train_globally(batch_size, d, network, reduced_train_loader, reduced_test_lo
 #####################################################################################################################
 ### State Vector Simulations                                                                                      ###
 #####################################################################################################################
-def train_network_2D_state_vector(batch_size, d, network, train_loader, criterion, output_scale, optimizer, device):
+def train_network_2d_state_vector(batch_size, d, network, train_loader, criterion, output_scale, optimizer, device):
     network.train()  # put in train mode: we will modify the weights of the network
     train_loss = 0  # initialize the loss
     train_accuracy = 0  # initialize the accuracy
 
     # loop on the batches in the train dataset
-    for batch_idx, (data, target) in enumerate(train_loader):
+    for _batch_idx, (data, target) in enumerate(train_loader):
         optimizer.zero_grad()  # important step to reset gradients to zero
         data = data.to(device)
         init_state_vector = F.normalize(data.squeeze().resize(data.shape[0], d ** 2), p=2, dim=1).to(device)
@@ -144,15 +144,15 @@ def train_network_2D_state_vector(batch_size, d, network, train_loader, criterio
         train_accuracy += acc  # increment accuracy of whole test set
 
     train_accuracy /= len(train_loader.dataset)  # compute mean accuracy
-    train_loss /= (batch_idx + 1)  # mean loss
+    train_loss /= (_batch_idx + 1)  # mean loss
     return train_loss, train_accuracy
 
 
-def test_network_2D_state_vector(batch_size, d, network, test_loader, criterion, output_scale, device):
+def test_network_2d_state_vector(batch_size, d, network, test_loader, criterion, output_scale, device):
     network.eval()  # put in eval mode: we will not modify the weights of the network
     train_loss = 0  # initialize the loss
     train_accuracy = 0  # initialize the accuracy
-    for batch_idx, (data, target) in enumerate(test_loader):
+    for _batch_idx, (data, target) in enumerate(test_loader):
         # Run the network and compute the loss
         data = data.to(device)
         init_state_vector = F.normalize(data.squeeze().resize(data.shape[0], d ** 2), p=2, dim=1).to(device)
@@ -167,7 +167,7 @@ def test_network_2D_state_vector(batch_size, d, network, test_loader, criterion,
         train_accuracy += acc  # increment accuracy of whole test set
 
     train_accuracy /= len(test_loader.dataset)  # compute mean accuracy
-    train_loss /= (batch_idx + 1)  # mean loss
+    train_loss /= (_batch_idx + 1)  # mean loss
     return train_loss, train_accuracy
 
 def train_globally_state_vector(batch_size, d, network, reduced_train_loader, reduced_test_loader, optimizer, scheduler,
@@ -179,7 +179,7 @@ def train_globally_state_vector(batch_size, d, network, reduced_train_loader, re
     total_params = sum(p.numel() for p in network.parameters())
     print(f"Start training! Number of network total parameters: {total_params}")
 
-    test_loss, test_accuracy = test_network_2D_state_vector(batch_size, d, network, reduced_test_loader, criterion, output_scale, device)
+    test_loss, test_accuracy = test_network_2d_state_vector(batch_size, d, network, reduced_test_loader, criterion, output_scale, device)
     print(f'Evaluation on test set: Loss = {test_loss:.6f}, accuracy = {test_accuracy * 100:.4f} %')
 
     # training step
@@ -189,15 +189,15 @@ def train_globally_state_vector(batch_size, d, network, reduced_train_loader, re
     testing_accuracy_list = [test_accuracy]
     for epoch in range(train_epochs):
         start = time.time()
-        train_loss, train_accuracy = train_network_2D_state_vector(batch_size, d, network, reduced_train_loader, criterion, output_scale,
-                                                      optimizer, device)
+        train_loss, train_accuracy = train_network_2d_state_vector(batch_size, d, network, reduced_train_loader, criterion, output_scale,
+                                                                   optimizer, device)
         training_loss_list.append(train_loss)
         training_accuracy_list.append(train_accuracy)
         end = time.time()
         print(
             f'Epoch {epoch}: Loss = {train_loss:.6f}, accuracy = {train_accuracy * 100:.4f} %, time={(end - start):.4f}s')
         if epoch % test_interval == 0 and epoch != 0:
-            test_loss, test_accuracy = test_network_2D_state_vector(batch_size, d, network, reduced_test_loader, criterion, output_scale, device)
+            test_loss, test_accuracy = test_network_2d_state_vector(batch_size, d, network, reduced_test_loader, criterion, output_scale, device)
             testing_loss_list.append(test_loss)
             testing_accuracy_list.append(test_accuracy)
             print(f'Evaluation on test set: Loss = {test_loss:.6f}, accuracy = {test_accuracy * 100:.4f} %')
@@ -210,18 +210,18 @@ def train_globally_state_vector(batch_size, d, network, reduced_train_loader, re
 #####################################################################################################################
 ### MSE Neural Network                                                                                            ###
 #####################################################################################################################
-def train_network_2D_MSE(batch_size, d, network, train_loader, criterion, output_scale, optimizer, device):
+def train_network_2d_mse(batch_size, d, network, train_loader, criterion, output_scale, optimizer, device):
     network.train()  # put in train mode: we will modify the weights of the network
     train_loss = 0  # initialize the loss
     train_accuracy = 0  # initialize the accuracy
 
     # loop on the batches in the train dataset
-    for batch_idx, (data, target) in enumerate(train_loader):
+    for _batch_idx, (data, target) in enumerate(train_loader):
         optimizer.zero_grad()  # important step to reset gradients to zero
         data = data.to(device)
         init_density_matrix = to_density_matrix(
             F.normalize(data.squeeze().resize(data.shape[0], d ** 2), p=2, dim=1).to(device), device)
-        output = network(normalize_DM(init_density_matrix))  # we run the network on the data
+        output = network(normalize_dm(init_density_matrix))  # we run the network on the data
 
         # training
         # print(output)
@@ -238,20 +238,20 @@ def train_network_2D_MSE(batch_size, d, network, train_loader, criterion, output
         train_accuracy += acc  # increment accuracy of whole test set
 
     train_accuracy /= len(train_loader.dataset)  # compute mean accuracy
-    train_loss /= (batch_idx + 1)  # mean loss
+    train_loss /= (_batch_idx + 1)  # mean loss
     return train_loss, train_accuracy
 
 
-def test_network_2D_MSE(batch_size, d, network, test_loader, criterion, output_scale, device):
+def test_network_2d_mse(batch_size, d, network, test_loader, criterion, output_scale, device):
     network.eval()  # put in eval mode: we will not modify the weights of the network
     train_loss = 0  # initialize the loss
     train_accuracy = 0  # initialize the accuracy
-    for batch_idx, (data, target) in enumerate(test_loader):
+    for _batch_idx, (data, target) in enumerate(test_loader):
         # Run the network and compute the loss
         data = data.to(device)
         init_density_matrix = to_density_matrix(
             F.normalize(data.squeeze().resize(data.shape[0], d ** 2), p=2, dim=1).to(device), device)
-        output = network(normalize_DM(init_density_matrix))  # we run the network on the data
+        output = network(normalize_dm(init_density_matrix))  # we run the network on the data
         loss = criterion(output*output_scale, target.to(dtype=torch.float, device=device))  # we compare output to the target and compute the loss, using the chosen loss function
         train_loss += loss.item()  # we increment the total train loss
         pred = output.argmax(dim=1, keepdim=True)  # the class chosen by the network is the highest output
@@ -260,12 +260,12 @@ def test_network_2D_MSE(batch_size, d, network, test_loader, criterion, output_s
         train_accuracy += acc  # increment accuracy of whole test set
 
     train_accuracy /= len(test_loader.dataset)  # compute mean accuracy
-    train_loss /= (batch_idx + 1)  # mean loss
+    train_loss /= (_batch_idx + 1)  # mean loss
     return train_loss, train_accuracy
 
 
-def train_globally_MSE(batch_size, d, network, reduced_train_loader, reduced_test_loader, optimizer, scheduler,
-                      criterion, output_scale, train_epochs, test_interval, device):
+def train_globally_mse(batch_size, d, network, reduced_train_loader, reduced_test_loader, optimizer, scheduler,
+                       criterion, output_scale, train_epochs, test_interval, device):
     """
     Perform general training on the single channel image and single channel network, including training, testing, and saving data.
     """
@@ -273,7 +273,7 @@ def train_globally_MSE(batch_size, d, network, reduced_train_loader, reduced_tes
     total_params = sum(p.numel() for p in network.parameters())
     print(f"Start training! Number of network total parameters: {total_params}")
 
-    test_loss, test_accuracy = test_network_2D_MSE(batch_size, d, network, reduced_test_loader, criterion, output_scale, device)
+    test_loss, test_accuracy = test_network_2d_mse(batch_size, d, network, reduced_test_loader, criterion, output_scale, device)
     print(f'Evaluation on test set: Loss = {test_loss:.6f}, accuracy = {test_accuracy * 100:.4f} %')
 
     # training step
@@ -283,7 +283,7 @@ def train_globally_MSE(batch_size, d, network, reduced_train_loader, reduced_tes
     testing_accuracy_list = [test_accuracy]
     for epoch in range(train_epochs):
         start = time.time()
-        train_loss, train_accuracy = train_network_2D_MSE(batch_size, d, network, reduced_train_loader, criterion, output_scale,
+        train_loss, train_accuracy = train_network_2d_mse(batch_size, d, network, reduced_train_loader, criterion, output_scale,
                                                       optimizer, device)
         training_loss_list.append(train_loss)
         training_accuracy_list.append(train_accuracy)
@@ -291,7 +291,7 @@ def train_globally_MSE(batch_size, d, network, reduced_train_loader, reduced_tes
         print(
             f'Epoch {epoch}: Loss = {train_loss:.6f}, accuracy = {train_accuracy * 100:.4f} %, time={(end - start):.4f}s')
         if epoch % test_interval == 0 and epoch != 0:
-            test_loss, test_accuracy = test_network_2D_MSE(batch_size, d, network, reduced_test_loader, criterion, output_scale, device)
+            test_loss, test_accuracy = test_network_2d_mse(batch_size, d, network, reduced_test_loader, criterion, output_scale, device)
             testing_loss_list.append(test_loss)
             testing_accuracy_list.append(test_accuracy)
             print(f'Evaluation on test set: Loss = {test_loss:.6f}, accuracy = {test_accuracy * 100:.4f} %')

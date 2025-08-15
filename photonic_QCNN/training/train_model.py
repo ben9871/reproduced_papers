@@ -29,8 +29,8 @@ def train_model(model, train_loader, x_train, x_test, y_train, y_test):
         test_acc_history.append(test_acc)
 
     # Training loop
-    for epoch in trange(20, desc="Training epochs"):
-        for batch_idx, (images, labels) in enumerate(train_loader):
+    for _epoch in trange(20, desc="Training epochs"):
+        for _batch_idx, (images, labels) in enumerate(train_loader):
             optimizer.zero_grad()
             output = model(images)
             loss = loss_fn(output, labels)
@@ -88,8 +88,8 @@ def train_model_return_preds(model, train_loader, x_train, x_test, y_train, y_te
         test_acc_history.append(test_acc)
 
     # Training loop
-    for epoch in trange(20, desc="Training epochs"):
-        for batch_idx, (images, labels) in enumerate(train_loader):
+    for _epoch in trange(20, desc="Training epochs"):
+        for _batch_idx, (images, labels) in enumerate(train_loader):
             optimizer.zero_grad()
             output = model(images)
             loss = loss_fn(output, labels)
