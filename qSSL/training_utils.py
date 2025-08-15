@@ -3,6 +3,7 @@ import json
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 from tqdm import tqdm
 
 
@@ -13,53 +14,51 @@ class InfoNCELoss(torch.nn.Module):
 
     def forward(self, features):
         """
-        Args:
-            features: Tensor of shape (2 * batch_size, feature_dim).
-                      The first half are augmented views of instances in the batch.
-                      The second half are corresponding positive pairs.
-
-        Returns:
-            torch.Tensor: Scalar loss value.
+        Explicit InfoNCE implementation following the original paper.
         """
         batch_size = features.shape[0] // 2
-        # create pseudo labels
-        labels = torch.cat([torch.arange(batch_size) for _ in range(2)], dim=0)
-        labels = (
-            (labels.unsqueeze(0) == labels.unsqueeze(1)).float().to(features.device)
-        )
-        # sim(z_i,z_j)/tau
-        similarity_matrix = torch.matmul(features, features.T) / self.temperature
+        device = features.device
 
-        # mask to remove self-comparisons
-        mask = torch.eye(labels.shape[0], dtype=torch.bool).to(features.device)
-        similarity_matrix = similarity_matrix.masked_fill(mask, float("-inf"))
-        # print(f"\n Similarity matrix:\n{similarity_matrix}")
-        # exp(sim(z_i,z_j)/tau)
-        sim_exp = torch.exp(similarity_matrix)
-        # exp(sim(z_i,z_j)/tau) - same indices
-        sim_exp_sum = sim_exp.sum(dim=1, keepdim=True) - torch.exp(
-            similarity_matrix.diagonal().view(-1, 1)
-        )
-        # - log( # exp(sim(z_i,z_j)/tau) / sum )
-        log_prob = similarity_matrix - torch.log(sim_exp_sum + 1e-8)
+        # Normalize features
+        features = F.normalize(features, dim=1)
 
-        pos_indices = torch.arange(batch_size).to(features.device)
-        pos_pairs = torch.cat([pos_indices + batch_size, pos_indices]).to(
-            features.device
-        )
-        # Apply softmax to get probabilities
-        loss = -log_prob[torch.arange(2 * batch_size), pos_pairs].mean()
-        """loss = -torch.log(
-            F.softmax(similarity_matrix, dim=1) * labels
-        ).sum(dim=1) / labels.sum(dim=1)"""
-        # print(f"Loss: {loss}")
-        return loss.mean()
+        # Split into two views
+        z1 = features[:batch_size]  # First augmented views
+        z2 = features[batch_size:]  # Second augmented views
+
+        # Concatenate for similarity computation
+        z = torch.cat([z1, z2], dim=0)  # Shape: (2*batch_size, feature_dim)
+
+        # Compute similarity matrix
+        sim_matrix = torch.matmul(z, z.T) / self.temperature
+
+        # Create mask for positive pairs
+        # Positive pairs: (i, i+batch_size) and (i+batch_size, i)
+        pos_mask = torch.zeros(2 * batch_size, 2 * batch_size, device=device)
+        for i in range(batch_size):
+            pos_mask[i, i + batch_size] = 1
+            pos_mask[i + batch_size, i] = 1
+
+        # Remove self-similarities (diagonal)
+        neg_mask = 1 - torch.eye(2 * batch_size, device=device) - pos_mask
+
+        # Compute InfoNCE loss
+        loss = 0
+        for i in range(2 * batch_size):
+            # Positive similarity
+            pos_sim = sim_matrix[i][pos_mask[i] == 1]
+            # All similarities except self
+            all_sim = sim_matrix[i][torch.arange(2 * batch_size) != i]
+
+            # InfoNCE: -log(exp(pos) / sum(exp(all)))
+            loss += -torch.log(torch.exp(pos_sim) / torch.exp(all_sim).sum())
+
+        return loss / (2 * batch_size)
 
 
 def training_step(model, train_loader, optimizer):
     pbar = tqdm(train_loader)
     total_loss = 0.0
-    iter = 0
     for (x1, x2), _target in pbar:
         loss = model(x1, x2)
 
@@ -77,9 +76,7 @@ def training_step(model, train_loader, optimizer):
         optimizer.step()
         total_loss += loss.item()
         pbar.set_postfix({"Loss": f"{loss.item():.4f}"})
-        iter+=1
-        if iter>3:
-            return total_loss / (iter + 1)
+
     return total_loss / len(train_loader)
 
 
@@ -169,14 +166,19 @@ def plot_training_loss(training_losses, args):
     )
     plt.xlabel("Epoch")
     plt.ylabel("Loss")
+    title = "Classical"
+    if args.merlin:
+        title = "Quantum_MerLin"
+    if args.qiskit:
+        title = "Quantum_Qiskit"
     plt.title(
-        f'SSL Training Loss ({"Quantum" if args.quantum else "Classical"} Network)'
+        f'SSL Training Loss ({title} Network)'
     )
     plt.grid(True, alpha=0.3)
     plt.legend()
     plt.tight_layout()
     plt.savefig(
-        f'ssl_training_loss_{"quantum" if args.quantum else "classical"}.png',
+        f'ssl_training_loss_{title}.png',
         dpi=300,
         bbox_inches="tight",
     )
@@ -185,7 +187,11 @@ def plot_training_loss(training_losses, args):
 
 def plot_evaluation_metrics(train_losses, val_losses, train_accs, val_accs, args):
     fig, ((ax1, ax2)) = plt.subplots(1, 2, figsize=(15, 6))
-
+    title = "Classical"
+    if args.merlin:
+        title = "Quantum_MerLin"
+    if args.qiskit:
+        title = "Quantum_Qiskit"
     # Plot losses
     epochs = range(1, args.epochs + 1)
     ax1.plot(epochs, train_losses, "b-", linewidth=2, label="Training Loss")
@@ -193,7 +199,7 @@ def plot_evaluation_metrics(train_losses, val_losses, train_accs, val_accs, args
     ax1.set_xlabel("Epoch")
     ax1.set_ylabel("Loss")
     ax1.set_title(
-        f'Linear Evaluation Losses ({"Quantum" if args.quantum else "Classical"} Network)'
+        f'Linear Evaluation Losses ({title} Network)'
     )
     ax1.grid(True, alpha=0.3)
     ax1.legend()
@@ -204,14 +210,14 @@ def plot_evaluation_metrics(train_losses, val_losses, train_accs, val_accs, args
     ax2.set_xlabel("Epoch")
     ax2.set_ylabel("Accuracy")
     ax2.set_title(
-        f'Linear Evaluation Accuracies ({"Quantum" if args.quantum else "Classical"} Network)'
+        f'Linear Evaluation Accuracies ({title} Network)'
     )
     ax2.grid(True, alpha=0.3)
     ax2.legend()
 
     plt.tight_layout()
     plt.savefig(
-        f'evaluation_metrics_{"quantum" if args.quantum else "classical"}.png',
+        f'evaluation_metrics_{title}.png',
         dpi=300,
         bbox_inches="tight",
     )
@@ -227,13 +233,19 @@ def save_results_to_json(
     ft_val_accs,
 ):
     # Determine filename based on quantum mode
-    filename = f'{"quantum" if args.quantum else "classical"}_results.json'
+    title = "Classical"
+    if args.merlin:
+        title = "Quantum_MerLin"
+    if args.qiskit:
+        title = "Quantum_Qiskit"
+    filename = f'{title}_results.json'
 
     # Create experiment entry
     experiment = {
         "timestamp": datetime.datetime.now().isoformat(),
         "arguments": {
-            "quantum": args.quantum,
+            "quantum-MerLin": args.merlin,
+            "quantum-Qiskit": args.qiskit,
             "epochs": args.epochs,
             "batch_size": args.batch_size,
             "classes": args.classes,

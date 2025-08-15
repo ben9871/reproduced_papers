@@ -53,7 +53,9 @@ class QSSL(nn.Module):
         args,
     ):
         super().__init__()
-        print(f"\n Defining the SSL model with \n - quantum : {args.quantum} \n - ")
+        framework_used = "Quantum (MerLin)" if args.merlin else "Classical ResNet18"
+        framework_used = "Quantum (Qiskit)" if args.qiskit else framework_used
+        print(f"\n Defining the SSL model with \n -{framework_used} \n - ")
         # backbone
         self.width = args.width
         # backbone with FC = Identity
@@ -64,14 +66,14 @@ class QSSL(nn.Module):
         self.comp = nn.Linear(backbone_features, self.width)
 
         # building the representation network
-        self.quantum = args.quantum
+        self.merlin = args.merlin
         self.qiskit = args.qiskit
         self.batch_norm = args.batch_norm
         self.bn = nn.BatchNorm2d(self.width)
 
         # photonic circuit
-        if self.quantum:
-            print("\n -> Building the quantum representation network ")
+        if self.merlin:
+            print("\n -> Building the quantum representation network with MerLin")
             self.modes = args.modes
             self.no_bunching = args.no_bunching
             self.circuit = create_quantum_circuit(
@@ -100,6 +102,7 @@ class QSSL(nn.Module):
 
         elif self.qiskit:
             #from https://github.com/bjader/QSSL
+            print("\n -> Building the quantum representation network with Qiskit")
             self.representation_network = QNet(n_qubits=self.width, encoding=args.encoding, ansatz_type=args.q_ansatz,
                                           layers=args.layers, sweeps_per_layer=args.q_sweeps,
                                           activation_function_type=args.activation, shots=args.shots,

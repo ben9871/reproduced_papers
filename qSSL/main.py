@@ -4,6 +4,7 @@ import torch.nn as nn
 from data_utils import load_transformed_data, load_finetuning_data
 from model import QSSL
 from training_utils import train, linear_evaluation, save_results_to_json
+from torchsummary import summary
 
 parser = argparse.ArgumentParser(description="PyTorch Quantum self-sup training")
 # dataset
@@ -13,10 +14,10 @@ parser.add_argument(
 parser.add_argument("-cl", "--classes", type=int, default=2, help="Number of classes")
 # training
 parser.add_argument(
-    "-e", "--epochs", type=int, default=10, help="Number of epochs for training"
+    "-e", "--epochs", type=int, default=2, help="Number of epochs for training"
 )
 parser.add_argument(
-    "-le", "--le-epochs", type=int, default=10, help="Number of epochs for training"
+    "-le", "--le-epochs", type=int, default=100, help="Number of epochs for training"
 )
 parser.add_argument("-bs", "--batch_size", type=int, default=128, help="Batch size")
 # the SSL model
@@ -47,11 +48,10 @@ parser.add_argument(
     help="Dimension of the features encoded in the QNN",
 )
 parser.add_argument(
-    "-quant",
-    "--quantum",
+    "--merlin",
     action="store_true",
     default=False,
-    help="Set if we use Quantum SSL",
+    help="Set if we use Quantum SSL with MerLin",
 )
 parser.add_argument("-m", "--modes", type=int, default=10, help="Number of modes")
 parser.add_argument(
@@ -67,7 +67,7 @@ parser.add_argument(
     "--qiskit",
     action="store_true",
     default=False,
-    help="Set if we use Quantum SSL",
+    help="Set if we use Quantum SSL with Qiskit",
 )
 parser.add_argument('--layers', type=int, default=2,
                     help='Number of layers in the test network (default: 2).')
@@ -101,6 +101,7 @@ if __name__ == "__main__":
     
     # Define model
     model = QSSL(args)
+    summary(model, [(3, 32, 32),(3, 32, 32)])
     print(
         f"Number of parameters in model = {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
     )
