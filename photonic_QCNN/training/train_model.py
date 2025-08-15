@@ -54,12 +54,12 @@ def train_model(model, train_loader, x_train, x_test, y_train, y_test):
             test_acc_history.append(test_acc)
         scheduler.step()
     return {
-        'loss_history': train_loss_history,
-        'test_loss_history': test_loss_history,
-        'train_acc_history': train_acc_history,
-        'test_acc_history': test_acc_history,
-        'final_train_acc': train_acc,
-        'final_test_acc': test_acc
+        "loss_history": train_loss_history,
+        "test_loss_history": test_loss_history,
+        "train_acc_history": train_acc_history,
+        "test_acc_history": test_acc_history,
+        "final_train_acc": train_acc,
+        "final_test_acc": test_acc,
     }
 
 
@@ -112,11 +112,15 @@ def train_model_return_preds(model, train_loader, x_train, x_test, y_train, y_te
             train_acc_history.append(train_acc)
             test_acc_history.append(test_acc)
         scheduler.step()
-    return {
-        'loss_history': train_loss_history,
-        'test_loss_history': test_loss_history,
-        'train_acc_history': train_acc_history,
-        'test_acc_history': test_acc_history,
-        'final_train_acc': train_acc,
-        'final_test_acc': test_acc
-    }, pred_test, y_test
+    return (
+        {
+            "loss_history": train_loss_history,
+            "test_loss_history": test_loss_history,
+            "train_acc_history": train_acc_history,
+            "test_acc_history": test_acc_history,
+            "final_train_acc": train_acc,
+            "final_test_acc": test_acc,
+        },
+        pred_test,
+        y_test,
+    )
