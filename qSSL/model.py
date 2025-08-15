@@ -1,9 +1,10 @@
 import math
 import sys
+
+import perceval as pcvl
 import torch
 import torch.nn as nn
 import torchvision
-import perceval as pcvl
 from merlin import OutputMappingStrategy, QuantumLayer
 from training_utils import InfoNCELoss
 
@@ -51,15 +52,14 @@ def initialize_resnet_kaiming(model):
     """Apply Kaiming initialization to ResNet model"""
     for m in model.modules():
         if isinstance(m, nn.Conv2d):
-            nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
         elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
             nn.init.constant_(m.weight, 1)
             nn.init.constant_(m.bias, 0)
         elif isinstance(m, nn.Linear):
-            nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            nn.init.kaiming_normal_(m.weight, mode="fan_out", nonlinearity="relu")
             if m.bias is not None:
                 nn.init.constant_(m.bias, 0)
-
 
 
 class QSSL(nn.Module):
@@ -74,7 +74,9 @@ class QSSL(nn.Module):
         # backbone
         self.width = args.width
         # backbone with FC = Identity
-        self.backbone = torchvision.models.resnet18(pretrained=False, zero_init_residual=True)
+        self.backbone = torchvision.models.resnet18(
+            pretrained=False, zero_init_residual=True
+        )
         # initialisation following Jaderberg et al.
         initialize_resnet_kaiming(self.backbone)
 
@@ -119,12 +121,19 @@ class QSSL(nn.Module):
             self.rep_net_output_size = self.representation_network.output_size
 
         elif self.qiskit:
-            #from https://github.com/bjader/QSSL
+            # from https://github.com/bjader/QSSL
             print("\n -> Building the quantum representation network with Qiskit")
-            self.representation_network = QNet(n_qubits=self.width, encoding=args.encoding, ansatz_type=args.q_ansatz,
-                                          layers=args.layers, sweeps_per_layer=args.q_sweeps,
-                                          activation_function_type=args.activation, shots=args.shots,
-                                          backend_type=args.q_backend, save_statevectors=args.save_dhs)
+            self.representation_network = QNet(
+                n_qubits=self.width,
+                encoding=args.encoding,
+                ansatz_type=args.q_ansatz,
+                layers=args.layers,
+                sweeps_per_layer=args.q_sweeps,
+                activation_function_type=args.activation,
+                shots=args.shots,
+                backend_type=args.q_backend,
+                save_statevectors=args.save_dhs,
+            )
             self.rep_net_output_size = self.width
         else:
             mapping_paper = True
@@ -175,7 +184,7 @@ class QSSL(nn.Module):
             else:
                 ### TO MAP THE PAPER ###
                 layers = []
-                for i in range(args.layers):
+                for _i in range(args.layers):
                     layers.append(nn.Linear(args.width, args.width, bias=True))
                     layers.append(nn.LeakyReLU())
                 self.representation_network = nn.Sequential(*layers)

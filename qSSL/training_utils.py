@@ -1,60 +1,57 @@
 import datetime
 import json
 import os
+
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
-import torch.nn.functional as F
+import torch.nn.functional as f
 from tqdm import tqdm
 
 
-class InfoNCELoss(torch.nn.Module):
-    def __init__(self, temperature=0.07):
+class InfoNCELoss(nn.Module):
+    def __init__(self, temperature=0.5):
         super().__init__()
         self.temperature = temperature
 
-    def forward(self, features):
+    def forward(self, x1, x2):
         """
-        Explicit InfoNCE implementation following the original paper.
+        Corrected InfoNCE implementation.
+
+        Args:
+            x1: First augmented views, shape (batch_size, feature_dim)
+            x2: Second augmented views, shape (batch_size, feature_dim)
         """
-        batch_size = features.shape[0] // 2
-        device = features.device
+        # Normalize features for better stability
+        x1 = f.normalize(x1, dim=1)
+        x2 = f.normalize(x2, dim=1)
 
-        # Normalize features
-        features = F.normalize(features, dim=1)
-
-        # Split into two views
-        z1 = features[:batch_size]  # First augmented views
-        z2 = features[batch_size:]  # Second augmented views
-
-        # Concatenate for similarity computation
-        z = torch.cat([z1, z2], dim=0)  # Shape: (2*batch_size, feature_dim)
+        batch_size = x1.shape[0]
+        features = torch.cat([x1, x2], dim=0)  # Shape: (2*batch_size, feature_dim)
 
         # Compute similarity matrix
-        sim_matrix = torch.matmul(z, z.T) / self.temperature
+        similarity_matrix = torch.matmul(features, features.T) / self.temperature
 
-        # Create mask for positive pairs
-        # Positive pairs: (i, i+batch_size) and (i+batch_size, i)
-        pos_mask = torch.zeros(2 * batch_size, 2 * batch_size, device=device)
-        for i in range(batch_size):
-            pos_mask[i, i + batch_size] = 1
-            pos_mask[i + batch_size, i] = 1
+        # Create correct labels for positive pairs
+        # For sample i in first half: positive is sample i in second half (index i+batch_size)
+        # For sample i in second half: positive is sample i-batch_size in first half
+        labels = torch.cat(
+            [
+                torch.arange(
+                    batch_size, 2 * batch_size
+                ),  # [batch_size, ..., 2*batch_size-1]
+                torch.arange(0, batch_size),  # [0, 1, ..., batch_size-1]
+            ]
+        ).to(features.device)
 
-        # Remove self-similarities (diagonal)
-        neg_mask = 1 - torch.eye(2 * batch_size, device=device) - pos_mask
+        # Remove self-similarities by masking diagonal
+        mask = torch.eye(2 * batch_size, dtype=bool, device=features.device)
+        similarity_matrix.masked_fill_(mask, -9e15)
 
-        # Compute InfoNCE loss
-        loss = 0
-        for i in range(2 * batch_size):
-            # Positive similarity
-            pos_sim = sim_matrix[i][pos_mask[i] == 1]
-            # All similarities except self
-            all_sim = sim_matrix[i][torch.arange(2 * batch_size) != i]
+        # Compute InfoNCE loss using cross-entropy
+        loss = f.cross_entropy(similarity_matrix, labels)
 
-            # InfoNCE: -log(exp(pos) / sum(exp(all)))
-            loss += -torch.log(torch.exp(pos_sim) / torch.exp(all_sim).sum())
-
-        return loss / (2 * batch_size)
+        return loss
 
 
 def training_step(model, train_loader, optimizer):
@@ -89,21 +86,30 @@ def get_results_dir(args):
         base_dir = "results/qiskit"
     else:
         base_dir = "results/classical"
-    
+
     # Create datetime subdirectory
     timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     results_dir = os.path.join(base_dir, timestamp)
     os.makedirs(results_dir, exist_ok=True)
-    
+
     return results_dir
 
-def save_metrics_during_training(results_dir, epoch, ssl_loss=None, train_loss=None, val_loss=None, train_acc=None, val_acc=None):
+
+def save_metrics_during_training(
+    results_dir,
+    epoch,
+    ssl_loss=None,
+    train_loss=None,
+    val_loss=None,
+    train_acc=None,
+    val_acc=None,
+):
     """Save metrics to JSON file during training"""
     metrics_file = os.path.join(results_dir, "training_metrics.json")
-    
+
     # Load existing metrics or create new
     if os.path.exists(metrics_file):
-        with open(metrics_file, 'r') as f:
+        with open(metrics_file) as f:
             metrics = json.load(f)
     else:
         metrics = {
@@ -112,46 +118,55 @@ def save_metrics_during_training(results_dir, epoch, ssl_loss=None, train_loss=N
                 "train_losses": [],
                 "val_losses": [],
                 "train_accuracies": [],
-                "val_accuracies": []
-            }
+                "val_accuracies": [],
+            },
         }
-    
+
     # Update metrics
     if ssl_loss is not None:
         metrics["ssl_training_losses"].append({"epoch": epoch, "loss": ssl_loss})
-    
+
     if train_loss is not None:
-        metrics["linear_evaluation"]["train_losses"].append({"epoch": epoch, "loss": train_loss})
-    
+        metrics["linear_evaluation"]["train_losses"].append(
+            {"epoch": epoch, "loss": train_loss}
+        )
+
     if val_loss is not None:
-        metrics["linear_evaluation"]["val_losses"].append({"epoch": epoch, "loss": val_loss})
-    
+        metrics["linear_evaluation"]["val_losses"].append(
+            {"epoch": epoch, "loss": val_loss}
+        )
+
     if train_acc is not None:
-        metrics["linear_evaluation"]["train_accuracies"].append({"epoch": epoch, "accuracy": train_acc})
-    
+        metrics["linear_evaluation"]["train_accuracies"].append(
+            {"epoch": epoch, "accuracy": train_acc}
+        )
+
     if val_acc is not None:
-        metrics["linear_evaluation"]["val_accuracies"].append({"epoch": epoch, "accuracy": val_acc})
-    
+        metrics["linear_evaluation"]["val_accuracies"].append(
+            {"epoch": epoch, "accuracy": val_acc}
+        )
+
     # Save updated metrics
-    with open(metrics_file, 'w') as f:
+    with open(metrics_file, "w") as f:
         json.dump(metrics, f, indent=2)
+
 
 def train(model, train_loader, args):
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
     training_losses = []
-    
+
     # Create results directory
     results_dir = get_results_dir(args)
     print(f"Saving training results to: {results_dir}")
-    
+
     for epoch in range(args.epochs):
         loss = training_step(model, train_loader, optimizer)
-        print(f"epoch: {epoch+1}/{args.epochs}, training loss: {loss}")
+        print(f"epoch: {epoch + 1}/{args.epochs}, training loss: {loss}")
         training_losses.append(loss)
-        
+
         # Save SSL training loss during training
         save_metrics_during_training(results_dir, epoch + 1, ssl_loss=loss)
-    
+
     return model, training_losses, results_dir
 
 
@@ -214,12 +229,17 @@ def linear_evaluation(model, train_loader, val_loader, args, results_dir):
         val_accs.append(avg_val_acc)
 
         # Save metrics during training
-        save_metrics_during_training(results_dir, epoch + 1, 
-                                   train_loss=avg_train_loss, val_loss=avg_val_loss,
-                                   train_acc=avg_train_acc, val_acc=avg_val_acc)
+        save_metrics_during_training(
+            results_dir,
+            epoch + 1,
+            train_loss=avg_train_loss,
+            val_loss=avg_val_loss,
+            train_acc=avg_train_acc,
+            val_acc=avg_val_acc,
+        )
 
         print(
-            f"Epoch {epoch+1}/{args.le_epochs}: Train Acc = {avg_train_acc:.4f}, Val Acc = {avg_val_acc:.4f}"
+            f"Epoch {epoch + 1}/{args.le_epochs}: Train Acc = {avg_train_acc:.4f}, Val Acc = {avg_val_acc:.4f}"
         )
 
     return model, train_losses, val_losses, train_accs, val_accs
@@ -241,14 +261,12 @@ def plot_training_loss(training_losses, args):
         title = "Quantum_MerLin"
     if args.qiskit:
         title = "Quantum_Qiskit"
-    plt.title(
-        f'SSL Training Loss ({title} Network)'
-    )
+    plt.title(f"SSL Training Loss ({title} Network)")
     plt.grid(True, alpha=0.3)
     plt.legend()
     plt.tight_layout()
     plt.savefig(
-        f'ssl_training_loss_{title}.png',
+        f"ssl_training_loss_{title}.png",
         dpi=300,
         bbox_inches="tight",
     )
@@ -268,9 +286,7 @@ def plot_evaluation_metrics(train_losses, val_losses, train_accs, val_accs, args
     ax1.plot(epochs, val_losses, "r-", linewidth=2, label="Validation Loss")
     ax1.set_xlabel("Epoch")
     ax1.set_ylabel("Loss")
-    ax1.set_title(
-        f'Linear Evaluation Losses ({title} Network)'
-    )
+    ax1.set_title(f"Linear Evaluation Losses ({title} Network)")
     ax1.grid(True, alpha=0.3)
     ax1.legend()
 
@@ -279,15 +295,13 @@ def plot_evaluation_metrics(train_losses, val_losses, train_accs, val_accs, args
     ax2.plot(epochs, val_accs, "r-", linewidth=2, label="Validation Accuracy")
     ax2.set_xlabel("Epoch")
     ax2.set_ylabel("Accuracy")
-    ax2.set_title(
-        f'Linear Evaluation Accuracies ({title} Network)'
-    )
+    ax2.set_title(f"Linear Evaluation Accuracies ({title} Network)")
     ax2.grid(True, alpha=0.3)
     ax2.legend()
 
     plt.tight_layout()
     plt.savefig(
-        f'evaluation_metrics_{title}.png',
+        f"evaluation_metrics_{title}.png",
         dpi=300,
         bbox_inches="tight",
     )
@@ -312,7 +326,7 @@ def save_results_to_json(
 
     # Save final summary to results directory
     summary_file = os.path.join(results_dir, "experiment_summary.json")
-    
+
     # Create experiment entry
     experiment = {
         "timestamp": datetime.datetime.now().isoformat(),
@@ -347,7 +361,7 @@ def save_results_to_json(
         json.dump(experiment, f, indent=2)
 
     # Also save to the original location for backwards compatibility
-    filename = f'{title}_results.json'
+    filename = f"{title}_results.json"
     try:
         with open(filename) as f:
             results = json.load(f)
@@ -361,7 +375,7 @@ def save_results_to_json(
     with open(filename, "w") as f:
         json.dump(results, f, indent=2)
 
-    print(f"\nResults saved to:")
+    print("\nResults saved to:")
     print(f"  - {summary_file}")
     print(f"  - {filename}")
     print(f"  - Training metrics: {os.path.join(results_dir, 'training_metrics.json')}")
