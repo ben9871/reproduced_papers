@@ -17,7 +17,7 @@ The script implements a quantum self-supervised learning framework with the foll
 ### Basic Usage
 
 ```bash
-python qSSL_train.py [OPTIONS]
+python3 main.py [OPTIONS]
 ```
 
 ### Key Arguments
@@ -44,12 +44,17 @@ python qSSL_train.py [OPTIONS]
 
 **Classical SSL training:**
 ```bash
-python qSSL_train.py --epochs 50 --batch_size 256 --classes 5
+python3 main.py --epochs 50 --batch_size 256 --classes 5
 ```
 
-**Quantum SSL training:**
+**Quantum SSL training with MerLin:**
 ```bash
-python qSSL_train.py --quantum --epochs 50 --batch_size 256 --modes 10 --classes 5
+python3 main.py --merlin --epochs 50 --batch_size 256 --modes 10 --classes 5
+```
+
+**Quantum SSL training with Qiskit (from [Jaderberg et al](https://github.com/bjader/QSSL/tree/main)):**
+```bash
+python3 main.py --qiskit --epochs 2 --batch_size 256
 ```
 
 ## Output
@@ -67,3 +72,24 @@ The script generates:
 2. **Feature extraction**: Freezes learned representations
 3. **Fine-tuning**: Trains linear classifier on frozen features
 4. **Evaluation**: Reports validation accuracy and saves results
+
+## Project Structure
+
+### Core Files
+
+- **`main.py`**: Main training script that orchestrates the complete SSL pipeline
+- **`model.py`**: Model definitions including QSSL class with quantum/classical options
+- **`data_utils.py`**: Data loading utilities with CIFAR-10 transformations and augmentations
+- **`training_utils.py`**: Training utilities including InfoNCE loss and evaluation functions
+
+### Quantum Backends
+
+- **`qnn/`**: Qiskit-based quantum neural network implementation
+- **MerLin**: Photonic quantum computing integration via Perceval
+- **Classical**: Standard PyTorch neural networks for baseline comparison
+
+### Results and Data
+
+- **`results/`**: Training metrics and model checkpoints organized by backend
+- **`data/`**: CIFAR-10 dataset storage
+- **`*.json`**: Experiment results and configuration files
