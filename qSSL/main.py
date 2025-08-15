@@ -107,7 +107,7 @@ if __name__ == "__main__":
     )
     
     # Train SSL model
-    model, ssl_training_losses = train(model, train_loader, args)
+    model, ssl_training_losses, results_dir = train(model, train_loader, args)
     
     # Build model for linear evaluation
     frozen_model = nn.Sequential(
@@ -134,7 +134,7 @@ if __name__ == "__main__":
     
     # Perform linear evaluation
     model, ft_train_losses, ft_val_losses, ft_train_accs, ft_val_accs = linear_evaluation(
-        frozen_model, train_loader, val_loader, args
+        frozen_model, train_loader, val_loader, args, results_dir
     )
     
     # Save results to JSON
@@ -145,4 +145,5 @@ if __name__ == "__main__":
         ft_val_losses,
         ft_train_accs,
         ft_val_accs,
+        results_dir,
     )

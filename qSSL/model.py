@@ -47,6 +47,21 @@ def create_quantum_circuit(modes=10, feature_size=10):
     return circuit
 
 
+def initialize_resnet_kaiming(model):
+    """Apply Kaiming initialization to ResNet model"""
+    for m in model.modules():
+        if isinstance(m, nn.Conv2d):
+            nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+        elif isinstance(m, (nn.BatchNorm2d, nn.GroupNorm)):
+            nn.init.constant_(m.weight, 1)
+            nn.init.constant_(m.bias, 0)
+        elif isinstance(m, nn.Linear):
+            nn.init.kaiming_normal_(m.weight, mode='fan_out', nonlinearity='relu')
+            if m.bias is not None:
+                nn.init.constant_(m.bias, 0)
+
+
+
 class QSSL(nn.Module):
     def __init__(
         self,
@@ -59,7 +74,10 @@ class QSSL(nn.Module):
         # backbone
         self.width = args.width
         # backbone with FC = Identity
-        self.backbone = torchvision.models.resnet18(pretrained=False)
+        self.backbone = torchvision.models.resnet18(pretrained=False, zero_init_residual=True)
+        # initialisation following Jaderberg et al.
+        initialize_resnet_kaiming(self.backbone)
+
         backbone_features = self.backbone.fc.in_features
         self.backbone.fc = nn.Identity()
         # compressing layer to map to self.width dimension
@@ -109,48 +127,59 @@ class QSSL(nn.Module):
                                           backend_type=args.q_backend, save_statevectors=args.save_dhs)
             self.rep_net_output_size = self.width
         else:
+            mapping_paper = True
             print("\n -> Building the classical representation network ")
-            # we want to create a classical representation network with similar # of parameters to the QLayer with 10 modes, 5 photons
-            # compute the number of parameters in a quantum network given 10 modes and 5 photons
-            circuit = create_quantum_circuit(modes=10, feature_size=8)
-            nb_trainable_params = len(
-                [
-                    p.name
-                    for p in circuit.get_parameters()
-                    if not p.name.startswith("feature")
-                ]
-            )
-            output_size = (
-                math.comb(10, 5) if args.no_bunching else math.comb(10 + 5 - 1, 5)
-            )
-            total_parameters = (
-                nb_trainable_params + output_size * self.width
-            )  # circuit + first layer of the proj
-            # number of parameters in classical repnet
-            classical_params = (
-                self.width * self.width + self.width
-            ) * 3  # rep + first layer of the proj
-            # difference
-            diff = total_parameters - classical_params
-            print(
-                f"--> Difference would be: {diff} (for {total_parameters} parameters for QNN)"
-            )
+            if not mapping_paper:
+                ### TO COMPARE TO MERLIN ###
+                # we want to create a classical representation network with similar # of parameters to the QLayer with 10 modes, 5 photons
+                # compute the number of parameters in a quantum network given 10 modes and 5 photons
+                circuit = create_quantum_circuit(modes=10, feature_size=8)
+                nb_trainable_params = len(
+                    [
+                        p.name
+                        for p in circuit.get_parameters()
+                        if not p.name.startswith("feature")
+                    ]
+                )
+                output_size = (
+                    math.comb(10, 5) if args.no_bunching else math.comb(10 + 5 - 1, 5)
+                )
+                total_parameters = (
+                    nb_trainable_params + output_size * self.width
+                )  # circuit + first layer of the proj
+                # number of parameters in classical repnet
+                classical_params = (
+                    self.width * self.width + self.width
+                ) * 3  # rep + first layer of the proj
+                # difference
+                diff = total_parameters - classical_params
+                print(
+                    f"--> Difference would be: {diff} (for {total_parameters} parameters for QNN)"
+                )
 
-            layers = []
-            for _i in range(2):
-                layers.append(nn.Linear(self.width, self.width, bias=True))
+                layers = []
+                for _i in range(2):
+                    layers.append(nn.Linear(self.width, self.width, bias=True))
+                    layers.append(nn.LeakyReLU())
+                # add another layer + activation to increase MLP size (TODO: have a more regular MLP)
+                catching_output_size = int(diff / self.width - 1)
+                layers.append(nn.Linear(self.width, catching_output_size, bias=True))
                 layers.append(nn.LeakyReLU())
-            # add another layer + activation to increase MLP size (TODO: have a more regular MLP)
-            catching_output_size = int(diff / self.width - 1)
-            layers.append(nn.Linear(self.width, catching_output_size, bias=True))
-            layers.append(nn.LeakyReLU())
 
-            self.representation_network = nn.Sequential(*layers)
-            print(
-                f" Now in repnet = {sum(p.numel() for p in self.representation_network.parameters())}"
-            )
-            self.rep_net_output_size = catching_output_size
+                self.representation_network = nn.Sequential(*layers)
+                print(
+                    f" Now in repnet = {sum(p.numel() for p in self.representation_network.parameters())}"
+                )
+                self.rep_net_output_size = catching_output_size
 
+            else:
+                ### TO MAP THE PAPER ###
+                layers = []
+                for i in range(args.layers):
+                    layers.append(nn.Linear(args.width, args.width, bias=True))
+                    layers.append(nn.LeakyReLU())
+                self.representation_network = nn.Sequential(*layers)
+                self.rep_net_output_size = args.width
         # self.fc = nn.Linear(self.rep_net_output_size, args.classes)
 
         self.loss_dim = args.loss_dim

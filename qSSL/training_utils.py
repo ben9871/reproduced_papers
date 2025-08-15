@@ -1,5 +1,6 @@
 import datetime
 import json
+import os
 import matplotlib.pyplot as plt
 import torch
 import torch.nn as nn
@@ -80,17 +81,81 @@ def training_step(model, train_loader, optimizer):
     return total_loss / len(train_loader)
 
 
+def get_results_dir(args):
+    """Create and return results directory path based on training type"""
+    if args.merlin:
+        base_dir = "results/merlin"
+    elif args.qiskit:
+        base_dir = "results/qiskit"
+    else:
+        base_dir = "results/classical"
+    
+    # Create datetime subdirectory
+    timestamp = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    results_dir = os.path.join(base_dir, timestamp)
+    os.makedirs(results_dir, exist_ok=True)
+    
+    return results_dir
+
+def save_metrics_during_training(results_dir, epoch, ssl_loss=None, train_loss=None, val_loss=None, train_acc=None, val_acc=None):
+    """Save metrics to JSON file during training"""
+    metrics_file = os.path.join(results_dir, "training_metrics.json")
+    
+    # Load existing metrics or create new
+    if os.path.exists(metrics_file):
+        with open(metrics_file, 'r') as f:
+            metrics = json.load(f)
+    else:
+        metrics = {
+            "ssl_training_losses": [],
+            "linear_evaluation": {
+                "train_losses": [],
+                "val_losses": [],
+                "train_accuracies": [],
+                "val_accuracies": []
+            }
+        }
+    
+    # Update metrics
+    if ssl_loss is not None:
+        metrics["ssl_training_losses"].append({"epoch": epoch, "loss": ssl_loss})
+    
+    if train_loss is not None:
+        metrics["linear_evaluation"]["train_losses"].append({"epoch": epoch, "loss": train_loss})
+    
+    if val_loss is not None:
+        metrics["linear_evaluation"]["val_losses"].append({"epoch": epoch, "loss": val_loss})
+    
+    if train_acc is not None:
+        metrics["linear_evaluation"]["train_accuracies"].append({"epoch": epoch, "accuracy": train_acc})
+    
+    if val_acc is not None:
+        metrics["linear_evaluation"]["val_accuracies"].append({"epoch": epoch, "accuracy": val_acc})
+    
+    # Save updated metrics
+    with open(metrics_file, 'w') as f:
+        json.dump(metrics, f, indent=2)
+
 def train(model, train_loader, args):
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
     training_losses = []
+    
+    # Create results directory
+    results_dir = get_results_dir(args)
+    print(f"Saving training results to: {results_dir}")
+    
     for epoch in range(args.epochs):
         loss = training_step(model, train_loader, optimizer)
         print(f"epoch: {epoch+1}/{args.epochs}, training loss: {loss}")
         training_losses.append(loss)
-    return model, training_losses
+        
+        # Save SSL training loss during training
+        save_metrics_during_training(results_dir, epoch + 1, ssl_loss=loss)
+    
+    return model, training_losses, results_dir
 
 
-def linear_evaluation(model, train_loader, val_loader, args):
+def linear_evaluation(model, train_loader, val_loader, args, results_dir):
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
     criterion = nn.CrossEntropyLoss()
     train_losses, val_losses = [], []
@@ -147,6 +212,11 @@ def linear_evaluation(model, train_loader, val_loader, args):
         val_losses.append(avg_val_loss)
         train_accs.append(avg_train_acc)
         val_accs.append(avg_val_acc)
+
+        # Save metrics during training
+        save_metrics_during_training(results_dir, epoch + 1, 
+                                   train_loss=avg_train_loss, val_loss=avg_val_loss,
+                                   train_acc=avg_train_acc, val_acc=avg_val_acc)
 
         print(
             f"Epoch {epoch+1}/{args.le_epochs}: Train Acc = {avg_train_acc:.4f}, Val Acc = {avg_val_acc:.4f}"
@@ -231,24 +301,32 @@ def save_results_to_json(
     ft_val_losses,
     ft_train_accs,
     ft_val_accs,
+    results_dir,
 ):
-    # Determine filename based on quantum mode
+    # Determine title based on quantum mode
     title = "Classical"
     if args.merlin:
         title = "Quantum_MerLin"
     if args.qiskit:
         title = "Quantum_Qiskit"
-    filename = f'{title}_results.json'
 
+    # Save final summary to results directory
+    summary_file = os.path.join(results_dir, "experiment_summary.json")
+    
     # Create experiment entry
     experiment = {
         "timestamp": datetime.datetime.now().isoformat(),
+        "experiment_type": title,
         "arguments": {
             "quantum-MerLin": args.merlin,
             "quantum-Qiskit": args.qiskit,
             "epochs": args.epochs,
+            "le_epochs": args.le_epochs,
             "batch_size": args.batch_size,
             "classes": args.classes,
+            "width": args.width,
+            "loss_dim": args.loss_dim,
+            "temperature": args.temperature,
             "modes": getattr(args, "modes", None),
             "no_bunching": getattr(args, "no_bunching", None),
             "datadir": args.datadir,
@@ -264,7 +342,12 @@ def save_results_to_json(
         },
     }
 
-    # Load existing results or create new list
+    # Save experiment summary to results directory
+    with open(summary_file, "w") as f:
+        json.dump(experiment, f, indent=2)
+
+    # Also save to the original location for backwards compatibility
+    filename = f'{title}_results.json'
     try:
         with open(filename) as f:
             results = json.load(f)
@@ -278,7 +361,10 @@ def save_results_to_json(
     with open(filename, "w") as f:
         json.dump(results, f, indent=2)
 
-    print(f"\nResults saved to {filename}")
+    print(f"\nResults saved to:")
+    print(f"  - {summary_file}")
+    print(f"  - {filename}")
+    print(f"  - Training metrics: {os.path.join(results_dir, 'training_metrics.json')}")
     print(
         f"Final validation accuracy: {experiment['linear_evaluation']['final_val_accuracy']:.4f}"
     )
