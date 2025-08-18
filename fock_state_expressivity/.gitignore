@@ -1,0 +1,18 @@
+# Ignore all
+*.png
+*.pdf
+*.txt
+*.DS_Store
+*.pth
+*__pycache__
+
+
+# Except
+!VQC_fourier_series/results/Fitting_example_and_DOF.png
+!VQC_fourier_series/results/expressive_power_of_the_VQC.png
+!VQC_classif/results/combined_decision_boundaries.png
+!VQC_classif/results/variational_classification.png
+!q_gaussian_kernel/results/Gaussian_kernel-kernel_methods.png
+!q_gaussian_kernel/results/learned_gauss_kernels_best_hps.png
+!q_random_kitchen_sinks/results/Classification-RKS.png
+!q_random_kitchen_sinks/results/q_rand_kitchen_sinks_overall_example.png
