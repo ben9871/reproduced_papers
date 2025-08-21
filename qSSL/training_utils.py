@@ -96,7 +96,7 @@ def training_step(model, train_loader, optimizer):
         total_loss += loss_scalar
         pbar.set_postfix({"Loss": f"{loss_scalar:.4f}"})
 
-    return total_loss / len(train_loader)
+    return total_loss / len(train_loader), model
 
 
 def get_results_dir(args):
@@ -172,23 +172,32 @@ def save_metrics_during_training(
         json.dump(metrics, f, indent=2)
 
 
-def train(model, train_loader, args):
+def train(model, train_loader, results_dir, args):
     optimizer = torch.optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-6)
     training_losses = []
 
     # Create results directory
-    results_dir = get_results_dir(args)
     print(f"Saving training results to: {results_dir}")
 
+    torch.save(model.state_dict(), os.path.join(results_dir, f"model-cl-{args.classes}-epoch-0.pth"))
+    print(f" - Initial model saved - ")
+
     for epoch in range(args.epochs):
-        loss = training_step(model, train_loader, optimizer)
+        loss, model = training_step(model, train_loader, optimizer)
         print(f"epoch: {epoch + 1}/{args.epochs}, training loss: {loss}")
         training_losses.append(loss)
 
         # Save SSL training loss during training
         save_metrics_during_training(results_dir, epoch + 1, ssl_loss=loss)
+        # Save model if required
+        if (epoch+1)%args.ckpt_step == 0:
+            torch.save(model.state_dict(), os.path.join(results_dir, f"model-cl-{args.classes}-epoch-{epoch+1}.pth"))
+            print(f" - Model saved at epoch {epoch + 1}/{args.epochs} - ")
 
-    return model, training_losses, results_dir
+    torch.save(model.state_dict(), os.path.join(results_dir, f"model-cl-{args.classes}-epoch-{args.epochs}.pth"))
+    print(f" - Final model saved to: {results_dir} - ")
+
+    return model, training_losses
 
 
 def linear_evaluation(model, train_loader, val_loader, args, results_dir):

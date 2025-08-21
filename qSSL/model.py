@@ -289,8 +289,9 @@ class QSSL(nn.Module):
         # ========== Feature Preprocessing ==========
         # Apply sigmoid activation before quantum/classical representation network
         # This ensures features are in [0,1] range, suitable for quantum encoding
-        x1 = torch.sigmoid(x1)
-        x2 = torch.sigmoid(x2)
+        factor = torch.pi if not self.merlin else 1/torch.pi
+        x1 = torch.sigmoid(x1) * factor
+        x2 = torch.sigmoid(x2) * factor
         # Note: Original implementation scales by π for phase encoding
         
         # ========== Representation Learning ==========

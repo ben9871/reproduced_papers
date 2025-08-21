@@ -3,13 +3,14 @@
 # Based on "Quantum Self-Supervised Learning" by Jaderberg et al. (2022)
 
 import argparse
+import json
 
 import torch
 import torch.nn as nn
 from data_utils import load_finetuning_data, load_transformed_data
 from model import QSSL
 from torchsummary import summary
-from training_utils import linear_evaluation, save_results_to_json, train
+from training_utils import linear_evaluation, save_results_to_json, train, get_results_dir
 
 # Command-line argument parser for configuring the experiment
 parser = argparse.ArgumentParser(description="PyTorch Quantum self-sup training")
@@ -27,6 +28,7 @@ parser.add_argument(
     "-le", "--le-epochs", type=int, default=100, help="Number of epochs for linear evaluation"
 )
 parser.add_argument("-bs", "--batch_size", type=int, default=128, help="Batch size")
+parser.add_argument("-ckpt", "--ckpt-step", type=int, default=1, help="Epochs when the model is saved")
 # ========== SSL Model Configuration ==========
 parser.add_argument(
     "-bn",
@@ -125,6 +127,12 @@ parser.add_argument(
 
 if __name__ == "__main__":
     args = parser.parse_args()
+    results_dir = get_results_dir(args)
+    # Save training arguments to JSON file for reproducibility
+    args_dict = vars(args)
+    with open(f"{results_dir}/args.json", "w") as f:
+        json.dump(args_dict, f, indent=4)
+    print(f"Saved training arguments to {results_dir}/args.json")
 
     # ========== Phase 1: Self-Supervised Learning ==========
     # Load SSL training data with heavy augmentations for contrastive learning
@@ -143,11 +151,11 @@ if __name__ == "__main__":
     )
 
     # Train the SSL model using contrastive learning on augmented image pairs
-    model, ssl_training_losses, results_dir = train(model, train_loader, args)
+    model, ssl_training_losses = train(model, train_loader, results_dir, args)
 
     # ========== Phase 2: Linear Evaluation ==========
     # Build model for linear evaluation with frozen feature extractor
-    frozen_model = nn.Sequential(
+    """frozen_model = nn.Sequential(
         model.backbone,        # ResNet18 backbone (frozen)
         model.comp,           # Compression layer (frozen)
         model.representation_network,  # Quantum/classical rep network (frozen)
@@ -185,4 +193,4 @@ if __name__ == "__main__":
         ft_train_accs,
         ft_val_accs,
         results_dir,
-    )
+    )"""
