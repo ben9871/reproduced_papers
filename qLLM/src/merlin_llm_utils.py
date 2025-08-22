@@ -491,7 +491,7 @@ class QLayerTraining(BaseEstimator, ClassifierMixin):
                 no_bunching=self.no_bunching,
             )
 
-        if self.expectation:
+        elif self.expectation:
             print(f" \n -------------------- \n Expectation encoding for second PQC \n --------------------")
             self.model = QuantumClassifier_amplitude(
                 input_dim=self.input_dim,
