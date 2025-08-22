@@ -119,11 +119,23 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--e_dim",
+        type=int,
+        default=1,
+        help="Parallel encoder",
+    )
+
+    parser.add_argument(
         "--photons-max",
         action="store_true",
         help="If True then max photons = 3",
     )
 
+    parser.add_argument("--expectation-encoding", action='store_true',
+                   help='Disable angle encoding (default: enabled)')
+
+    parser.add_argument("--vanilla", action='store_true',
+                        help='Vanilla Quantum Head')
     parser.add_argument(
         "--lr-q",
         type=float,
@@ -438,10 +450,10 @@ def main():
     args = parse_args()
     device = setup_environment(args)
     trained_body = False
-    trained_cl = True
+    trained_cl = False
     trained_q = True
     use_normalization_cl = False
-    use_normalization_q = False
+    use_normalization_q = True
     # Create results folder for this experiment
     results_folder = create_results_folder()
     save_arguments(args, results_folder)

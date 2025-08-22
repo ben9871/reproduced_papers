@@ -58,6 +58,31 @@ def create_quantum_circuit(m, size=400):
 
     return c
 
+class ScaleLayer(nn.Module):
+    def __init__(self, dim, scale_type = "learned"):
+        super(ScaleLayer, self).__init__()
+        # Create a single learnable parameter (initialized to 1.0 by default)
+        # Caution: MerLin already mutltiplies by pi
+        if scale_type == "learned":
+            self.scale = nn.Parameter(torch.rand(dim))
+        elif scale_type == "2pi":
+            self.scale = torch.full((dim,), 2 * torch.pi)
+        elif scale_type == "pi":
+            self.scale = torch.full((dim,), torch.pi)
+        elif scale_type == "1":
+            self.scale = torch.full((dim,), 1)
+        #print(f"SELF.SCALE: {self.scale.shape}")
+
+    def forward(self, x):
+        # Element-wise multiplication of each input element by the learned scale
+        return x * self.scale
+
+class DivideByPi(nn.Module):
+    """Normalizes phases to be within quantum-friendly range"""
+
+    def forward(self, x):
+        return x / torch.pi
+
 
 class QuantumClassifier(nn.Module):
     def __init__(
@@ -72,11 +97,13 @@ class QuantumClassifier(nn.Module):
     ):
         super().__init__()
         print(
-            f"Building a model with {modes} modes and {input_state} as an input state and no_bunching = {no_bunching}"
+            f"Building a model with {modes} modes and {input_state} as an input state and no_bunching = {no_bunching} (input of shape {hidden_dim})"
         )
         # this layer downscale the inputs to fit in the QLayer
+        hidden_dim = modes
         self.downscaling_layer = nn.Linear(input_dim, hidden_dim, device=device)
-
+        self.scale = ScaleLayer(dim = hidden_dim, scale_type="learned")
+        self.pi_scale = DivideByPi()
         # building the QLayer with MerLin
         circuit = create_quantum_circuit(modes, size=hidden_dim)
         # default input state
@@ -113,9 +140,291 @@ class QuantumClassifier(nn.Module):
 
     def forward(self, x):
         # forward pass
+        #print(f"x of shape {x.shape}")
         out = self.downscaling_layer(x)
+        #out = self.sig(x)
+        out = self.pi_scale(out)
         # casts the input to [0,1] + use q_circuit
-        out = self.q_circuit(self.sig(out))
+        out = self.q_circuit(out) #self.sig
+        out_scaled = out  # self.bn(out) #(out - out.mean(dim = 1, keepdim=True)) / (out.std(dim = 1, keepdim=True)+1e-6)
+        out = self.output_layer(out_scaled)
+        return out
+
+class QuantumClassifier_v2(nn.Module):
+    def __init__(
+        self,
+        input_dim,
+        hidden_dim=100,
+        modes=10,
+        num_classes=2,
+        input_state=None,
+        device="cpu",
+        no_bunching=False,
+        E = 1,
+    ):
+        super().__init__()
+        print(
+            f"Building a model with {modes} modes and {input_state} as an input state and no_bunching = {no_bunching} (input of shape {hidden_dim})"
+        )
+        # this layer downscale the inputs to fit in the QLayer
+        hidden_dim = modes
+        self.downscaling_layer = nn.Linear(input_dim, hidden_dim, device=device)
+        self.pi_scale = DivideByPi()
+        self.E = E
+        # building the QLayer with MerLin
+        circuit_1 = create_quantum_circuit(modes, size=hidden_dim)
+        circuit_2 = create_quantum_circuit(modes, size=hidden_dim)
+
+        # default input state
+        if input_state is None:
+            input_state = [(i + 1) % 2 for i in range(modes)]
+        photons_count = sum(input_state)
+
+        self.q_circuit_1 = ml.QuantumLayer(
+            input_size=hidden_dim,
+            output_size=None,  # but we do not use it
+            circuit=circuit_1,
+            trainable_parameters=[
+                p.name for p in circuit_1.get_parameters() if not p.name.startswith("px")
+            ],
+            input_parameters=["px"],
+            input_state=input_state,
+            output_mapping_strategy=ml.OutputMappingStrategy.NONE,
+            device=device,
+            no_bunching=True,
+        )
+        if self.E == 2:
+            self.q_circuit_2 = ml.QuantumLayer(
+                input_size=hidden_dim,
+                output_size=None,  # but we do not use it
+                circuit=circuit_2,
+                trainable_parameters=[
+                    p.name for p in circuit_2.get_parameters() if not p.name.startswith("px")
+                ],
+                input_parameters=["px"],
+                input_state=input_state,
+                output_mapping_strategy=ml.OutputMappingStrategy.NONE,
+                device=device,
+                no_bunching=True,
+            )
+
+        output_encoder = math.comb(modes, photons_count)
+
+        # PNR output size
+        output_size_slos = (
+            math.comb(modes + photons_count - 1, photons_count)
+            if not no_bunching
+            else math.comb(modes, photons_count)
+        )
+
+        # build the QLayer with a linear output as in the original paper
+        # "The measurement output of the second module is then passed through a single Linear layer"
+        self.sig = nn.Sigmoid()
+        print("\n -> self.q_circuit")
+
+        circuit_final = create_quantum_circuit(modes, size=self.E*output_encoder)
+
+        self.q_circuit_final = ml.QuantumLayer(
+            input_size=self.E*output_encoder,
+            output_size=None,  # but we do not use it
+            circuit=circuit_final,
+            trainable_parameters=[
+                p.name for p in circuit_final.get_parameters() if not p.name.startswith("px")
+            ],
+            input_parameters=["px"],
+            input_state=input_state,
+            output_mapping_strategy=ml.OutputMappingStrategy.NONE,
+            device=device,
+            no_bunching=no_bunching,
+        )
+        self.bn = nn.LayerNorm(output_size_slos).requires_grad_(False)  # works OK
+        print(f"\n -- Building the Linear layer with output size = {num_classes} -- ")
+        self.output_layer = nn.Linear(output_size_slos, num_classes, device=device)
+
+    def forward(self, x):
+        # forward pass
+        #print(f"x of shape {x.shape}")
+        x = self.downscaling_layer(x)
+        #out = self.sig(x)
+        x = self.pi_scale(x)
+
+        e1 = self.q_circuit_1(x)
+        if self.E == 2:
+            e2 = self.q_circuit_2(x)
+
+            e_cat = torch.cat([e1,e2], dim=1)
+        else:
+            e_cat = e1
+        # casts the input to [0,1] + use q_circuit
+        out = self.q_circuit_final(e_cat) #self.sig
+        out_scaled = out  # self.bn(out) #(out - out.mean(dim = 1, keepdim=True)) / (out.std(dim = 1, keepdim=True)+1e-6)
+        out = self.output_layer(out_scaled)
+        return out
+
+def marginalize_photon_presence(keys, probs):
+    """
+    Marginalize Fock state probabilities to get per-mode occupation probabilities.
+
+    Computes the probability that each mode contains at least one photon
+    by summing over all Fock states where that mode is occupied.
+
+    Args:
+        keys (list): List of Fock state tuples, e.g., [(0,1,0,2), (1,0,1,0), ...]
+        probs (torch.Tensor): Tensor of shape (N, num_keys) with probabilities
+            for each Fock state, with requires_grad=True
+
+    Returns:
+        torch.Tensor: Shape (N, num_modes) with marginal probability that
+            each mode has at least one photon
+    """
+    device = probs.device
+    keys_tensor = torch.tensor(
+        keys, dtype=torch.long, device=device
+    )  # shape: (num_keys, num_modes)
+    keys_tensor.shape[1]
+
+    # Create mask of shape (num_modes, num_keys)
+    # Each mask[i] is a binary vector indicating which Fock states have >=1 photon in mode i
+    mask = (keys_tensor >= 1).T  # shape: (num_modes, num_keys)
+
+    # Convert to float to allow matrix multiplication
+    mask = mask.float()
+
+    # Now do: (N, num_keys) @ (num_keys, num_modes) → (N, num_modes)
+    marginalized = probs @ mask.T  # shape: (N, num_modes)
+    return marginalized
+
+class QuantumClassifier_amplitude(nn.Module):
+    def __init__(
+        self,
+        input_dim,
+        hidden_dim=100,
+        modes=10,
+        num_classes=2,
+        input_state=None,
+        device="cpu",
+        no_bunching=False,
+        E = 1,
+    ):
+        super().__init__()
+        print(
+            f"Building a model with {modes} modes and {input_state} as an input state and no_bunching = {no_bunching} (input of shape {hidden_dim})"
+        )
+        # this layer downscale the inputs to fit in the QLayer
+        hidden_dim = modes
+        self.downscaling_layer = nn.Linear(input_dim, hidden_dim, device=device)
+        self.pi_scale = DivideByPi()
+        self.E = E
+        # building the QLayer with MerLin
+        circuit_1 = create_quantum_circuit(modes, size=hidden_dim)
+        circuit_2 = create_quantum_circuit(modes, size=hidden_dim)
+
+        # default input state
+        if input_state is None:
+            input_state = [(i + 1) % 2 for i in range(modes)]
+        photons_count = sum(input_state)
+
+        self.q_circuit_1 = ml.QuantumLayer(
+            input_size=hidden_dim,
+            output_size=None,  # but we do not use it
+            circuit=circuit_1,
+            trainable_parameters=[
+                p.name for p in circuit_1.get_parameters() if not p.name.startswith("px")
+            ],
+            input_parameters=["px"],
+            input_state=input_state,
+            output_mapping_strategy=ml.OutputMappingStrategy.NONE,
+            device=device,
+            no_bunching=True,
+        )
+        if self.E == 2:
+            self.q_circuit_2 = ml.QuantumLayer(
+                input_size=hidden_dim,
+                output_size=None,  # but we do not use it
+                circuit=circuit_2,
+                trainable_parameters=[
+                    p.name for p in circuit_2.get_parameters() if not p.name.startswith("px")
+                ],
+                input_parameters=["px"],
+                input_state=input_state,
+                output_mapping_strategy=ml.OutputMappingStrategy.NONE,
+                device=device,
+                no_bunching=True,
+            )
+
+        # we generate the keys associated with the probs
+        dummy_input = torch.zeros(1, hidden_dim, dtype=torch.float32)
+        # Get MerLin probability distribution (no gradients to avoid sampling warnings)
+        with torch.no_grad():
+            merlin_params = self.q_circuit_1.prepare_parameters([dummy_input])
+            unitary = self.q_circuit_1.computation_process.converter.to_tensor(
+                *merlin_params
+            )
+            # perfect distribution (no sampling)
+            self.keys, probs = (
+                self.q_circuit_1.computation_process.simulation_graph.compute(
+                    unitary, input_state
+                )
+            )
+
+            probs_marginalized = marginalize_photon_presence(self.keys, probs)
+
+            print(f"Probabilities marginalized with shape {probs_marginalized.shape}")
+            output_encoder = probs_marginalized.shape[-1]
+            print(f"Therefore the input of the encoder is of shape {output_encoder}")
+
+
+
+
+        # build the QLayer with a linear output as in the original paper
+        # "The measurement output of the second module is then passed through a single Linear layer"
+        self.sig = nn.Sigmoid()
+        print("\n -> self.q_circuit")
+
+        circuit_final = create_quantum_circuit(modes, size=self.E*output_encoder)
+
+        self.q_circuit_final = ml.QuantumLayer(
+            input_size=self.E*output_encoder,
+            output_size=None,  # but we do not use it
+            circuit=circuit_final,
+            trainable_parameters=[
+                p.name for p in circuit_final.get_parameters() if not p.name.startswith("px")
+            ],
+            input_parameters=["px"],
+            input_state=input_state,
+            output_mapping_strategy=ml.OutputMappingStrategy.NONE,
+            device=device,
+            no_bunching=no_bunching,
+        )
+
+        # PNR output size
+        output_size_slos = (
+            math.comb(modes + photons_count - 1, photons_count)
+            if not no_bunching
+            else math.comb(modes, photons_count)
+        )
+
+        self.bn = nn.LayerNorm(output_size_slos).requires_grad_(False)  # works OK
+        print(f"\n -- Building the Linear layer with output size = {num_classes} -- ")
+        self.output_layer = nn.Linear(output_size_slos, num_classes, device=device)
+
+    def forward(self, x):
+        # forward pass
+        #print(f"x of shape {x.shape}")
+        x = self.downscaling_layer(x)
+        #out = self.sig(x)
+        x = self.pi_scale(x)
+
+        e1 = self.q_circuit_1(x)
+        e1_expectation = marginalize_photon_presence(self.keys, e1)
+        e_cat = e1_expectation
+        if self.E == 2:
+            e2 = self.q_circuit_2(x)
+            e2_expectation = marginalize_photon_presence(self.keys, e2)
+            e_cat = torch.cat([e1_expectation,e2_expectation], dim=1)
+
+        # casts the input to [0,1] + use q_circuit
+        out = self.q_circuit_final(e_cat) #self.sig
         out_scaled = out  # self.bn(out) #(out - out.mean(dim = 1, keepdim=True)) / (out.std(dim = 1, keepdim=True)+1e-6)
         out = self.output_layer(out_scaled)
         return out
@@ -136,6 +445,9 @@ class QLayerTraining(BaseEstimator, ClassifierMixin):
         device=None,
         input_state=None,
         no_bunching=False,
+        expectation = True,
+        vanilla = False,
+        E = 1,
     ):
         self.input_dim = input_dim
         self.hidden_dim = hidden_dim
@@ -160,18 +472,49 @@ class QLayerTraining(BaseEstimator, ClassifierMixin):
         self.train_accuracies = []
         self.val_accuracies = []
         self.no_bunching = no_bunching
+        self.expectation = expectation
+        self.vanilla = vanilla
+        self.E = E
 
     def _initialize_model(self):
         """Initialize or re-initialize the model."""
-        self.model = QuantumClassifier(
-            input_dim=self.input_dim,
-            hidden_dim=self.hidden_dim,
-            modes=self.modes,
-            num_classes=len(self.classes_),
-            input_state=self.input_state,
-            device=self.device,
-            no_bunching=self.no_bunching,
-        )
+
+        if self.vanilla:
+            print(f" \n -------------------- \n Vanilla Quantum Head \n --------------------")
+            self.model = QuantumClassifier_amplitude(
+                input_dim=self.input_dim,
+                hidden_dim=self.hidden_dim,
+                modes=self.modes,
+                num_classes=len(self.classes_),
+                input_state=self.input_state,
+                device=self.device,
+                no_bunching=self.no_bunching,
+            )
+
+        if self.expectation:
+            print(f" \n -------------------- \n Expectation encoding for second PQC \n --------------------")
+            self.model = QuantumClassifier_amplitude(
+                input_dim=self.input_dim,
+                hidden_dim=self.hidden_dim,
+                modes=self.modes,
+                num_classes=len(self.classes_),
+                input_state=self.input_state,
+                device=self.device,
+                no_bunching=self.no_bunching,
+                E=self.E,
+            )
+        else:
+            print(f" \n -------------------- \n Angle encoding for second PQC \n --------------------")
+            self.model = QuantumClassifier_v2(
+                input_dim=self.input_dim,
+                hidden_dim=self.hidden_dim,
+                modes=self.modes,
+                num_classes=len(self.classes_),
+                input_state=self.input_state,
+                device=self.device,
+                no_bunching=self.no_bunching,
+                E=self.E,
+            )
 
         print(
             f"\n ---- Number of parameters in Quantum head: {sum([p.numel() for p in self.model.parameters() if p.requires_grad])}"
@@ -292,7 +635,7 @@ class QLayerTraining(BaseEstimator, ClassifierMixin):
                 self.history["val_loss"].append(val_loss)
                 self.history["val_accuracy"].append(val_accuracy)
                 self.val_accuracies.append(val_accuracy)
-                if val_accuracy > best_val:
+                if val_accuracy >= best_val:
                     best_val = val_accuracy
                     self.best_model_state_dict = copy.deepcopy(self.model.state_dict())
 
@@ -361,6 +704,9 @@ def create_setfit_with_q_layer(
     lr=0.001,
     input_state=None,
     no_bunching=False,
+    expectation = True,
+    vanilla = False,
+    E_dim = 1,
 ):
     """
     Replace the classification head of a SetFit model with a quantum layer.
@@ -390,6 +736,9 @@ def create_setfit_with_q_layer(
         device=device,
         no_bunching=no_bunching,
         lr=lr,
+        expectation = expectation,
+        vanilla = vanilla,
+        E = E_dim,
     )
     print(f"\n -> Model with {modes} modes and input_state = {input_state} initialized")
     return model
@@ -478,6 +827,9 @@ def train_quantum_heads(
                 input_state=input_state,
                 no_bunching=args.no_bunching,
                 lr=args.lr_q,
+                expectation = args.expectation_encoding,
+                vanilla = args.vanilla,
+                E_dim=args.e_dim,
             )
             # Move model to device BEFORE training to avoid parameter issues
             model = model.to(device)
