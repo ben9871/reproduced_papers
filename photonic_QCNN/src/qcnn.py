@@ -67,9 +67,9 @@ class OneHotEncoder(nn.Module):
         return "OneHotEncoder()"
 
 
-class AParametrizedLayer(nn.Module):
+class AQCNNLayer(nn.Module):
     """
-    Abstract parametrized layer.
+    Abstract QCNN layer.
 
     Base class layer for inheriting functionality methods.
 
@@ -84,6 +84,29 @@ class AParametrizedLayer(nn.Module):
 
         if dims[0] != dims[1]:
             raise NotImplementedError('Non-square images not supported yet.')
+
+    def _check_input_shape(self, rho):
+        """
+        Checks that the shape of an input density matrix, rho matches
+        the shape of the density matrix in the one hot encoding.
+        """
+        dim1 = rho.shape[1] ** 0.5
+        dim2 = rho.shape[2] ** 0.5
+
+        if not dim1.is_integer() or not dim2.is_integer():
+            raise ValueError(
+                'Shape of rho is not a valid. Please ensure that `rho` is a '
+                'density matrix in the one-hot encoding space.'
+            )
+
+        dim1, dim2 = int(dim1), int(dim2)
+
+        if dim1 != self.dims[0] or dim2 != self.dims[1]:
+            raise ValueError(
+                'Input density matrix does not match specified dimensions. '
+                f'Expected {self.dims}, received {(dim1, dim2)}. Please ensure'
+                ' that `rho` is a density matrix in the one-hot encoding space'
+            )
 
     def _set_param_names(self, circuit):
         """
@@ -111,7 +134,7 @@ class AParametrizedLayer(nn.Module):
         self._training_params.extend(param_list)
 
 
-class QConv2d(AParametrizedLayer):
+class QConv2d(AQCNNLayer):
     """
     Quantum 2D Convolutional layer.
 
@@ -176,6 +199,7 @@ class QConv2d(AParametrizedLayer):
         self.phi_y = 2*np.pi * nn.Parameter(torch.rand(num_params_y))
 
     def forward(self, rho, adjoint = False):
+        self._check_input_shape(rho)
         b = len(rho)
 
         # Compute unitary for the entire layer
@@ -201,7 +225,7 @@ class QConv2d(AParametrizedLayer):
         return f"QConv2d({self.dims}, kernel_size={self.kernel_size}), stride={self.stride}"
 
 
-class QPooling(torch.nn.Module):
+class QPooling(AQCNNLayer):
     """
     Quantum pooling layer.
 
@@ -212,12 +236,15 @@ class QPooling(torch.nn.Module):
         kernel_size: Dimension by which the image is reduced.
     """
     def __init__(self, dims: tuple[int], kernel_size: int):
+        if dims[0] % kernel_size != 0:
+            raise ValueError(
+                'Input dimensions must be divisible by the kernel size')
+
+        super().__init__(dims)
         d = dims[0]
         k = kernel_size
         new_d = d // kernel_size
 
-        super().__init__()
-        self.dims = d
         self._new_d = new_d
         self.kernel_size = k
 
@@ -264,6 +291,7 @@ class QPooling(torch.nn.Module):
         self._new_y = new_m * new_d + new_n + h_grid[mask] * new_d ** 2
 
     def forward(self, rho):
+        self._check_input_shape(rho)
         b = len(rho)
 
         b_indices = torch.arange(b).unsqueeze(1).expand(-1, len(self._new_x))
@@ -365,7 +393,7 @@ def compute_amplitudes(self,
     return amplitudes
 
 
-class QDense(AParametrizedLayer):
+class QDense(AQCNNLayer):
     """
     Quantum Dense layer.
 
@@ -387,9 +415,7 @@ class QDense(AParametrizedLayer):
     ):
         super().__init__(dims)
 
-        self.dims = dims
         self.device = device
-
         m = m if m is not None else sum(dims)
         self.m = [m]
 
@@ -434,6 +460,7 @@ class QDense(AParametrizedLayer):
         self.phi = nn.Parameter(2*np.pi * torch.rand(num_params))
 
     def forward(self, rho):
+        self._check_input_shape(rho)
         b = len(rho)
 
         # Run SLOS & extract amplitudes.
@@ -484,6 +511,7 @@ class Measure(nn.Module):
     def __init__(self, m: int = None, n: int = 2, subset: int = None):
         super().__init__()
         self.m = m
+        self.n = n
         self.subset = subset
 
         if subset is not None:
