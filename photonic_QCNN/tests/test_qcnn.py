@@ -8,8 +8,7 @@ from photonic_QCNN.tests._processor_builder import ProcessorBuilder
 
 
 def _create_input_statevector(x):
-    """Create OneHot encoded Perceval statevector from square image, x.
-    """
+    """Create OneHot encoded Perceval statevector from square image, x."""
     input_state = 0 * BasicState([])
     for i in range(len(x)):
         for j in range(len(x[i])):
@@ -19,9 +18,9 @@ def _create_input_statevector(x):
             input_state += state
     return input_state
 
+
 def _trim_results(distribution: BSDistribution, m: int):
-    """Truncate a given Perceval BSDistribution to the first `m` modes.
-    """
+    """Truncate a given Perceval BSDistribution to the first `m` modes."""
     trimmed_results = {}
     for key, val in distribution.items():
         new_key = key[:m]
@@ -64,7 +63,7 @@ def test_pooling(dims):
     processor.min_detected_photons_filter(0)
     processor.with_input(input_state)
     sampler = Sampler(processor)
-    results = sampler.probs()['results']
+    results = sampler.probs()["results"]
 
     # Group results based off state in first sum(dims) // 2 modes
     trimmed_results = _trim_results(results, sum(dims) // 2)
@@ -82,11 +81,11 @@ def test_pooling(dims):
     num_params1 = len(conv1_params)
     num_params2 = len(conv2_params)
 
-    conv1.phi_x.data = torch.tensor(conv1_params)[:num_params1 // 2]
-    conv1.phi_y.data = torch.tensor(conv1_params)[num_params1 // 2:]
+    conv1.phi_x.data = torch.tensor(conv1_params)[: num_params1 // 2]
+    conv1.phi_y.data = torch.tensor(conv1_params)[num_params1 // 2 :]
 
-    conv2.phi_x.data = torch.tensor(conv2_params)[:num_params2 // 2]
-    conv2.phi_y.data = torch.tensor(conv2_params)[num_params2 // 2:]
+    conv2.phi_x.data = torch.tensor(conv2_params)[: num_params2 // 2]
+    conv2.phi_y.data = torch.tensor(conv2_params)[num_params2 // 2 :]
 
     x = x.unsqueeze(0)
     rho = encoder(x)
@@ -132,7 +131,7 @@ def test_dense(dims):
     processor.min_detected_photons_filter(0)
     processor.with_input(input_state)
     sampler = Sampler(processor)
-    results = sampler.probs()['results']
+    results = sampler.probs()["results"]
 
     # Group results based off state in first m_remaining modes
     trimmed_results = _trim_results(results, sum(dims) // 2)
@@ -149,8 +148,8 @@ def test_dense(dims):
 
     # Assign phi parameters in Conv & Dense torch layers
     num_conv_params = len(conv1_params)
-    conv1.phi_x.data = torch.tensor(conv1_params)[:num_conv_params // 2]
-    conv1.phi_y.data = torch.tensor(conv1_params)[num_conv_params // 2:]
+    conv1.phi_x.data = torch.tensor(conv1_params)[: num_conv_params // 2]
+    conv1.phi_y.data = torch.tensor(conv1_params)[num_conv_params // 2 :]
 
     dense.phi.data = torch.tensor(dense_params)
 
