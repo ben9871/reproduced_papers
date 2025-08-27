@@ -1,12 +1,9 @@
 # ruff: noqa: N801, N806, N802, N803, E741, F405, F403
-import torch
-from qoptcraft.basis import *
 from qoptcraft.evolution import *
-from qoptcraft.operators import *
 from qoptcraft.optical_elements import *
 from torch import nn
 
-from photonic_QCNN.models.paper_layers.toolbox import *
+from photonic_QCNN.src.paper_layers.toolbox import *
 
 
 #####################################################################################################################

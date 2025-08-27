@@ -26,7 +26,7 @@ from photonic_QCNN.data.data import (
     convert_tensor_to_loader,
     get_dataset,
 )
-from photonic_QCNN.models.merlin_pqcnn import HybridModelReadout
+from photonic_QCNN.src.merlin_pqcnn import HybridModelReadout
 from photonic_QCNN.training.train_model import train_model
 
 

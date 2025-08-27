@@ -1,3 +1,7 @@
+"""
+Definition of the actual models used to reproduce results from the paper
+"""
+
 import itertools
 import math
 
@@ -5,13 +9,13 @@ import merlin
 import torch
 import torch.nn as nn
 
-from photonic_QCNN.models.qcnn import (
+from photonic_QCNN.src.qcnn_paper import (
     Measure,
     OneHotEncoder,
     QConv2d,
     QDense,
     QPooling,
-    generate_all_fock_states,
+    generate_all_fock_states_list,
 )
 
 
@@ -62,7 +66,7 @@ def generate_partial_fock_states(subset, n, m):
     reduced_states = []
     # Account for when subset == m or subset + 1 == m. There cannot have 1 or 0 photon
     for i in range(max(0, subset - m + n), n + 1):
-        reduced_states += list(generate_all_fock_states(subset, i))
+        reduced_states += generate_all_fock_states_list(subset, i, true_order=True)
     return reduced_states
 
 
@@ -147,7 +151,7 @@ class HybridModel(nn.Module):
                     self.num_modes_measured, 2, self.num_modes_end
                 )
             else:
-                states = list(generate_all_fock_states(self.num_modes_end, 2))
+                states = generate_all_fock_states_list(self.num_modes_end, 2, true_order=True)
                 qcnn_output_dim = len(states)
             print(f"Number of Fock states: {qcnn_output_dim}")
 
@@ -185,7 +189,7 @@ class HybridModel(nn.Module):
                 measure_subset, 2, self.num_modes_end
             )
         else:
-            self.keys = list(generate_all_fock_states(self.num_modes_end, 2))
+            self.keys = generate_all_fock_states_list(self.num_modes_end, 2, true_order=True)
 
     def forward(self, x):
         probs = self.qcnn(x)
@@ -297,14 +301,14 @@ class HybridModelReadout(nn.Module):
         )
 
         # Output dimension of the QCNN
-        states = list(generate_all_fock_states(self.num_modes_end, 2))
+        states = generate_all_fock_states_list(self.num_modes_end, 2, true_order=True)
         qcnn_output_dim = len(states)
         print(f"Number of Fock states: {qcnn_output_dim}")
         self.qcnn_output_dim = qcnn_output_dim
 
         self.readout = Readout(list_label_0)
 
-        self.keys = list(generate_all_fock_states(self.num_modes_end, 2))
+        self.keys = generate_all_fock_states_list(self.num_modes_end, 2, true_order=True)
 
     def forward(self, x):
         probs = self.qcnn(x)

@@ -1,3 +1,7 @@
+"""
+Modified version of qcnn.py to more accurately reproduce the architecture from the reference paper.
+"""
+
 import io
 import math
 import random
@@ -17,9 +21,7 @@ from perceval import (
     Circuit,
     GenericInterferometer,
     InterferometerShape,
-    Matrix,
     P,
-    Unitary,
     catalog,
 )
 from torch import Tensor, nn
@@ -78,8 +80,8 @@ def generate_all_fock_states(m, n) -> Generator:
     Generate all possible Fock states for n photons and m modes.
 
     Args:
-        m: Number of modes
-        n: Number of photons
+        m: Number of modes.
+        n: Number of photons.
 
     Returns:
         Generator of tuples of each Fock state.
@@ -96,15 +98,23 @@ def generate_all_fock_states(m, n) -> Generator:
             yield (i,) + state
 
 
-class OneHotEncoder(nn.Module):
-    def __init__(self):
-        """
-        One Hot Encoder
+def generate_all_fock_states_list(m, n, true_order=True) -> list:
+    states_list = list(generate_all_fock_states(m, n))
+    if true_order:
+        states_list.reverse()
+    return states_list
 
-        Converts an image X to density matrix in the One Hot Amplitude
-        basis. For a given d x d image, the density matrix will be of
-        size d^2 x d^2.
-        """
+
+class OneHotEncoder(nn.Module):
+    """
+    One Hot Encoder
+
+    Converts an image `x` to density matrix in the One Hot Amplitude
+    basis. For a given d by d image, the density matrix will be of
+    size d^2 by d^2.
+    """
+
+    def __init__(self):
         super().__init__()
 
     def forward(self, x: Tensor) -> Tensor:
@@ -125,42 +135,9 @@ class OneHotEncoder(nn.Module):
         return "OneHotEncoder()"
 
 
-class OneHotDecoder(torch.nn.Module):
+class AQCNNLayer(nn.Module):
     """
-    Measures a state rho in the one hot basis and re-constructs the
-    image.
-
-    Args:
-        channels (int): Number of channels within the encoding.
-    """
-
-    def __init__(self, channels=None):
-        super().__init__()
-        self.channels = channels
-
-    def forward(self, rho):
-        b = len(rho)
-        c = 1 if self.channels is None else self.channels
-
-        dim = int(np.sqrt(len(rho[0]) // c))
-
-        diagonals = rho.diagonal(dim1=1, dim2=2)
-        diagonals = torch.abs(diagonals)
-
-        x = diagonals.reshape(b, c, dim, dim)
-
-        norm = torch.sqrt(torch.square(torch.abs(x)).sum(dim=(1, 2, 3)))
-        norm = norm.view(-1, 1, 1, 1)
-        return x
-
-    def __repr__(self):
-        c = 0 if self.channels is None else self.channels
-        return f"OneHotDecoder(channels={c})"
-
-
-class AParametrizedLayer(nn.Module):
-    """
-    Abstract parametrized layer.
+    Abstract QCNN layer.
 
     Base class layer for inheriting functionality methods.
 
@@ -175,6 +152,29 @@ class AParametrizedLayer(nn.Module):
 
         if dims[0] != dims[1]:
             raise NotImplementedError("Non-square images not supported yet.")
+
+    def _check_input_shape(self, rho):
+        """
+        Checks that the shape of an input density matrix, rho matches
+        the shape of the density matrix in the one hot encoding.
+        """
+        dim1 = rho.shape[1] ** 0.5
+        dim2 = rho.shape[2] ** 0.5
+
+        if not dim1.is_integer() or not dim2.is_integer():
+            raise ValueError(
+                "Shape of rho is not a valid. Please ensure that `rho` is a "
+                "density matrix in the one-hot encoding space."
+            )
+
+        dim1, dim2 = int(dim1), int(dim2)
+
+        if dim1 != self.dims[0] or dim2 != self.dims[1]:
+            raise ValueError(
+                "Input density matrix does not match specified dimensions. "
+                f"Expected {self.dims}, received {(dim1, dim2)}. Please ensure"
+                " that `rho` is a density matrix in the one-hot encoding space"
+            )
 
     def _set_param_names(self, circuit):
         """
@@ -251,33 +251,28 @@ class AParametrizedLayer(nn.Module):
         return rho, u, uc
 
 
-class QConv2d(AParametrizedLayer):
+class QConv2d(AQCNNLayer):
+    """
+    Quantum 2D Convolutional layer.
+
+    Args:
+        dims: Input dimensions.
+        kernel_size: Size of universal interferometer.
+        stride: Stride of the universal interferometer across the
+            modes.
+        circuit: Circuit type to use for convolutions.
+    """
+
     def __init__(
         self,
         dims,
         kernel_size: int,
         stride: int = None,
-        in_channels: int = None,
-        out_channels: int = None,
         circuit: str = "MZI",
     ):
-        """
-        Quantum 2D Convolutional layer to processor
-
-        Args:
-            dims: Input dimensions.
-            kernel_size: Size of universal interferometer
-            stride: Stride of the universal interferometer across the
-                modes.
-        """
-        if in_channels is not None and out_channels is None:
-            raise ValueError("Please specify a number of output channels")
-
         super().__init__(dims)
         self.kernel_size = kernel_size
         self.stride = kernel_size if stride is None else stride
-        self.in_channels = in_channels
-        self.out_channels = out_channels
 
         # Define filters
         filters = []
@@ -286,7 +281,7 @@ class QConv2d(AParametrizedLayer):
             self._set_param_names(filter)
             filters.append(filter)
 
-        # Create x and y and channel registers
+        # Create x and y registers
         self._reg_x = Circuit(dims[0], name="Conv X")
         self._reg_y = Circuit(dims[1], name="Conv Y")
 
@@ -297,15 +292,8 @@ class QConv2d(AParametrizedLayer):
         for i in range((dims[1] - kernel_size) // self.stride + 1):
             self._reg_y.add(self.stride * i, filters[1])
 
-        self._n_params_x = len(self._reg_x.get_parameters())
-        self._n_params_y = len(self._reg_y.get_parameters())
-        num_params = self._n_params_x + self._n_params_y
-
-        if out_channels is not None:
-            self._reg_c = get_circuit(out_channels, circuit)
-            self._set_param_names(self._reg_c)
-            self._n_params_c = len(self._reg_c.get_parameters())
-            num_params += self._n_params_c
+        num_params_x = len(self._reg_x.get_parameters())
+        num_params_y = len(self._reg_y.get_parameters())
 
         # Suppress unnecessary print statements from pcvl_pytorch
         original_stdout = sys.stdout
@@ -318,243 +306,108 @@ class QConv2d(AParametrizedLayer):
             self._circuit_graph_y = CircuitConverter(
                 self._reg_y, ["phi"], torch.float32
             )
-            if out_channels is not None:
-                self._circuit_graph_c = CircuitConverter(
-                    self._reg_c, ["phi"], torch.float32
-                )
         finally:
             sys.stdout = original_stdout
 
         # Create model parameters
-        self.phi = nn.Parameter(2 * np.pi * torch.rand(num_params))
-
-        if out_channels is not None and in_channels is not None:
-            if in_channels < out_channels:
-                self._mode_insertion = _InsertChannels(dims, in_channels, out_channels)
+        self.phi_x = nn.Parameter(2 * np.pi * torch.rand(num_params_x))
+        self.phi_y = nn.Parameter(2 * np.pi * torch.rand(num_params_y))
 
     def forward(self, rho, adjoint=False):
+        self._check_input_shape(rho)
         b = len(rho)
 
-        phi_x = self.phi[: self._n_params_x]
-        phi_y = self.phi[self._n_params_x : self._n_params_x + self._n_params_y]
-
-        ux = self._circuit_graph_x.to_tensor(phi_x)
-        uy = self._circuit_graph_y.to_tensor(phi_y)
-        u = torch.kron(ux, uy)
-
-        # Evaluate unitary on channels register
-        if self.out_channels is not None:
-            uc = self._circuit_graph_c.to_tensor(self.phi[-self._n_params_c :])
-        else:
-            uc = None
-
-        rho, u, uc = self._modify_channels(rho, u, uc)
-
-        if self.out_channels is not None:
-            u = torch.kron(uc, u)
+        # Compute unitary for the entire layer
+        u_x = self._circuit_graph_x.to_tensor(self.phi_x)
+        u_y = self._circuit_graph_y.to_tensor(self.phi_y)
+        u = torch.kron(u_x, u_y)
 
         u = u.unsqueeze(0).expand(b, -1, -1)
-        udag = u.transpose(1, 2).conj()
+        u_dag = u.transpose(1, 2).conj()
 
         # There is only one photon in each register, can apply the U directly.
         if not adjoint:
             u_rho = torch.bmm(u, rho)
-            new_rho = torch.bmm(u_rho, udag)
+            new_rho = torch.bmm(u_rho, u_dag)
         else:
             # Apply adjoint to rho
-            udag_rho = torch.bmm(udag, rho)
-            new_rho = torch.bmm(udag_rho, u)
+            u_dag_rho = torch.bmm(u_dag, rho)
+            new_rho = torch.bmm(u_dag_rho, u)
 
         return new_rho
 
     def __repr__(self):
-        c_in = 0 if self.in_channels is None else self.in_channels
-        c_out = 0 if self.out_channels is None else self.out_channels
-        return f"QConv2d({self.dims}, kernel_size={self.kernel_size}, in_channels={c_in}, out_channels={c_out})"
+        return f"QConv2d({self.dims}, kernel_size={self.kernel_size}), stride={self.stride}"
 
 
-class QCycleConv2d(AParametrizedLayer):
-    def __init__(self, dims, in_channels=None, out_channels=None):
-        """
-        Quantum 2D Cyclic Convolutional layer
-
-        :param dims: Dimension of input image.
-        """
-        super().__init__()
-        self.dims = dims
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-
-        self.m = sum(dims)
-
-        # Define the registers
-        self._build_registers()
-
-        num_params = self.m
-        if out_channels is not None:
-            self._reg_c = GenericInterferometer(
-                out_channels, catalog["mzi phase first"].generate
-            )
-            self._n_params_c = len(self._reg_c.get_parameters())
-            num_params += self._n_params_c
-
-        # Suppress unnecessary print statements
-        original_stdout = sys.stdout
-        sys.stdout = io.StringIO()
-        try:
-            # Build circuit graphs for the two registers separately.
-            self._circuit_graph_x = CircuitConverter(
-                self._reg_x, ["phi"], torch.float32
-            )
-            self._circuit_graph_y = CircuitConverter(
-                self._reg_y, ["phi"], torch.float32
-            )
-            if out_channels is not None:
-                self._circuit_graph_c = CircuitConverter(
-                    self._reg_c, ["phi"], torch.float32
-                )
-        finally:
-            sys.stdout = original_stdout
-
-        # Create and register model parameters
-        self.phi = torch.nn.Parameter(2 * np.pi * torch.rand(num_params))
-
-        if out_channels is not None and in_channels is not None:
-            if out_channels > in_channels:
-                self._mode_insertion = _InsertChannels(dims, in_channels, out_channels)
-
-    def forward(self, rho, adjoint=False):
-        b = len(rho)
-
-        phi_x = self.phi[: self.m // 2]
-        phi_y = self.phi[self.m // 2 : self.m]
-
-        ux = self._circuit_graph_x.compute(phi_x)
-        uy = self._circuit_graph_y.compute(phi_y)
-        u = torch.kron(ux, uy)
-
-        # Evaluate unitary on channels register
-        if self.out_channels is not None:
-            phi_c = self.phi[-self._n_params_c :]
-            uc = self._circuit_graph_c.compute(phi_c)
-        else:
-            uc = None
-
-        rho, u, uc = self._modify_channels(rho, u, uc)
-
-        if self.out_channels is not None:
-            u = torch.kron(uc, u)
-
-        u = u.unsqueeze(0).expand(b, -1, -1)
-        udag = u.transpose(1, 2).conj()
-
-        # Since there is only one photon in each register, can apply the U directly.
-        if not adjoint:
-            u_rho = torch.bmm(u, rho)
-            new_rho = torch.bmm(u_rho, udag)
-        else:
-            # Apply adjoint to rho
-            udag_rho = torch.bmm(udag, rho)
-            new_rho = torch.bmm(udag_rho, u)
-
-        return new_rho
-
-    def _build_registers(
-        self,
-    ) -> Circuit:
-        """Build a register for a given size."""
-        m_reg = self.m // 2
-
-        # Build QFT interferometer unitaries.
-        k = np.arange(m_reg).reshape((1, m_reg))
-        l = np.arange(m_reg).reshape((m_reg, 1))  # noqa: E741
-        exponent = -2j * np.pi * k * l / m_reg
-        matrix = np.exp(exponent) / np.sqrt(m_reg)
-        matrix_dag = matrix.T.conj()
-
-        uft = Unitary(Matrix(matrix))
-        uft_dag = Unitary(Matrix(matrix_dag))
-
-        # Build x register
-        self._reg_x = Circuit(m_reg, name="QCycleConv2d").add(0, uft)
-        for mode in range(m_reg):
-            self._reg_x.add(mode, PS(P(f"phi{mode}")))
-        self._reg_x.add(0, uft_dag)
-
-        # Build y register
-        self._reg_y = Circuit(m_reg, name="QCycleConv2d").add(0, uft)
-        for mode in range(m_reg):
-            self._reg_x.add(mode, PS(P(f"phi{mode + m_reg}")))
-        self._reg_x.add(0, uft_dag)
-
-    def __repr__(self):
-        c_in = 0 if self.in_channels is None else self.in_channels
-        c_out = 0 if self.out_channels is None else self.out_channels
-
-        return f"QCycleConv2d({self.dims}, in_channels={c_in}, out_channels={c_out})"
-
-
-class QPooling(torch.nn.Module):
+class QPooling(AQCNNLayer):
     """
-    Quantum pooling layer
+    Quantum pooling layer.
 
-    :param dims: Input image dimensions
-    :param kernel_size: Dimension by which the image is reduced.
-    :param channels: Number of input channels.
+    Reduce the size of the encoded image by the given kernel size.
+
+    Args:
+        dims: Input image dimensions.
+        kernel_size: Dimension by which the image is reduced.
     """
 
-    def __init__(self, dims, kernel_size, channels=None):
+    def __init__(self, dims: tuple[int], kernel_size: int):
+        if dims[0] % kernel_size != 0:
+            raise ValueError("Input dimensions must be divisible by the kernel size")
+
+        super().__init__(dims)
         d = dims[0]
         k = kernel_size
-        c = 1 if channels is None else channels
         new_d = d // kernel_size
 
-        super().__init__()
-        self.dims = d
         self._new_d = new_d
         self.kernel_size = k
-        self.channels = channels
 
         # Create all index combinations at once
-        x = torch.arange(c * d**2)
-        y = torch.arange(c * d**2)
+        x = torch.arange(d**2)
+        y = torch.arange(d**2)
 
-        # Let f, h represent the channel indices.
-        # In basis: |e_f>|e_i>|e_j><e_h|<e_l|<e_m|
+        # Our state is written in the basis: |e_f>|e_i>|e_j><e_h|<e_m|<e_n|
+
+        # f, h represent the channel indices.
+        # (Channels not included in this script)
         f = x // (d**2)
         h = y // (d**2)
 
-        # Let i, j, l, m represent the one hot indices
+        # Let i, j, m, n represent the one hot indices of the main register
         i = (x % (d**2)) // d
         j = (x % (d**2)) % d
-        l = (y % (d**2)) // d  # noqa: E741
-        m = (y % (d**2)) % d
+        m = (y % (d**2)) // d
+        n = (y % (d**2)) % d
 
-        # Create meshgrids for pairwise operations
         f_grid, h_grid = torch.meshgrid(f, h, indexing="ij")
-        i_grid, l_grid = torch.meshgrid(i, l, indexing="ij")
-        j_grid, m_grid = torch.meshgrid(j, m, indexing="ij")
+        i_grid, m_grid = torch.meshgrid(i, m, indexing="ij")
+        j_grid, n_grid = torch.meshgrid(j, n, indexing="ij")
 
-        # Ensure that odd mode photon numbers match
-        inject_condition = (i_grid % k == l_grid % k) & (j_grid % k == m_grid % k)
-        match_odd1 = ((i_grid % k != 0) & (i_grid == l_grid)) | (i_grid % k == 0)
-        match_odd2 = ((j_grid % k != 0) & (j_grid == m_grid)) | (j_grid % k == 0)
+        # Ensure that odd mode photon numbers match.
+        match_odd1 = ((i_grid % k != 0) & (i_grid == m_grid)) | (i_grid % k == 0)
+        match_odd2 = ((j_grid % k != 0) & (j_grid == n_grid)) | (j_grid % k == 0)
+
+        # Ensure photon number in ancillae used for photon injection match
+        inject_condition = (i_grid % k == m_grid % k) & (j_grid % k == n_grid % k)
 
         mask = inject_condition & match_odd1 & match_odd2
         mask_coords = torch.nonzero(mask, as_tuple=False)
         self._mask_coords = (mask_coords[:, 0], mask_coords[:, 1])
 
+        # New one hot indices
         new_i = i_grid[mask] // k
         new_j = j_grid[mask] // k
-        new_l = l_grid[mask] // k
         new_m = m_grid[mask] // k
+        new_n = n_grid[mask] // k
 
+        # New matrix coordinates
         self._new_x = new_i * new_d + new_j + f_grid[mask] * new_d**2
-        self._new_y = new_l * new_d + new_m + h_grid[mask] * new_d**2
+        self._new_y = new_m * new_d + new_n + h_grid[mask] * new_d**2
 
     def forward(self, rho):
+        self._check_input_shape(rho)
         b = len(rho)
-        c = 1 if self.channels is None else self.channels
 
         b_indices = torch.arange(b).unsqueeze(1).expand(-1, len(self._new_x))
         b_indices = b_indices.reshape(-1)
@@ -563,17 +416,16 @@ class QPooling(torch.nn.Module):
         new_y = self._new_y.expand(b, -1).reshape(-1)
 
         new_rho = torch.zeros(
-            b,
-            c * self._new_d**2,
-            c * self._new_d**2,
-            dtype=rho.dtype,
-            device=rho.device,
+            b, self._new_d**2, self._new_d**2, dtype=rho.dtype, device=rho.device
         )
 
         values = rho[:, self._mask_coords[0], self._mask_coords[1]].reshape(-1)
         new_rho.index_put_((b_indices, new_x, new_y), values, accumulate=True)
 
         return new_rho
+
+    def __repr__(self):
+        return f"QPooling({self.dims}, kernel_size={self.kernel_size})"
 
 
 # For QDense layer, patch merlin.SLOSGraph to add method to return amplitudes
@@ -656,53 +508,49 @@ def compute_amplitudes(self, unitary: Tensor, input_state: list[int]) -> torch.T
     return amplitudes
 
 
-class QDense(AParametrizedLayer):
+class QDense(AQCNNLayer):
     """
-    Dense layer
+    Quantum Dense layer.
 
     Expects an input density matrix in the One Hot Amplitude basis and
-    performs SLOS to return the output density matrix in the whole fock
+    performs SLOS to return the output density matrix in the whole Fock
     space.
 
     Args:
-        dims: Input image dimensions.
-        sizes: Size of the dense layers placed in succession.
-        channels: Size of the channel register received into dense layer.
-
+        dims (tuple[int]): Input image dimensions.
+        m (int | list[int]): Size of the dense layers placed in
+            succession. If `None`, a single universal dense layer is
+            applied.
+        circuit (str): Circuit type to use in dense layer.
+        add_modes (int): Number of modes to add to the dense layer.
     """
 
     def __init__(
-        self,
-        dims,
-        m: Union[int, list] = None,
-        channels: int = None,
-        circuit: str = "MZI",
-        add_modes: int = 0,
-        device=None,
+            self,
+            dims,
+            m: Union[int, list[int]] = None,
+            circuit: str = "MZI",
+            add_modes: int = 0,
+            device=None
     ):
         super().__init__(dims)
-
         self.dims = dims
-        self.channels = channels
         self.add_modes = add_modes
 
+        # Even number of modes to add
         if add_modes % 2 == 0 and add_modes > 0:
             insertion_x = [-i for i in range(int(add_modes / 2))]
-            insertion_y = [i - 1 + dims[0] * 2 for i in range(int(add_modes / 2))]
+            insertion_y = [i - 1 + self.dims[0] * 2 for i in range(int(add_modes / 2))]
             insertion = insertion_x + insertion_y
-            self.add_modes_layer = _InsertMainModes(dims, insertion)
-            self.dims = (dims[0] + len(insertion_x), dims[1] + len(insertion_y))
+            self.add_modes_layer = _InsertMainModes(self.dims, insertion)
+            self.dims = (self.dims[0] + len(insertion_x), self.dims[1] + len(insertion_y))
+        # Odd number of modes to add
         elif add_modes != 0:
             raise NotImplementedError("Asymmetric insertions not supported yet.")
 
         self.device = device
-
-        n = 2 if channels is None else 3
         m = m if m is not None else sum(self.dims)
-        if channels is None:
-            self.m = [m]
-        else:
-            self.m = [m + channels]
+        self.m = [m]
 
         # Construct circuit and circuit graph
         self._training_params = []
@@ -712,6 +560,7 @@ class QDense(AParametrizedLayer):
             # Implement the same circuit from the paper
             if circuit == "BS" and add_modes == 2 and m == 6:
                 circuit = "paper_6modes"
+
             gi = get_circuit(m, circuit)
             self._set_param_names(gi)
             self.circuit.add(0, gi)
@@ -732,16 +581,9 @@ class QDense(AParametrizedLayer):
             for y in range(self.dims[0])
         ]
 
-        if channels is not None:
-            channel_states = list(generate_all_fock_states(channels, 1))
-
-            self._input_states = [
-                c + m for c in channel_states for m in self._input_states
-            ]
-
         self._slos_graph = build_slos_graph(
             m=max(self.m),
-            n_photons=n,
+            n_photons=2,
             device=self.device,
         )
         self._slos_graph.__class__.compute_amplitudes = compute_amplitudes
@@ -752,12 +594,12 @@ class QDense(AParametrizedLayer):
 
     def forward(self, rho):
         # Add modes
-        if self.add_modes == 2:
+        if self.add_modes != 0:
             rho = self.add_modes_layer(rho)
-
         b = len(rho)
+        self._check_input_shape(rho)
 
-        # Run SLOS & extract amplitudes
+        # Run SLOS & extract amplitudes.
         unitary = self._circuit_graph.to_tensor(self.phi)
 
         amplitudes = torch.stack(
@@ -767,7 +609,7 @@ class QDense(AParametrizedLayer):
             ]
         ).squeeze()
 
-        u_evolve = amplitudes.transpose(0, 1)
+        u_evolve = amplitudes.T
 
         # Amplitudes constitute evolution operator
         u_evolve = u_evolve.expand(b, -1, -1)
@@ -786,10 +628,8 @@ class QDense(AParametrizedLayer):
         return new_rho
 
     def __repr__(self):
-        c = 0 if self.channels is None else self.channels
         m = self.m[0] if len(self.m) == 1 else self.m
-
-        return f"QDense({self.dims}, m={m}, channels={c})"
+        return f"QDense({self.dims}, m={m})"
 
 
 class Measure(nn.Module):
@@ -802,30 +642,28 @@ class Measure(nn.Module):
     params can be specified.
 
     Args:
-        m: Total number of modes in-device. Default: None
-        n: Number of photons in-device. Default: 2.
-        subset: Number of modes being measured. Default: None.
+        m (int): Total number of modes in-device. Default: None.
+        n (int): Number of photons in-device. Default: 2.
+        subset (int): Number of modes being measured. Default: None.
     """
 
     def __init__(self, m: int = None, n: int = 2, subset: int = None):
         super().__init__()
         self.m = m
+        self.n = n
         self.subset = subset
 
         if subset is not None:
-            all_states = list(generate_all_fock_states(m, 2))
+            all_states = generate_all_fock_states_list(m, 2, true_order=True)
             reduced_states = []
             for i in range(max(0, subset - m + n), n + 1):
-                reduced_states += list(generate_all_fock_states(subset, i))
+                reduced_states += generate_all_fock_states_list(subset, i, true_order=True)
             self.reduced_states_len = len(reduced_states)
 
             # To reproduce paper, measure from center if 6 modes and measure from start otherwise
             if m == 6:
                 self.indices = torch.tensor(
-                    [
-                        reduced_states.index(state[2 : 2 + subset])
-                        for state in all_states
-                    ]
+                [reduced_states.index(state[2 : 2 + subset]) for state in all_states]
                 )
             else:
                 self.indices = torch.tensor(
@@ -838,7 +676,7 @@ class Measure(nn.Module):
 
         if self.subset is not None:
             indices = self.indices.unsqueeze(0).expand(b, -1)
-            # Change size of the QCNN output accordingly
+            # Keep output of size (batch_size, reduced_states_len)
             probs_output = torch.zeros(
                 (b, self.reduced_states_len), device=probs.device, dtype=probs.dtype
             )
@@ -851,199 +689,7 @@ class Measure(nn.Module):
         if self.subset is not None:
             return f"Measure(m={self.m}, n={self.n}, subset={self.subset})"
         else:
-            return "Measure"
-
-
-class QTransposeConv2d(AParametrizedLayer):
-    """
-    Quantum Transpose Convolutional layer.
-
-    :param dims: Input image dimensions.
-    :param kernel_size: Size of universal interferometer and number of
-        modes injected.
-    :param qconvolution: State is passed through the adjoint of the
-        given qconvolution.
-    :param scatter_first: If True, trainable beam-splitters will be used
-        to mix the modes a little before convolution.
-    """
-
-    def __init__(
-        self,
-        dims,
-        kernel_size: int,
-        qconv: QConv2d,
-        in_channels=None,
-        scatter_first=False,
-    ):
-        super().__init__()
-        self.in_dims = dims
-        self.kernel_size = kernel_size
-        self.qconv = qconv
-        self.in_channels = in_channels
-        self.scatter_first = scatter_first
-
-        out_dim_x = dims[0] + (kernel_size - 1) * dims[0]
-        out_dim_y = dims[1] + (kernel_size - 1) * dims[1]
-
-        self.out_dims = (out_dim_x, out_dim_y)
-
-        self._training_params = []
-
-        # Pad the image to desired dimensions
-        insertions = [i for i in range(sum(dims)) for _ in range(kernel_size - 1)]
-        self._mode_insertions = _InsertMainModes(
-            dims, insertions, channels=self.in_channels
-        )
-
-        if scatter_first:
-            self._build_scatter_graphs()
-
-        self._new_conv = QConv2d(
-            qconv.dims,
-            qconv.kernel_size,
-            in_channels=in_channels,
-            out_channels=qconv.in_channels,
-        )
-
-    def forward(self, rho):
-        # Force TQConv params match QConv params
-        self._new_conv.phi = self.qconv.phi
-
-        rho = self._mode_insertions(rho)
-
-        if self.scatter_first:
-            u_scatter_x = self._scatter_graph_x.to_tensor(self.theta_x)
-            u_scatter_y = self._scatter_graph_y.to_tensor(self.theta_y)
-
-            u_scatter = torch.kron(u_scatter_x, u_scatter_y)
-            u_scatter = u_scatter.unsqueeze(0).expand(len(rho), -1, -1)
-
-            if self.in_channels is not None:
-                ic = torch.eye(self.in_channels)
-                u_scatter = torch.kron(ic, u_scatter)
-            rho = torch.bmm(u_scatter, rho)
-
-        rho = self._new_conv(rho, adjoint=True)
-        return rho
-
-    def __repr__(self):
-        c_in = 0 if self.in_channels is None else self.in_channels
-        c_out = 0 if self.qconv.in_channels is None else self.qconv.in_channels
-
-        return f"QTransposeConv2d({self.in_dims}, kernel_size={self.kernel_size}, in_channels={c_in}, out_channels={c_out})"
-
-    def _build_scatter_graphs(self):
-        """Applies beam-splitters to mix inserted and pre-existing modes."""
-        scatter_x = Circuit(self.out_dims[0])
-
-        for j in range(self.out_dims[0] // self.kernel_size):
-            gi = GenericInterferometer(
-                self.kernel_size,
-                lambda i: BS.Ry(P(f"theta{i + j * self.kernel_size}")),  # noqa: B023
-            )
-            self._set_param_names(gi)
-            scatter_x.add(j * self.kernel_size, gi)
-
-        num_theta_x = len(scatter_x.get_parameters())
-
-        scatter_y = Circuit(self.out_dims[1])
-        for j in range(self.out_dims[0] // self.kernel_size):
-            gi = GenericInterferometer(
-                self.kernel_size,
-                lambda i: BS.Ry(P(f"theta{i + j * self.kernel_size + num_theta_x}")),  # noqa: B023
-            )
-            self._set_param_names(gi)
-            scatter_y.add(j * self.kernel_size, gi)
-
-        num_theta_y = len(scatter_y.get_parameters())
-
-        self.theta_x = torch.nn.Parameter(2 * np.pi * torch.rand(num_theta_x))
-        self.theta_y = torch.nn.Parameter(2 * np.pi * torch.rand(num_theta_y))
-
-        original_stdout = sys.stdout
-        sys.stdout = io.StringIO()
-        try:
-            # Build circuit graphs for the two registers separately.
-            self._scatter_graph_x = CircuitConverter(
-                scatter_x, input_specs=["theta"], dtype=torch.float32
-            )
-            self._scatter_graph_y = CircuitConverter(
-                scatter_y, input_specs=["theta"], dtype=torch.float32
-            )
-        finally:
-            sys.stdout = original_stdout
-
-
-class _InsertChannels(torch.nn.Module):
-    """
-    Helper class for adding channels to bottom of channel register
-    within convolutional layers.
-
-    Args:
-        dims (tuple): Input dimensions
-        in_channels (int): Initial size of channel register
-        out_channels (int): Output size of channel register
-    """
-
-    def __init__(self, dims, in_channels, out_channels):
-        super().__init__()
-        d = dims[0]
-        c_in = in_channels
-        c_out = out_channels
-
-        super().__init__()
-        self.dims = dims
-        self.in_channels = in_channels
-        self.out_channels = out_channels
-
-        # Create all index combinations at once
-        x = torch.arange(c_in * d**2)
-        y = torch.arange(c_in * d**2)
-
-        # f, h represent the channel indices.
-        # In basis: |e_f>|e_i>|e_j><e_h|<e_l|<e_m|
-        f = x // (d**2)
-        h = y // (d**2)
-
-        # i, j, l, m represent the one hot indices
-        i = (x % (d**2)) // d
-        j = (x % (d**2)) % d
-        l = (y % (d**2)) // d  # noqa: E741
-        m = (y % (d**2)) % d
-
-        new_f = f + (c_out - c_in)
-        new_h = h + (c_out - c_in)
-
-        new_x = i * d + j + new_f * d**2
-        new_y = l * d + m + new_h * d**2
-
-        x_coords, y_coords = torch.meshgrid(new_x, new_y, indexing="ij")
-        self._new_x = x_coords.flatten()
-        self._new_y = y_coords.flatten()
-
-    def forward(self, rho):
-        b = rho.shape[0]
-        c_out = self.out_channels
-        d1, d2 = self.dims[0] ** 2, self.dims[1] ** 2
-
-        new_rho = torch.zeros(
-            (b, c_out * d1, c_out * d2), dtype=rho.dtype, device=rho.device
-        )
-        rho_flat = rho.view(b, -1)
-
-        x_coords = self._new_x.unsqueeze(0).expand(b, -1)
-        y_coords = self._new_y.unsqueeze(0).expand(b, -1)
-        batch_indices = (
-            torch.arange(b, device=rho.device)
-            .unsqueeze(-1)
-            .expand(-1, self._new_x.size(0))
-        )
-
-        # Broadcast values to new density matrix indices
-        new_rho.index_put_(
-            (batch_indices, x_coords, y_coords), rho_flat, accumulate=True
-        )
-        return new_rho
+            return "Measure()"
 
 
 class _InsertMainModes(torch.nn.Module):
@@ -1054,10 +700,11 @@ class _InsertMainModes(torch.nn.Module):
         dims (tuple): Input image dimensions
         insertions (list): List of mode indices to insert empty modes
             after.
+
+    Code from Anthony Walsh
     """
 
-    def __init__(self, dims, insertions: list[int], channels=None):
-        c = 1 if channels is None else channels
+    def __init__(self, dims, insertions: list[int]):
         d = dims[0]
 
         super().__init__()
@@ -1066,7 +713,6 @@ class _InsertMainModes(torch.nn.Module):
 
         self.insertions = insertions
         self.in_dims = dims
-        self.channels = c
 
         self._new_d = d + len(insertions) // 2
 
@@ -1080,8 +726,8 @@ class _InsertMainModes(torch.nn.Module):
         if len(insertions_x) != len(insertions_y):
             raise NotImplementedError("Asymmetric insertions not supported yet.")
 
-        x = torch.arange(c * d**2)
-        y = torch.arange(c * d**2)
+        x = torch.arange(d**2)
+        y = torch.arange(d**2)
 
         # f, h represent the channel indices.
         # In basis: |e_f>|e_i>|e_j><e_h|<e_l|<e_m|
@@ -1124,7 +770,6 @@ class _InsertMainModes(torch.nn.Module):
 
     def forward(self, rho):
         b = len(rho)
-        c = self.channels
 
         # Create batch indices
         b_indices = torch.arange(b).repeat_interleave(len(self._new_x))
@@ -1135,8 +780,8 @@ class _InsertMainModes(torch.nn.Module):
 
         new_rho = torch.zeros(
             b,
-            c * self._new_d**2,
-            c * self._new_d**2,
+            self._new_d**2,
+            self._new_d**2,
             dtype=rho.dtype,
             device=rho.device,
         )
@@ -1147,8 +792,7 @@ class _InsertMainModes(torch.nn.Module):
         return new_rho
 
     def __repr__(self):
-        c = 1 if self.channels is None else self.channels
-        return f"_InsertMainModes({self.in_dims}, insertions={self.insertions}, channels={c})"
+        return f"_InsertMainModes({self.in_dims}, insertions={self.insertions})"
 
 
 """

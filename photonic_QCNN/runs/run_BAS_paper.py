@@ -17,7 +17,6 @@ if project_root not in sys.path:
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch.nn as nn
 
 # Save path:
 # Get the directory where the current script lives
@@ -67,15 +66,15 @@ for data, target in train_loader:
     break
 
 # Define the Quantum CNN model:
-from photonic_QCNN.models.paper_layers.HW_preserving_QCNN.Conv import (
+from photonic_QCNN.src.paper_layers.HW_preserving_QCNN.Conv import (
     Conv_RBS_density_I2,
 )
-from photonic_QCNN.models.paper_layers.HW_preserving_QCNN.Pooling import (
+from photonic_QCNN.src.paper_layers.HW_preserving_QCNN.Pooling import (
     Pooling_2D_density_HW,
 )
-from photonic_QCNN.models.paper_layers.Linear_Optics import *
-from photonic_QCNN.models.paper_layers.measurement import *
-from photonic_QCNN.models.paper_layers.toolbox_basis_change import (
+from photonic_QCNN.src.paper_layers.Linear_Optics import *
+from photonic_QCNN.src.paper_layers.measurement import *
+from photonic_QCNN.src.paper_layers.toolbox_basis_change import (
     Basis_Change_Image_to_larger_Fock_density,
 )
 
