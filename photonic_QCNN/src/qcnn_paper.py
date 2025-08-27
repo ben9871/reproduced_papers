@@ -539,6 +539,109 @@ class Measure(nn.Module):
             return "Measure()"
 
 
+class _InsertMainModes(torch.nn.Module):
+    """
+    Inserts empty modes into specified locations in main register.
+
+    Args:
+        dims (tuple): Input image dimensions
+        insertions (list): List of mode indices to insert empty modes
+            after.
+
+    Code from Anthony Walsh
+    """
+
+    def __init__(self, dims, insertions: list[int]):
+        d = dims[0]
+
+        super().__init__()
+        if max(insertions) > 2 * d:
+            raise ValueError(f"Insertions {insertions} exceed input dimensions {d}")
+
+        self.insertions = insertions
+        self.in_dims = dims
+
+        self._new_d = d + len(insertions) // 2
+
+        # Insertion coordinates within each register
+        insertions_x = torch.tensor(
+            [insert for insert in insertions if insert < dims[0]]
+        )
+        insertions_y = torch.tensor(
+            [insert - dims[0] for insert in insertions if insert >= dims[0]]
+        )
+        if len(insertions_x) != len(insertions_y):
+            raise NotImplementedError("Asymmetric insertions not supported yet.")
+
+        x = torch.arange(d**2)
+        y = torch.arange(d**2)
+
+        # f, h represent the channel indices.
+        # In basis: |e_f>|e_i>|e_j><e_h|<e_l|<e_m|
+        f = x // (d**2)
+        h = y // (d**2)
+
+        # Let i, j, l, m represent the one hot indices
+        i = (x % (d**2)) // d
+        j = (x % (d**2)) % d
+        l = (y % (d**2)) // d  # noqa: E741
+        m = (y % (d**2)) % d
+
+        # Apply insertions to shift indices
+        if insertions_x.numel():
+            i += (insertions_x[None, :] <= i[:, None]).sum(dim=1)
+            l += (insertions_x[None, :] <= l[:, None]).sum(dim=1)  # noqa: E741
+
+        if insertions_y.numel():
+            j += (insertions_y[None, :] <= j[:, None]).sum(dim=1)
+            m += (insertions_y[None, :] <= m[:, None]).sum(dim=1)
+
+        # Create & flatten meshgrids for channel indices
+        f_grid, h_grid = torch.meshgrid(f, h, indexing="ij")
+        f_flat = f_grid.flatten()
+        h_flat = h_grid.flatten()
+
+        # Repeat i, j, l, m to match the flattened channel meshgrid size
+        i = i.repeat(len(h))
+        j = j.repeat(len(h))
+        l = l.repeat_interleave(len(f))  # noqa: E741
+        m = m.repeat_interleave(len(f))
+
+        # Calculate new density matrix coordinates
+        self._new_x = i * self._new_d + j + f_flat * self._new_d**2
+        self._new_y = l * self._new_d + m + h_flat * self._new_d**2
+
+        x_flat = x.repeat(len(y))
+        y_flat = y.repeat_interleave(len(x))
+        self._mask_coords = (x_flat, y_flat)
+
+    def forward(self, rho):
+        b = len(rho)
+
+        # Create batch indices
+        b_indices = torch.arange(b).repeat_interleave(len(self._new_x))
+
+        # Expand coordinate arrays for all batches
+        new_x = self._new_x.unsqueeze(0).expand(b, -1).reshape(-1)
+        new_y = self._new_y.unsqueeze(0).expand(b, -1).reshape(-1)
+
+        new_rho = torch.zeros(
+            b,
+            self._new_d**2,
+            self._new_d**2,
+            dtype=rho.dtype,
+            device=rho.device,
+        )
+        values = rho[:, self._mask_coords[0], self._mask_coords[1]].reshape(-1)
+
+        new_rho.index_put_((b_indices, new_x, new_y), values, accumulate=True)
+
+        return new_rho
+
+    def __repr__(self):
+        return f"_InsertMainModes({self.in_dims}, insertions={self.insertions})"
+
+
 """
 Symbolic cheat sheet:
 d = dimensions
