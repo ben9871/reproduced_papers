@@ -151,7 +151,9 @@ class HybridModel(nn.Module):
                     self.num_modes_measured, 2, self.num_modes_end
                 )
             else:
-                states = generate_all_fock_states_list(self.num_modes_end, 2, true_order=True)
+                states = generate_all_fock_states_list(
+                    self.num_modes_end, 2, true_order=True
+                )
                 qcnn_output_dim = len(states)
             print(f"Number of Fock states: {qcnn_output_dim}")
 
@@ -189,7 +191,9 @@ class HybridModel(nn.Module):
                 measure_subset, 2, self.num_modes_end
             )
         else:
-            self.keys = generate_all_fock_states_list(self.num_modes_end, 2, true_order=True)
+            self.keys = generate_all_fock_states_list(
+                self.num_modes_end, 2, true_order=True
+            )
 
     def forward(self, x):
         probs = self.qcnn(x)
@@ -308,7 +312,9 @@ class HybridModelReadout(nn.Module):
 
         self.readout = Readout(list_label_0)
 
-        self.keys = generate_all_fock_states_list(self.num_modes_end, 2, true_order=True)
+        self.keys = generate_all_fock_states_list(
+            self.num_modes_end, 2, true_order=True
+        )
 
     def forward(self, x):
         probs = self.qcnn(x)

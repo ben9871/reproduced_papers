@@ -526,12 +526,12 @@ class QDense(AQCNNLayer):
     """
 
     def __init__(
-            self,
-            dims,
-            m: Union[int, list[int]] = None,
-            circuit: str = "MZI",
-            add_modes: int = 0,
-            device=None
+        self,
+        dims,
+        m: Union[int, list[int]] = None,
+        circuit: str = "MZI",
+        add_modes: int = 0,
+        device=None,
     ):
         super().__init__(dims)
         self.dims = dims
@@ -543,7 +543,10 @@ class QDense(AQCNNLayer):
             insertion_y = [i - 1 + self.dims[0] * 2 for i in range(int(add_modes / 2))]
             insertion = insertion_x + insertion_y
             self.add_modes_layer = _InsertMainModes(self.dims, insertion)
-            self.dims = (self.dims[0] + len(insertion_x), self.dims[1] + len(insertion_y))
+            self.dims = (
+                self.dims[0] + len(insertion_x),
+                self.dims[1] + len(insertion_y),
+            )
         # Odd number of modes to add
         elif add_modes != 0:
             raise NotImplementedError("Asymmetric insertions not supported yet.")
@@ -657,13 +660,18 @@ class Measure(nn.Module):
             all_states = generate_all_fock_states_list(m, 2, true_order=True)
             reduced_states = []
             for i in range(max(0, subset - m + n), n + 1):
-                reduced_states += generate_all_fock_states_list(subset, i, true_order=True)
+                reduced_states += generate_all_fock_states_list(
+                    subset, i, true_order=True
+                )
             self.reduced_states_len = len(reduced_states)
 
             # To reproduce paper, measure from center if 6 modes and measure from start otherwise
             if m == 6:
                 self.indices = torch.tensor(
-                [reduced_states.index(state[2 : 2 + subset]) for state in all_states]
+                    [
+                        reduced_states.index(state[2 : 2 + subset])
+                        for state in all_states
+                    ]
                 )
             else:
                 self.indices = torch.tensor(
