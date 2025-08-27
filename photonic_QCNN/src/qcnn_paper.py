@@ -4,6 +4,7 @@ Modified version of qcnn.py to more accurately reproduce the architecture from t
 
 import io
 import math
+import random
 import re
 import sys
 from collections.abc import Generator
@@ -476,12 +477,12 @@ class QDense(AQCNNLayer):
     """
 
     def __init__(
-            self,
-            dims,
-            m: Union[int, list[int]] = None,
-            circuit: str = "MZI",
-            add_modes: int = 0,
-            device=None
+        self,
+        dims,
+        m: Union[int, list[int]] = None,
+        circuit: str = "MZI",
+        add_modes: int = 0,
+        device=None,
     ):
         super().__init__(dims)
         self.dims = dims
@@ -610,13 +611,15 @@ class Measure(nn.Module):
             all_states = generate_all_fock_states_list(m, n, true_order=True)
             reduced_states = []
             for i in range(n + 1):
-                reduced_states += generate_all_fock_states_list(subset, i, true_order=True)
+                reduced_states += generate_all_fock_states_list(
+                    subset, i, true_order=True
+                )
 
             # To reproduce paper, measure from center if 6 modes and measure from start otherwise
             if m == 6:
                 self.indices = torch.tensor(
                     [
-                        reduced_states.index(state[2: 2 + subset])
+                        reduced_states.index(state[2 : 2 + subset])
                         for state in all_states
                     ]
                 )
@@ -633,7 +636,9 @@ class Measure(nn.Module):
             indices = self.indices.unsqueeze(0).expand(b, -1)
             # Keep output of size (batch_size, subset_states_length)
             probs_output = torch.zeros(
-                (b, len(torch.unique(self.indices))), device=probs.device, dtype=probs.dtype
+                (b, len(torch.unique(self.indices))),
+                device=probs.device,
+                dtype=probs.dtype,
             )
             probs_output.scatter_add_(dim=1, index=indices, src=probs)
             return probs_output
