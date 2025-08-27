@@ -156,7 +156,7 @@ Enter the path to second_readout_detailed_results.json:
 ```
 
 ## Roadmap
-Future work on this topic would include a benchmarking of this architecture. We also need to reproduce Figure 3 from the reference paper. It showcases the outcome versus the expected results for each stage of the PQCNN. However, we will wait until the release of MerLin 2.0 to implement it. Note that our implementation can take multi-channels images.
+Future work on this topic would include a benchmarking of this architecture. We also need to reproduce Figure 3 from the reference paper. It showcases the outcome versus the expected results for each stage of the PQCNN. However, we will wait until the release of MerLin 2.0 to implement it. Note that this current implementation cannot take multi-channel images but we have the code to handle these types of images (just not in this repository).
 
 ## Dependencies
 
