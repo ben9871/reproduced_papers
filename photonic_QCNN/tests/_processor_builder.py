@@ -4,6 +4,7 @@ Processor Builder.
 Here one can build the QCNN as a `Processor` in Perceval.
 Used for visualizing the QCNN & testing.
 """
+
 import re
 from collections.abc import Sequence
 from itertools import product
@@ -57,7 +58,6 @@ class ProcessorBuilder:
         self._num_dense = 0
         self._num_pools = 0
 
-
     def add_conv(
         self,
         kernel_size: int,
@@ -75,26 +75,21 @@ class ProcessorBuilder:
                 the processor. Default: equal to the `kernel_size`.
         """
         if self._num_dense != 0:
-            raise ValueError(
-                "Cannot add a convolutional layer after a dense layer.")
+            raise ValueError("Cannot add a convolutional layer after a dense layer.")
 
         stride = kernel_size if stride is None else stride
 
         filters = []
         for _ in range(2):
             filter = GenericInterferometer(
-                kernel_size,
-                catalog['mzi phase first'].generate
+                kernel_size, catalog["mzi phase first"].generate
             )
             self._set_param_names(filter)
 
-            filter.name = 'Conv2D_Filter'
+            filter.name = "Conv2D_Filter"
             filters.append(filter)
 
-        conv_layer = Circuit(
-            self._m_remaining,
-            name=f'Conv2D{self._num_conv + 1}'
-        )
+        conv_layer = Circuit(self._m_remaining, name=f"Conv2D{self._num_conv + 1}")
 
         # Apply convolutional filters across the processor.
         num_filters = (self._m_remaining // 2 - kernel_size) // stride + 1
@@ -105,7 +100,6 @@ class ProcessorBuilder:
 
         self._processor.add(0, conv_layer)
         self._num_conv += 1
-
 
     def add_pooling(self, kernel_size: int = 2) -> None:
         """
@@ -119,9 +113,11 @@ class ProcessorBuilder:
             kernel_size: Dimension by which to decrease the size of the
                 input state.
         """
-        if self._m_remaining % kernel_size !=0:
-            raise ValueError('Number of modes remaining must be divisible by '
-                'the kernel size before Pooling.')
+        if self._m_remaining % kernel_size != 0:
+            raise ValueError(
+                "Number of modes remaining must be divisible by "
+                "the kernel size before Pooling."
+            )
 
         # Reduce dimensions of image.
         self._m_remaining //= kernel_size
@@ -150,22 +146,21 @@ class ProcessorBuilder:
             # Change feedfoward configurator position
             if self._num_pools and isinstance(component, PERM):
                 if idx + 1 != len(old_processor.components):
-
                     # When a Barrier is the next component, we place a new
                     # pooling layer at new position.
                     if isinstance(old_processor.components[idx + 1][1], Barrier):
                         self._add_feedforward_components(
-                            past_m_remaining,
-                            past_kernel_size
+                            past_m_remaining, past_kernel_size
                         )
                         pool_coord += 1
 
-            elif not isinstance(component, (PERM, FFCircuitProvider, Barrier, Detector)):
+            elif not isinstance(
+                component, (PERM, FFCircuitProvider, Barrier, Detector)
+            ):
                 self._processor.add(position, component)
 
         self._add_feedforward_components(self._m_remaining, kernel_size)
         self._num_pools += 1
-
 
     def add_dense(self, m: int = None) -> None:
         """
@@ -182,21 +177,16 @@ class ProcessorBuilder:
 
         if m > self._m_remaining:
             raise ValueError(
-                "Dense layer cannot have more modes than the number of "
-                "remaining modes."
+                "Dense layer cannot have more modes than the number of remaining modes."
             )
 
-        dense_layer = GenericInterferometer(
-            m,
-            catalog['mzi phase first'].generate
-        )
+        dense_layer = GenericInterferometer(m, catalog["mzi phase first"].generate)
         self._set_param_names(dense_layer)
 
-        dense_layer.name = 'Dense' + str(self._num_dense + 1)
+        dense_layer.name = "Dense" + str(self._num_dense + 1)
 
         self._processor.add(0, dense_layer)
         self._num_dense += 1
-
 
     def fix_parameters(
         self,
@@ -213,7 +203,7 @@ class ProcessorBuilder:
             values: Values to set the parameters. If `None`, random
                 values are selected.
         """
-        if not hasattr(self, 'fixed_parameters'):
+        if not hasattr(self, "fixed_parameters"):
             self.fixed_parameters = []
 
         self.fixed_parameters += self.free_parameters
@@ -232,10 +222,7 @@ class ProcessorBuilder:
             for i, param in enumerate(params):
                 param.set_value(values[i])
 
-            self.free_parameters = [
-                p for p in self.free_parameters
-                if p not in params
-            ]
+            self.free_parameters = [p for p in self.free_parameters if p not in params]
 
     @property
     def n(self) -> int:
@@ -249,7 +236,7 @@ class ProcessorBuilder:
     def _input_state(self, datapoint: np.ndarray) -> StateVector:
         """Generate data-embedded initial state"""
         datapoint = np.asarray(datapoint)
-        norm = np.sum(datapoint ** 2)
+        norm = np.sum(datapoint**2)
         amplitudes = np.float32(datapoint / norm)
 
         state_vec = StateVector()
@@ -274,7 +261,8 @@ class ProcessorBuilder:
         else:
             # Take index from last parameter name
             param_start_idx = int(
-                re.search(r'\d+', self.free_parameters[-1].name).group())
+                re.search(r"\d+", self.free_parameters[-1].name).group()
+            )
 
         for i, p in enumerate(param_list):
             p.name = f"phi{i + param_start_idx + 1}"
@@ -285,7 +273,6 @@ class ProcessorBuilder:
                 param._symbol = sp.S(param.name)
 
         self.free_parameters.extend(param_list)
-
 
     def _add_feedforward_components(self, m_reduced, kernel_size):
         """Adds photonic state injection components in pooling layer to
@@ -324,19 +311,18 @@ class ProcessorBuilder:
         measurements_register += [[0] * (m_reduced // 2 * (kernel_size - 1))]
 
         measurements = [
-            x + y
-            for x, y in product(measurements_register, measurements_register)
+            x + y for x, y in product(measurements_register, measurements_register)
         ]
         feedforward = FFCircuitProvider(
             m=m_reduced * (kernel_size - 1),
             offset=-self._num_ancillae + 1,
-            default_circuit=Circuit(m_reduced + 2)
+            default_circuit=Circuit(m_reduced + 2),
         )
 
         # Add configurations to FFCircuitProvider for each measurement
         for measurement in measurements:
-            register_x = measurement[:len(measurement) // 2]
-            register_y = measurement[len(measurement) // 2:]
+            register_x = measurement[: len(measurement) // 2]
+            register_y = measurement[len(measurement) // 2 :]
 
             # Group the measured modes into their corresponding pools
             register_x_grouped = [
@@ -354,9 +340,7 @@ class ProcessorBuilder:
                 # ancilla for x register
                 if sum(group) == 1:
                     injection_permutation = self._swap(
-                        swap_circuit.m,
-                        i,
-                        swap_circuit.m - 2
+                        swap_circuit.m, i, swap_circuit.m - 2
                     )
                     swap_circuit.add(0, injection_permutation)
                     break
@@ -366,9 +350,7 @@ class ProcessorBuilder:
                 # ancilla for x register
                 if sum(group) == 1:
                     injection_permutation = self._swap(
-                        swap_circuit.m,
-                        m_reduced // 2 + i,
-                        swap_circuit.m - 1
+                        swap_circuit.m, m_reduced // 2 + i, swap_circuit.m - 1
                     )
                     swap_circuit.add(0, injection_permutation)
                     break

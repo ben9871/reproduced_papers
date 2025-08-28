@@ -34,7 +34,7 @@ def generate_all_fock_states(m, n) -> Generator:
         return
 
     for i in range(n + 1):
-        for state in generate_all_fock_states(m-1, n-i):
+        for state in generate_all_fock_states(m - 1, n - i):
             yield (i,) + state
 
 
@@ -46,6 +46,7 @@ class OneHotEncoder(nn.Module):
     basis. For a given d by d image, the density matrix will be of
     size d^2 by d^2.
     """
+
     def __init__(self):
         super().__init__()
 
@@ -83,7 +84,7 @@ class AQCNNLayer(nn.Module):
         self._training_params = []
 
         if dims[0] != dims[1]:
-            raise NotImplementedError('Non-square images not supported yet.')
+            raise NotImplementedError("Non-square images not supported yet.")
 
     def _check_input_shape(self, rho):
         """
@@ -95,17 +96,17 @@ class AQCNNLayer(nn.Module):
 
         if not dim1.is_integer() or not dim2.is_integer():
             raise ValueError(
-                'Shape of rho is not a valid. Please ensure that `rho` is a '
-                'density matrix in the one-hot encoding space.'
+                "Shape of rho is not a valid. Please ensure that `rho` is a "
+                "density matrix in the one-hot encoding space."
             )
 
         dim1, dim2 = int(dim1), int(dim2)
 
         if dim1 != self.dims[0] or dim2 != self.dims[1]:
             raise ValueError(
-                'Input density matrix does not match specified dimensions. '
-                f'Expected {self.dims}, received {(dim1, dim2)}. Please ensure'
-                ' that `rho` is a density matrix in the one-hot encoding space'
+                "Input density matrix does not match specified dimensions. "
+                f"Expected {self.dims}, received {(dim1, dim2)}. Please ensure"
+                " that `rho` is a density matrix in the one-hot encoding space"
             )
 
     def _set_param_names(self, circuit):
@@ -120,7 +121,7 @@ class AQCNNLayer(nn.Module):
         else:
             # Take index from last parameter name
             param_start_idx = int(
-                re.search(r'\d+', self._training_params[-1].name).group()
+                re.search(r"\d+", self._training_params[-1].name).group()
             )
 
         for i, p in enumerate(param_list):
@@ -144,7 +145,9 @@ class QConv2d(AQCNNLayer):
         stride: Stride of the universal interferometer across the
             modes.
     """
-    def __init__(self,
+
+    def __init__(
+        self,
         dims,
         kernel_size: int,
         stride: int = None,
@@ -157,14 +160,14 @@ class QConv2d(AQCNNLayer):
         filters = []
         for _ in range(2):
             filter = GenericInterferometer(
-                kernel_size, catalog['mzi phase first'].generate
+                kernel_size, catalog["mzi phase first"].generate
             )
             self._set_param_names(filter)
             filters.append(filter)
 
         # Create x and y registers
-        self._reg_x = Circuit(dims[0], name='Conv X')
-        self._reg_y = Circuit(dims[1], name='Conv Y')
+        self._reg_x = Circuit(dims[0], name="Conv X")
+        self._reg_y = Circuit(dims[1], name="Conv Y")
 
         # Add filters with specified stride
         for i in range((dims[0] - kernel_size) // self.stride + 1):
@@ -182,23 +185,19 @@ class QConv2d(AQCNNLayer):
         try:
             # Build circuit graphs for the two registers separately.
             self._circuit_graph_x = CircuitConverter(
-                self._reg_x,
-                ['phi'],
-                torch.float32
+                self._reg_x, ["phi"], torch.float32
             )
             self._circuit_graph_y = CircuitConverter(
-                self._reg_y,
-                ['phi'],
-                torch.float32
+                self._reg_y, ["phi"], torch.float32
             )
         finally:
             sys.stdout = original_stdout
 
         # Create model parameters
-        self.phi_x = 2*np.pi * nn.Parameter(torch.rand(num_params_x))
-        self.phi_y = 2*np.pi * nn.Parameter(torch.rand(num_params_y))
+        self.phi_x = 2 * np.pi * nn.Parameter(torch.rand(num_params_x))
+        self.phi_y = 2 * np.pi * nn.Parameter(torch.rand(num_params_y))
 
-    def forward(self, rho, adjoint = False):
+    def forward(self, rho, adjoint=False):
         self._check_input_shape(rho)
         b = len(rho)
 
@@ -235,10 +234,10 @@ class QPooling(AQCNNLayer):
         dims: Input image dimensions.
         kernel_size: Dimension by which the image is reduced.
     """
+
     def __init__(self, dims: tuple[int], kernel_size: int):
         if dims[0] % kernel_size != 0:
-            raise ValueError(
-                'Input dimensions must be divisible by the kernel size')
+            raise ValueError("Input dimensions must be divisible by the kernel size")
 
         super().__init__(dims)
         d = dims[0]
@@ -249,25 +248,25 @@ class QPooling(AQCNNLayer):
         self.kernel_size = k
 
         # Create all index combinations at once
-        x = torch.arange(d ** 2)
-        y = torch.arange(d ** 2)
+        x = torch.arange(d**2)
+        y = torch.arange(d**2)
 
         # Our state is written in the basis: |e_f>|e_i>|e_j><e_h|<e_m|<e_n|
 
         # f, h represent the channel indices.
         # (Channels not included in this script)
-        f = x // (d ** 2)
-        h = y // (d ** 2)
+        f = x // (d**2)
+        h = y // (d**2)
 
         # Let i, j, m, n represent the one hot indices of the main register
-        i = (x % (d ** 2)) // d
-        j = (x % (d ** 2)) % d
-        m = (y % (d ** 2)) // d
-        n = (y % (d ** 2)) % d
+        i = (x % (d**2)) // d
+        j = (x % (d**2)) % d
+        m = (y % (d**2)) // d
+        n = (y % (d**2)) % d
 
-        f_grid, h_grid = torch.meshgrid(f, h, indexing='ij')
-        i_grid, m_grid = torch.meshgrid(i, m, indexing='ij')
-        j_grid, n_grid = torch.meshgrid(j, n, indexing='ij')
+        f_grid, h_grid = torch.meshgrid(f, h, indexing="ij")
+        i_grid, m_grid = torch.meshgrid(i, m, indexing="ij")
+        j_grid, n_grid = torch.meshgrid(j, n, indexing="ij")
 
         # Ensure that odd mode photon numbers match.
         match_odd1 = ((i_grid % k != 0) & (i_grid == m_grid)) | (i_grid % k == 0)
@@ -287,8 +286,8 @@ class QPooling(AQCNNLayer):
         new_n = n_grid[mask] // k
 
         # New matrix coordinates
-        self._new_x = new_i * new_d + new_j + f_grid[mask] * new_d ** 2
-        self._new_y = new_m * new_d + new_n + h_grid[mask] * new_d ** 2
+        self._new_x = new_i * new_d + new_j + f_grid[mask] * new_d**2
+        self._new_y = new_m * new_d + new_n + h_grid[mask] * new_d**2
 
     def forward(self, rho):
         self._check_input_shape(rho)
@@ -300,8 +299,9 @@ class QPooling(AQCNNLayer):
         new_x = self._new_x.expand(b, -1).reshape(-1)
         new_y = self._new_y.expand(b, -1).reshape(-1)
 
-        new_rho = torch.zeros(b, self._new_d ** 2, self._new_d ** 2,
-                            dtype=rho.dtype, device=rho.device)
+        new_rho = torch.zeros(
+            b, self._new_d**2, self._new_d**2, dtype=rho.dtype, device=rho.device
+        )
 
         values = rho[:, self._mask_coords[0], self._mask_coords[1]].reshape(-1)
         new_rho.index_put_((b_indices, new_x, new_y), values, accumulate=True)
@@ -313,10 +313,7 @@ class QPooling(AQCNNLayer):
 
 
 # For QDense layer, patch merlin.SLOSGraph to add method to return amplitudes
-def compute_amplitudes(self,
-    unitary: Tensor,
-    input_state: list[int]
-) -> torch.Tensor:
+def compute_amplitudes(self, unitary: Tensor, input_state: list[int]) -> torch.Tensor:
     """
     Compute the amplitudes using the pre-built graph.
 
@@ -341,12 +338,14 @@ def compute_amplitudes(self,
 
     if self.no_bunching and not all(x in [0, 1] for x in input_state):
         raise ValueError(
-            "Input state must be binary (0s and 1s only) in non-bunching mode")
+            "Input state must be binary (0s and 1s only) in non-bunching mode"
+        )
 
     batch_size, m, m2 = unitary.shape
     if m != m2 or m != self.m:
         raise ValueError(
-            f"Unitary matrix must be square with dimension {self.m}x{self.m}")
+            f"Unitary matrix must be square with dimension {self.m}x{self.m}"
+        )
 
     # Check dtype to match the complex dtype used for the graph building
     if unitary.dtype != self.complex_dtype:
@@ -363,25 +362,25 @@ def compute_amplitudes(self,
             self.norm_factor_input *= c + 1
             idx_n.append(i)
 
-            bounds1 = self.index_photons[len(idx_n)-1][1]
-            bounds2 = self.index_photons[len(idx_n)-1][0]
+            bounds1 = self.index_photons[len(idx_n) - 1][1]
+            bounds2 = self.index_photons[len(idx_n) - 1][0]
             if (i > bounds1) or (i < bounds2):
                 raise ValueError(
-                    f"Input state photons must be bounded by {self.index_photons}")
+                    f"Input state photons must be bounded by {self.index_photons}"
+                )
 
     # Get device from unitary
     device = unitary.device
 
     # Initial amplitude
-    amplitudes = torch.ones(
-        (batch_size, 1), dtype=self.complex_dtype, device=device
-    )
+    amplitudes = torch.ones((batch_size, 1), dtype=self.complex_dtype, device=device)
 
     # Apply each layer
     for layer_idx, layer_fn in enumerate(self.layer_functions):
         p = idx_n[layer_idx]
         amplitudes, self.contributions = layer_fn(
-            unitary, amplitudes, p, return_contributions=True)
+            unitary, amplitudes, p, return_contributions=True
+        )
 
     self.prev_amplitudes = amplitudes
 
@@ -407,12 +406,8 @@ class QDense(AQCNNLayer):
             succession. If `None`, a single universal dense layer is
             applied.
     """
-    def __init__(
-        self,
-        dims,
-        m: Union[int, list[int]] = None,
-        device = None
-    ):
+
+    def __init__(self, dims, m: Union[int, list[int]] = None, device=None):
         super().__init__(dims)
 
         self.device = device
@@ -424,7 +419,7 @@ class QDense(AQCNNLayer):
 
         self.circuit = Circuit(max(self.m))
         for m in self.m:
-            gi = GenericInterferometer(m, catalog['mzi phase first'].generate)
+            gi = GenericInterferometer(m, catalog["mzi phase first"].generate)
             self._set_param_names(gi)
             self.circuit.add(0, gi)
 
@@ -432,18 +427,14 @@ class QDense(AQCNNLayer):
         original_stdout = sys.stdout
         sys.stdout = io.StringIO()
         try:
-            self._circuit_graph = CircuitConverter(
-                self.circuit,
-                ['phi'],
-                torch.float32
-            )
+            self._circuit_graph = CircuitConverter(self.circuit, ["phi"], torch.float32)
         finally:
             sys.stdout = original_stdout
 
         # Set up input states & SLOS graphs
         self._input_states = [
-            tuple(int(i==x) for i in range(dims[0])) + \
-            tuple(int(i==y) for i in range(dims[1]))
+            tuple(int(i == x) for i in range(dims[0]))
+            + tuple(int(i == y) for i in range(dims[1]))
             for x in range(dims[1])
             for y in range(dims[0])
         ]
@@ -457,7 +448,7 @@ class QDense(AQCNNLayer):
 
         # Create and register model parameters
         num_params = len(self._training_params)
-        self.phi = nn.Parameter(2*np.pi * torch.rand(num_params))
+        self.phi = nn.Parameter(2 * np.pi * torch.rand(num_params))
 
     def forward(self, rho):
         self._check_input_shape(rho)
@@ -466,10 +457,12 @@ class QDense(AQCNNLayer):
         # Run SLOS & extract amplitudes.
         unitary = self._circuit_graph.to_tensor(self.phi)
 
-        amplitudes = torch.stack([
-            self._slos_graph.compute_amplitudes(unitary, basis_state)
-            for basis_state in self._input_states
-        ]).squeeze()
+        amplitudes = torch.stack(
+            [
+                self._slos_graph.compute_amplitudes(unitary, basis_state)
+                for basis_state in self._input_states
+            ]
+        ).squeeze()
 
         u_evolve = amplitudes.T
 
@@ -508,6 +501,7 @@ class Measure(nn.Module):
         n (int): Number of photons in-device. Default: 2.
         subset (int): Number of modes being measured. Default: None.
     """
+
     def __init__(self, m: int = None, n: int = 2, subset: int = None):
         super().__init__()
         self.m = m
@@ -520,10 +514,9 @@ class Measure(nn.Module):
             for i in range(n + 1):
                 reduced_states += list(generate_all_fock_states(subset, i))
 
-            self.indices = torch.tensor([
-                reduced_states.index(state[:subset])
-                for state in all_states
-            ])
+            self.indices = torch.tensor(
+                [reduced_states.index(state[:subset]) for state in all_states]
+            )
 
     def forward(self, rho):
         b = len(rho)
@@ -541,10 +534,9 @@ class Measure(nn.Module):
 
     def __repr__(self):
         if self.subset is not None:
-            return f'Measure(m={self.m}, n={self.n}, subset={self.subset})'
+            return f"Measure(m={self.m}, n={self.n}, subset={self.subset})"
         else:
-            return 'Measure()'
-
+            return "Measure()"
 
 
 """
