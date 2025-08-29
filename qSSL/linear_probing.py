@@ -4,16 +4,16 @@
 
 import argparse
 import json
+import os
+import re
+from pathlib import Path
 
 import torch
 import torch.nn as nn
-from data_utils import load_finetuning_data, load_transformed_data
+from data_utils import load_finetuning_data
 from model import QSSL
 from torchsummary import summary
-from training_utils import linear_evaluation, save_results_to_json, train
-from pathlib import Path
-import os
-import re
+from training_utils import linear_evaluation
 
 # Command-line argument parser for configuring the experiment
 parser = argparse.ArgumentParser(description="PyTorch Quantum self-sup training")
@@ -23,11 +23,19 @@ parser.add_argument(
     "-d", "--datadir", metavar="DIR", default="./data", help="path to dataset"
 )
 parser.add_argument(
-    "-p", "--pretrained", type=str, default="./results/qiskit/20250819_182304", help="path to folder with trained models"
+    "-p",
+    "--pretrained",
+    type=str,
+    default="./results/qiskit/20250819_182304",
+    help="path to folder with trained models",
 )
 # ========== Training Configuration ==========
 parser.add_argument(
-    "-le", "--le-epochs", type=int, default=100, help="Number of epochs for linear evaluation"
+    "-le",
+    "--le-epochs",
+    type=int,
+    default=100,
+    help="Number of epochs for linear evaluation",
 )
 parser.add_argument("-bs", "--batch_size", type=int, default=128, help="Batch size")
 
@@ -65,7 +73,7 @@ def list_pth_files_pathlib(directory_path):
     """
     try:
         path = Path(directory_path)
-        pth_files = [file.name for file in path.glob('*.pth') if file.is_file()]
+        pth_files = [file.name for file in path.glob("*.pth") if file.is_file()]
         return pth_files
     except Exception as e:
         print(f"Error accessing directory: {e}")
@@ -93,10 +101,12 @@ def extract_model_info(filename):
         return None, None
 
 
-def save_linear_probing_results(args, ft_train_losses, ft_val_losses, ft_train_accs, ft_val_accs, epoch, results_dir):
+def save_linear_probing_results(
+    args, ft_train_losses, ft_val_losses, ft_train_accs, ft_val_accs, epoch, results_dir
+):
     """
     Save linear probing results to a JSON file.
-    
+
     Args:
         args: Command line arguments
         ft_train_losses: Training losses from fine-tuning
@@ -107,7 +117,7 @@ def save_linear_probing_results(args, ft_train_losses, ft_val_losses, ft_train_a
         results_dir: Directory to save results
     """
     import datetime
-    
+
     results = {
         "timestamp": datetime.datetime.now().isoformat(),
         "experiment_type": "Linear_Probing",
@@ -120,30 +130,34 @@ def save_linear_probing_results(args, ft_train_losses, ft_val_losses, ft_train_a
             "val_accuracies": ft_val_accs,
             "final_val_accuracy": ft_val_accs[-1] if ft_val_accs else 0.0,
             "best_val_accuracy": max(ft_val_accs) if ft_val_accs else 0.0,
-        }
+        },
     }
-    
-    results_file = os.path.join(results_dir, f"linear_probing_results_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json")
+
+    results_file = os.path.join(
+        results_dir,
+        f"linear_probing_results_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}.json",
+    )
     with open(results_file, "w") as f:
         json.dump(results, f, indent=2)
-    
+
     print(f"Linear probing results saved to: {results_file}")
 
 
 class FactorMultiplication(nn.Module):
     """Normalizes phases to be within quantum-friendly range"""
+
     def __init__(self, factor):
         super().__init__()
         self.factor = factor
 
     def forward(self, x):
         out = x * self.factor
-        #print(f"x from {torch.min(out)} to {torch.max(out)}")
+        # print(f"x from {torch.min(out)} to {torch.max(out)}")
         return out
+
 
 if __name__ == "__main__":
     args = parser.parse_args()
-
 
     # define if we have a directory or a file
     pretrained_path = Path(args.pretrained)
@@ -154,7 +168,7 @@ if __name__ == "__main__":
         parent_dir = Path(os.path.dirname(pretrained_path))
         results_dir = parent_dir
         args_json_path = parent_dir / "args.json"
-        with open(args_json_path, "r") as f:
+        with open(args_json_path) as f:
             saved_args_dict = json.load(f)
         # Create an argparse.Namespace object from the loaded arguments
         saved_args = argparse.Namespace(**saved_args_dict)
@@ -163,7 +177,9 @@ if __name__ == "__main__":
         # Load linear evaluation data with minimal augmentations
         args.classes = saved_args.classes
         train_dataset, eval_dataset = load_finetuning_data(args)
-        print(f"\n Loaded linear evaluation datasets: {len(train_dataset)} train, {len(eval_dataset)} validation")
+        print(
+            f"\n Loaded linear evaluation datasets: {len(train_dataset)} train, {len(eval_dataset)} validation"
+        )
         train_loader = torch.utils.data.DataLoader(
             train_dataset, batch_size=args.batch_size, shuffle=True
         )
@@ -189,7 +205,9 @@ if __name__ == "__main__":
             nn.Sigmoid(),
             FactorMultiplication(factor),
             model.representation_network,  # Quantum/classical rep network (frozen)
-            nn.Linear(model.rep_net_output_size, saved_args.classes),  # Linear classifier (trainable)
+            nn.Linear(
+                model.rep_net_output_size, saved_args.classes
+            ),  # Linear classifier (trainable)
         )
         print(
             f"Trainable parameters in linear evaluation: {sum(p.numel() for p in frozen_model[2].parameters() if p.requires_grad) + sum(p.numel() for p in frozen_model[-1].parameters() if p.requires_grad)}"
@@ -200,19 +218,28 @@ if __name__ == "__main__":
 
         # Perform linear evaluation to assess quality of learned representations
         trained_model, ft_train_losses, ft_val_losses, ft_train_accs, ft_val_accs = (
-            linear_evaluation(frozen_model, train_loader, val_loader, saved_args, str(results_dir))
+            linear_evaluation(
+                frozen_model, train_loader, val_loader, saved_args, str(results_dir)
+            )
         )
-        
-        # Save results using new function
-        save_linear_probing_results(saved_args, ft_train_losses, ft_val_losses, ft_train_accs, ft_val_accs, epoch, str(results_dir))
 
+        # Save results using new function
+        save_linear_probing_results(
+            saved_args,
+            ft_train_losses,
+            ft_val_losses,
+            ft_train_accs,
+            ft_val_accs,
+            epoch,
+            str(results_dir),
+        )
 
     else:
         # Handle case where pretrained is a directory containing args.json
         results_dir = pretrained_path
         args_json_path = pretrained_path / "args.json"
 
-        with open(args_json_path, "r") as f:
+        with open(args_json_path) as f:
             saved_args_dict = json.load(f)
 
         # Create an argparse.Namespace object from the loaded arguments
@@ -224,7 +251,9 @@ if __name__ == "__main__":
         # Load linear evaluation data with minimal augmentations
         args.classes = saved_args.classes
         train_dataset, eval_dataset = load_finetuning_data(args)
-        print(f"\n Loaded linear evaluation datasets: {len(train_dataset)} train, {len(eval_dataset)} validation")
+        print(
+            f"\n Loaded linear evaluation datasets: {len(train_dataset)} train, {len(eval_dataset)} validation"
+        )
         train_loader = torch.utils.data.DataLoader(
             train_dataset, batch_size=args.batch_size, shuffle=True
         )
@@ -244,22 +273,20 @@ if __name__ == "__main__":
             classes, epoch = extract_model_info(pth_file)
             print(f"Evaluating model on {epoch} epochs on {classes} classes")
 
-            
             # ========== Phase 2: Linear Evaluation ==========
             # Build model for linear evaluation with frozen feature extractor
-            factor = torch.pi if not saved_args.merlin else 1/torch.pi
+            factor = torch.pi if not saved_args.merlin else 1 / torch.pi
             print(f"\n - Using a factor = {factor} \n")
 
-
-
-
             frozen_model = nn.Sequential(
-                model.backbone,        # ResNet18 backbone (frozen)
-                model.comp,           # Compression layer (frozen)
+                model.backbone,  # ResNet18 backbone (frozen)
+                model.comp,  # Compression layer (frozen)
                 nn.Sigmoid(),
                 FactorMultiplication(factor),
                 model.representation_network,  # Quantum/classical rep network (frozen)
-                nn.Linear(model.rep_net_output_size, saved_args.classes),  # Linear classifier (trainable)
+                nn.Linear(
+                    model.rep_net_output_size, saved_args.classes
+                ),  # Linear classifier (trainable)
             )
             print(
                 f"Trainable parameters in linear evaluation: {sum(p.numel() for p in frozen_model[2].parameters() if p.requires_grad) + sum(p.numel() for p in frozen_model[-1].parameters() if p.requires_grad)}"
@@ -269,9 +296,23 @@ if __name__ == "__main__":
             frozen_model[-1].requires_grad_(True)
 
             # Perform linear evaluation to assess quality of learned representations
-            trained_model, ft_train_losses, ft_val_losses, ft_train_accs, ft_val_accs = (
-                linear_evaluation(frozen_model, train_loader, val_loader, saved_args, str(results_dir))
+            (
+                trained_model,
+                ft_train_losses,
+                ft_val_losses,
+                ft_train_accs,
+                ft_val_accs,
+            ) = linear_evaluation(
+                frozen_model, train_loader, val_loader, saved_args, str(results_dir)
             )
-            
+
             # Save results using new function
-            save_linear_probing_results(saved_args, ft_train_losses, ft_val_losses, ft_train_accs, ft_val_accs, epoch, str(results_dir))
+            save_linear_probing_results(
+                saved_args,
+                ft_train_losses,
+                ft_val_losses,
+                ft_train_accs,
+                ft_val_accs,
+                epoch,
+                str(results_dir),
+            )

@@ -8,20 +8,23 @@ import torch.nn as nn
 import torch.nn.functional as f
 from tqdm import tqdm
 
+
 class InfoNCELossFromPaper(torch.nn.Module):
     def __init__(self, temperature=0.07):
         super().__init__()
         self.temperature = temperature
 
     def forward(self, out_1, out_2):
-
         out = torch.cat([out_1, out_2], dim=0)
         batch_size = out_1.shape[0]
         # InfoNCE Loss
 
         # [2*B, 2*B]
         sim_matrix = torch.exp(torch.mm(out, out.t().contiguous()) / self.temperature)
-        mask = (torch.ones_like(sim_matrix) - torch.eye(2 * batch_size, device=sim_matrix.device)).type(torch.bool)
+        mask = (
+            torch.ones_like(sim_matrix)
+            - torch.eye(2 * batch_size, device=sim_matrix.device)
+        ).type(torch.bool)
         # [2*B, 2*B-1]
         sim_matrix = sim_matrix.masked_select(mask).view(2 * batch_size, -1)
         # compute loss
@@ -29,11 +32,12 @@ class InfoNCELossFromPaper(torch.nn.Module):
         # [2*B]
         pos_sim = torch.cat([pos_sim, pos_sim], dim=0)
 
-        loss = (- torch.log(pos_sim / sim_matrix.sum(dim=-1))).mean()
+        loss = (-torch.log(pos_sim / sim_matrix.sum(dim=-1))).mean()
 
         return loss
 
-class  InfoNCELoss(torch.nn.Module):
+
+class InfoNCELoss(torch.nn.Module):
     def __init__(self, temperature=0.07):
         super().__init__()
         self.temperature = temperature
@@ -57,22 +61,37 @@ class  InfoNCELoss(torch.nn.Module):
 
         # Negatives: all similarities except the positive pair and self-similarities
         # For z1: negatives are other z1s + all z2s except the corresponding one
-        neg_sim_1 = torch.cat([
-            sim_11.masked_fill(torch.eye(batch_size, device=device).bool(), float('-inf')),
-            sim_12.masked_fill(torch.eye(batch_size, device=device).bool(), float('-inf'))
-        ], dim=1)
-        
-        # For z2: negatives are other z2s + all z1s except the corresponding one  
-        neg_sim_2 = torch.cat([
-            sim_12.T.masked_fill(torch.eye(batch_size, device=device).bool(), float('-inf')),
-            sim_22.masked_fill(torch.eye(batch_size, device=device).bool(), float('-inf'))
-        ], dim=1)
+        neg_sim_1 = torch.cat(
+            [
+                sim_11.masked_fill(
+                    torch.eye(batch_size, device=device).bool(), float("-inf")
+                ),
+                sim_12.masked_fill(
+                    torch.eye(batch_size, device=device).bool(), float("-inf")
+                ),
+            ],
+            dim=1,
+        )
+
+        # For z2: negatives are other z2s + all z1s except the corresponding one
+        neg_sim_2 = torch.cat(
+            [
+                sim_12.T.masked_fill(
+                    torch.eye(batch_size, device=device).bool(), float("-inf")
+                ),
+                sim_22.masked_fill(
+                    torch.eye(batch_size, device=device).bool(), float("-inf")
+                ),
+            ],
+            dim=1,
+        )
 
         # InfoNCE loss using logsumexp for numerical stability
         loss_1 = -pos_sim + torch.logsumexp(neg_sim_1, dim=1)
         loss_2 = -pos_sim + torch.logsumexp(neg_sim_2, dim=1)
 
         return ((loss_1.mean() + loss_2.mean()) / 2).unsqueeze(0)
+
 
 def training_step(model, train_loader, optimizer):
     pbar = tqdm(train_loader)
@@ -179,8 +198,11 @@ def train(model, train_loader, results_dir, args):
     # Create results directory
     print(f"Saving training results to: {results_dir}")
 
-    torch.save(model.state_dict(), os.path.join(results_dir, f"model-cl-{args.classes}-epoch-0.pth"))
-    print(f" - Initial model saved - ")
+    torch.save(
+        model.state_dict(),
+        os.path.join(results_dir, f"model-cl-{args.classes}-epoch-0.pth"),
+    )
+    print(" - Initial model saved - ")
 
     for epoch in range(args.epochs):
         loss, model = training_step(model, train_loader, optimizer)
@@ -190,11 +212,19 @@ def train(model, train_loader, results_dir, args):
         # Save SSL training loss during training
         save_metrics_during_training(results_dir, epoch + 1, ssl_loss=loss)
         # Save model if required
-        if (epoch+1)%args.ckpt_step == 0:
-            torch.save(model.state_dict(), os.path.join(results_dir, f"model-cl-{args.classes}-epoch-{epoch+1}.pth"))
+        if (epoch + 1) % args.ckpt_step == 0:
+            torch.save(
+                model.state_dict(),
+                os.path.join(
+                    results_dir, f"model-cl-{args.classes}-epoch-{epoch + 1}.pth"
+                ),
+            )
             print(f" - Model saved at epoch {epoch + 1}/{args.epochs} - ")
 
-    torch.save(model.state_dict(), os.path.join(results_dir, f"model-cl-{args.classes}-epoch-{args.epochs}.pth"))
+    torch.save(
+        model.state_dict(),
+        os.path.join(results_dir, f"model-cl-{args.classes}-epoch-{args.epochs}.pth"),
+    )
     print(f" - Final model saved to: {results_dir} - ")
 
     return model, training_losses

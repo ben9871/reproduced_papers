@@ -10,7 +10,12 @@ import torch.nn as nn
 from data_utils import load_finetuning_data, load_transformed_data
 from model import QSSL
 from torchsummary import summary
-from training_utils import linear_evaluation, save_results_to_json, train, get_results_dir
+from training_utils import (
+    get_results_dir,
+    linear_evaluation,
+    save_results_to_json,
+    train,
+)
 
 # Command-line argument parser for configuring the experiment
 parser = argparse.ArgumentParser(description="PyTorch Quantum self-sup training")
@@ -25,10 +30,16 @@ parser.add_argument(
     "-e", "--epochs", type=int, default=2, help="Number of epochs for SSL pre-training"
 )
 parser.add_argument(
-    "-le", "--le-epochs", type=int, default=100, help="Number of epochs for linear evaluation"
+    "-le",
+    "--le-epochs",
+    type=int,
+    default=100,
+    help="Number of epochs for linear evaluation",
 )
 parser.add_argument("-bs", "--batch_size", type=int, default=128, help="Batch size")
-parser.add_argument("-ckpt", "--ckpt-step", type=int, default=1, help="Epochs when the model is saved")
+parser.add_argument(
+    "-ckpt", "--ckpt-step", type=int, default=1, help="Epochs when the model is saved"
+)
 # ========== SSL Model Configuration ==========
 parser.add_argument(
     "-bn",
@@ -62,7 +73,13 @@ parser.add_argument(
     default=False,
     help="Use Quantum SSL with MerLin photonic framework",
 )
-parser.add_argument("-m", "--modes", type=int, default=10, help="Number of photonic modes in quantum circuit")
+parser.add_argument(
+    "-m",
+    "--modes",
+    type=int,
+    default=10,
+    help="Number of photonic modes in quantum circuit",
+)
 parser.add_argument(
     "-bunch",
     "--no_bunching",
@@ -155,11 +172,13 @@ if __name__ == "__main__":
 
     # ========== Phase 2: Linear Evaluation ==========
     # Build model for linear evaluation with frozen feature extractor
-    """frozen_model = nn.Sequential(
-        model.backbone,        # ResNet18 backbone (frozen)
-        model.comp,           # Compression layer (frozen)
+    frozen_model = nn.Sequential(
+        model.backbone,  # ResNet18 backbone (frozen)
+        model.comp,  # Compression layer (frozen)
         model.representation_network,  # Quantum/classical rep network (frozen)
-        nn.Linear(model.rep_net_output_size, args.classes),  # Linear classifier (trainable)
+        nn.Linear(
+            model.rep_net_output_size, args.classes
+        ),  # Linear classifier (trainable)
     )
     print(
         f"Trainable parameters in linear evaluation: {sum(p.numel() for p in frozen_model[2].parameters() if p.requires_grad) + sum(p.numel() for p in frozen_model[-1].parameters() if p.requires_grad)}"
@@ -170,7 +189,9 @@ if __name__ == "__main__":
 
     # Load linear evaluation data with minimal augmentations
     train_dataset, eval_dataset = load_finetuning_data(args)
-    print(f"\n Loaded linear evaluation datasets: {len(train_dataset)} train, {len(eval_dataset)} validation")
+    print(
+        f"\n Loaded linear evaluation datasets: {len(train_dataset)} train, {len(eval_dataset)} validation"
+    )
     train_loader = torch.utils.data.DataLoader(
         train_dataset, batch_size=args.batch_size, shuffle=True
     )
@@ -193,4 +214,4 @@ if __name__ == "__main__":
         ft_train_accs,
         ft_val_accs,
         results_dir,
-    )"""
+    )
