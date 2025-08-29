@@ -148,7 +148,7 @@ class QSSL(nn.Module):
 
             # Define initial photon state: alternating pattern of 0s and 1s
             input_state = [(i + 1) % 2 for i in range(args.modes)]
-            print(f"Initial photon state: {input_state}, bunching disabled: {self.no_bunching}")
+            print(f"Initial photon state: {input_state}, no_bunching = {self.no_bunching}")
 
             # Create quantum layer using MerLin framework
             self.representation_network = QuantumLayer(
@@ -293,7 +293,7 @@ class QSSL(nn.Module):
         x1 = torch.sigmoid(x1) * factor
         x2 = torch.sigmoid(x2) * factor
         # Note: Original implementation scales by π for phase encoding
-        
+        #print(f"\n ---x1 = {torch.min(x1)} to {torch.max(x1)} with factor = {factor}")
         # ========== Representation Learning ==========
         # Process through quantum or classical representation network
         z1 = self.representation_network(x1)

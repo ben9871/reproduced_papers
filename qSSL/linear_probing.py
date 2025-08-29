@@ -129,6 +129,18 @@ def save_linear_probing_results(args, ft_train_losses, ft_val_losses, ft_train_a
     
     print(f"Linear probing results saved to: {results_file}")
 
+
+class FactorMultiplication(nn.Module):
+    """Normalizes phases to be within quantum-friendly range"""
+    def __init__(self, factor):
+        super().__init__()
+        self.factor = factor
+
+    def forward(self, x):
+        out = x * self.factor
+        #print(f"x from {torch.min(out)} to {torch.max(out)}")
+        return out
+
 if __name__ == "__main__":
     args = parser.parse_args()
 
@@ -166,12 +178,16 @@ if __name__ == "__main__":
         summary(model, [(3, 32, 32), (3, 32, 32)])
 
         classes, epoch = extract_model_info(os.path.basename(pretrained_path))
+        factor = torch.pi if not saved_args.merlin else 1 / torch.pi
+        print(f"\n - Using a factor = {factor} \n")
 
         # ========== Phase 2: Linear Evaluation ==========
         # Build model for linear evaluation with frozen feature extractor
         frozen_model = nn.Sequential(
             model.backbone,  # ResNet18 backbone (frozen)
             model.comp,  # Compression layer (frozen)
+            nn.Sigmoid(),
+            FactorMultiplication(factor),
             model.representation_network,  # Quantum/classical rep network (frozen)
             nn.Linear(model.rep_net_output_size, saved_args.classes),  # Linear classifier (trainable)
         )
@@ -231,9 +247,17 @@ if __name__ == "__main__":
             
             # ========== Phase 2: Linear Evaluation ==========
             # Build model for linear evaluation with frozen feature extractor
+            factor = torch.pi if not saved_args.merlin else 1/torch.pi
+            print(f"\n - Using a factor = {factor} \n")
+
+
+
+
             frozen_model = nn.Sequential(
                 model.backbone,        # ResNet18 backbone (frozen)
                 model.comp,           # Compression layer (frozen)
+                nn.Sigmoid(),
+                FactorMultiplication(factor),
                 model.representation_network,  # Quantum/classical rep network (frozen)
                 nn.Linear(model.rep_net_output_size, saved_args.classes),  # Linear classifier (trainable)
             )
