@@ -20,9 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from qiskit.circuit import Parameter
-
 from ansatz.variational_ansatz import VariationalAnsatz
+from qiskit.circuit import Parameter
 
 
 class FarhiAnsatz(VariationalAnsatz):
@@ -54,14 +53,14 @@ class FarhiAnsatz(VariationalAnsatz):
 
     def rxx_to_all(self, n_data_qubits):
         for i in range(n_data_qubits - 1):
-            param = Parameter("ansatz{}".format(str(self.param_counter)))
+            param = Parameter(f"ansatz{str(self.param_counter)}")
             self.qc.rxx(param, self.qr[-1], self.qr[i])
             self.param_counter += 1
         return self.qc
 
     def rzx_to_all(self, n_data_qubits):
         for i in range(n_data_qubits - 1):
-            param = Parameter("ansatz{}".format(str(self.param_counter)))
+            param = Parameter(f"ansatz{str(self.param_counter)}")
             self.qc.rzx(param, self.qr[-1], self.qr[i])
             self.param_counter += 1
         return self.qc

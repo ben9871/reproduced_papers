@@ -1,7 +1,6 @@
 import numpy as np
-from qiskit import QuantumRegister, QuantumCircuit
-
 from input.data_handler import DataHandler
+from qiskit import QuantumCircuit, QuantumRegister
 
 
 class FRQIBennettDataHandler(DataHandler):
@@ -27,13 +26,20 @@ class FRQIBennettDataHandler(DataHandler):
         self.n_colour_qubits = 1
         self.n_ancilla_qubits = max(self.n_location_qubits - 2, 0)
 
-        self.qr = QuantumRegister(self.n_location_qubits + self.n_ancilla_qubits + self.n_colour_qubits)
-        self.qc = QuantumCircuit(self.qr, name='FRQI')
+        self.qr = QuantumRegister(
+            self.n_location_qubits + self.n_ancilla_qubits + self.n_colour_qubits
+        )
+        self.qc = QuantumCircuit(self.qr, name="FRQI")
 
-        self.location_register = self.qr[:self.n_location_qubits]
-        self.colour_register = self.qr[self.n_location_qubits:self.n_location_qubits + self.n_colour_qubits]
+        self.location_register = self.qr[: self.n_location_qubits]
+        self.colour_register = self.qr[
+            self.n_location_qubits : self.n_location_qubits + self.n_colour_qubits
+        ]
         self.ancilla_register = self.qr[
-                                self.n_location_qubits + self.n_colour_qubits:self.n_location_qubits + self.n_colour_qubits + self.n_ancilla_qubits:]
+            self.n_location_qubits + self.n_colour_qubits : self.n_location_qubits
+            + self.n_colour_qubits
+            + self.n_ancilla_qubits :
+        ]
 
         location_strings, angle_data = self.encode_using_frqi(input_data)
 
@@ -49,15 +55,23 @@ class FRQIBennettDataHandler(DataHandler):
         for i, location_string in enumerate(location_strings):
             theta = angle_data[i] * np.pi
             if theta != 0:
-                location_qubits_flipped = self.make_location_qubits_ones(location_string)
+                location_qubits_flipped = self.make_location_qubits_ones(
+                    location_string
+                )
 
-                self.qc.mcry(theta, self.location_register, self.colour_register[0], self.ancilla_register,
-                             mode='basic')
+                self.qc.mcry(
+                    theta,
+                    self.location_register,
+                    self.colour_register[0],
+                    self.ancilla_register,
+                    mode="basic",
+                )
 
                 self.reverse_location_flips(location_qubits_flipped)
 
-    def make_location_qubits_ones(self, location_string):  # Repeated for FRQI and NEQR - move to DataHandler Class
-
+    def make_location_qubits_ones(
+        self, location_string
+    ):  # Repeated for FRQI and NEQR - move to DataHandler Class
         location_qubits_to_flip = np.where(location_string == 0)[0]
 
         for qubit in location_qubits_to_flip:
@@ -66,6 +80,5 @@ class FRQIBennettDataHandler(DataHandler):
         return location_qubits_to_flip
 
     def reverse_location_flips(self, qubits_to_flip):
-
         for qubit in qubits_to_flip:
             self.qc.x(qubit)

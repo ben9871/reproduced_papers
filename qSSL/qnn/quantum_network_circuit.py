@@ -26,12 +26,12 @@ import logging
 from math import log
 
 import numpy as np
-from qiskit import QuantumRegister, QuantumCircuit, ClassicalRegister, transpile
+from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister, transpile
 
 # Conditional imports for different Qiskit versions
 try:
     # For Qiskit 1.0+, primitives are in qiskit.primitives
-    from qiskit.primitives import StatevectorSampler, StatevectorEstimator
+    from qiskit.primitives import StatevectorEstimator, StatevectorSampler
 
     PRIMITIVES_AVAILABLE = True
     Sampler = StatevectorSampler
@@ -39,7 +39,7 @@ try:
 except ImportError:
     try:
         # For older versions, try the old location
-        from qiskit.primitives import Sampler, Estimator
+        from qiskit.primitives import Estimator, Sampler
 
         PRIMITIVES_AVAILABLE = True
     except ImportError:
@@ -47,13 +47,11 @@ except ImportError:
         PRIMITIVES_AVAILABLE = False
         Sampler = None
         Estimator = None
-from qiskit.quantum_info import Pauli, Statevector
-from qiskit_aer import AerSimulator
-
 from config import Config
+from qiskit.quantum_info import Pauli, Statevector
 
 logging.basicConfig(level=logging.INFO)
-logging.getLogger('qiskit').setLevel(logging.WARN)
+logging.getLogger("qiskit").setLevel(logging.WARN)
 
 
 class QuantumNetworkCircuit:
@@ -63,7 +61,6 @@ class QuantumNetworkCircuit:
     """
 
     def __init__(self, config: Config, input_qubits, input_data=None):
-
         self.config = config
         self.input_qubits = input_qubits
         self.input_data = input_data
@@ -71,11 +68,13 @@ class QuantumNetworkCircuit:
 
         self.ansatz_circuit = self._create_ansatz_circuit(input_qubits)
 
-        self.ansatz_circuit_parameters = sorted(list(self.ansatz_circuit.parameters),
-                                                key=lambda p: int(''.join(filter(str.isdigit, p.name))))
+        self.ansatz_circuit_parameters = sorted(
+            self.ansatz_circuit.parameters,
+            key=lambda p: int("".join(filter(str.isdigit, p.name))),
+        )
 
-        self.qr = QuantumRegister(self.ansatz_circuit.num_qubits, name='qr')
-        self.cr = ClassicalRegister(len(self.qr), name='cr')
+        self.qr = QuantumRegister(self.ansatz_circuit.num_qubits, name="qr")
+        self.cr = ClassicalRegister(len(self.qr), name="cr")
         self.qc = QuantumCircuit(self.qr, self.cr)
 
         self.backend = config.backend
@@ -96,21 +95,25 @@ class QuantumNetworkCircuit:
     def construct_network(self, input_data):
         self.input_data = input_data
         input_circuit = self.config.data_handler.get_quantum_circuit(input_data)
-        self.input_circuit_parameters = sorted(list(input_circuit.parameters),
-                                               key=lambda p: int(''.join(filter(str.isdigit, p.name))))
+        self.input_circuit_parameters = sorted(
+            input_circuit.parameters,
+            key=lambda p: int("".join(filter(str.isdigit, p.name))),
+        )
 
-        self.qc.append(input_circuit, self.qr[:input_circuit.num_qubits])
+        self.qc.append(input_circuit, self.qr[: input_circuit.num_qubits])
         self.qc = self.qc.compose(self.ansatz_circuit)
 
         # Check backend type for measurement strategy
-        backend_name = getattr(self.backend, 'name', str(self.backend))
-        if 'statevector' not in backend_name.lower():
-            if self.config.meas_method == 'ancilla':
+        backend_name = getattr(self.backend, "name", str(self.backend))
+        if "statevector" not in backend_name.lower():
+            if self.config.meas_method == "ancilla":
                 self.qc.measure(self.qr[-1], self.cr[0])
-            elif self.config.meas_method == 'all':
+            elif self.config.meas_method == "all":
                 self.qc.measure(self.qr, self.cr)
 
-        logging.info("QNN created with {} trainable parameters.".format(len(self.ansatz_circuit_parameters)))
+        logging.info(
+            f"QNN created with {len(self.ansatz_circuit_parameters)} trainable parameters."
+        )
         self.config.log_info()
 
     def bind_circuit(self, parameter_values):
@@ -121,10 +124,15 @@ class QuantumNetworkCircuit:
         """
         if self.input_circuit_parameters is None:
             raise NotImplementedError(
-                "No input data was specified before binding. Please call construct_network() first.")
-        combined_parameter_list = self.input_circuit_parameters + self.ansatz_circuit_parameters
+                "No input data was specified before binding. Please call construct_network() first."
+            )
+        combined_parameter_list = (
+            self.input_circuit_parameters + self.ansatz_circuit_parameters
+        )
         if len(parameter_values) != len(combined_parameter_list):
-            raise ValueError('Parameter_values must be of length {}'.format(len(combined_parameter_list)))
+            raise ValueError(
+                f"Parameter_values must be of length {len(combined_parameter_list)}"
+            )
 
         binding_dict = {}
         for i, value in enumerate(parameter_values):
@@ -140,9 +148,9 @@ class QuantumNetworkCircuit:
         circuit = self.bind_circuit(parameter_list)
 
         # Check if backend supports statevector simulation
-        backend_name = getattr(self.backend, 'name', str(self.backend))
+        backend_name = getattr(self.backend, "name", str(self.backend))
 
-        if 'statevector' in backend_name.lower():
+        if "statevector" in backend_name.lower():
             # For statevector backends, we can use the backend directly
             # since we don't need sampling, just the final statevector
             return self._legacy_execute(circuit, shots)
@@ -164,13 +172,16 @@ class QuantumNetworkCircuit:
             # Try with AerSimulator as final fallback
             try:
                 from qiskit_aer import AerSimulator
+
                 simulator = AerSimulator()
                 transpiled_circuit = transpile(circuit, simulator)
                 job = simulator.run(transpiled_circuit, shots=shots)
                 return job.result()
             except Exception as e2:
                 logging.error(f"AerSimulator fallback also failed: {e2}")
-                raise RuntimeError(f"All execution methods failed. Original error: {e}")
+                raise RuntimeError(
+                    f"All execution methods failed. Original error: {e}"
+                ) from e2
 
     @staticmethod
     def get_vector_from_results(results, circuit_id=0):
@@ -184,22 +195,24 @@ class QuantumNetworkCircuit:
         """
 
         # Handle modern PrimitiveResult from Qiskit 1.0+ primitives
-        if hasattr(results, 'quasi_dists'):
+        if hasattr(results, "quasi_dists"):
             try:
                 # For PrimitiveResult from Sampler
                 quasi_dist = results.quasi_dists[circuit_id]
-                
+
                 # Convert quasi-distribution to counts format
                 counts = {}
                 total_shots = 0
                 for outcome, probability in quasi_dist.items():
                     # Convert integer outcome to binary string
-                    num_qubits = len(bin(max(quasi_dist.keys()))[2:])  # Get number of qubits
-                    bitstring = format(outcome, f'0{num_qubits}b')
+                    num_qubits = len(
+                        bin(max(quasi_dist.keys()))[2:]
+                    )  # Get number of qubits
+                    bitstring = format(outcome, f"0{num_qubits}b")
                     count = int(probability * 1000)  # Scale probability to counts
                     counts[bitstring] = count
                     total_shots += count
-                
+
                 if not counts:
                     raise ValueError("No measurement data found in PrimitiveResult")
 
@@ -210,22 +223,26 @@ class QuantumNetworkCircuit:
 
                 for bitstring, frequency in counts.items():
                     for i in range(num_measurements):
-                        if bitstring[i] == '0':
+                        if bitstring[i] == "0":
                             vector[i] += frequency
-                        elif bitstring[i] == '1':
+                        elif bitstring[i] == "1":
                             vector[i] -= frequency
                         else:
-                            raise ValueError(f"Measurement returned unrecognised value: {bitstring[i]}")
+                            raise ValueError(
+                                f"Measurement returned unrecognised value: {bitstring[i]}"
+                            )
 
                 return vector / total_shots
 
             except Exception as e:
-                logging.warning(f"PrimitiveResult processing failed: {e}, trying legacy approach")
+                logging.warning(
+                    f"PrimitiveResult processing failed: {e}, trying legacy approach"
+                )
 
         # Check if this is a statevector result (legacy)
-        backend_name = getattr(results, 'backend_name', '')
+        backend_name = getattr(results, "backend_name", "")
 
-        if 'statevector' in backend_name.lower():
+        if "statevector" in backend_name.lower():
             try:
                 state = results.get_statevector(circuit_id)
                 n = int(log(len(state), 2))
@@ -234,10 +251,12 @@ class QuantumNetworkCircuit:
                 vector = []
                 for i in range(n):
                     # Create Pauli operator for Z measurement on qubit i
-                    pauli_str = 'I' * n
-                    pauli_str = pauli_str[:i] + 'Z' + pauli_str[i + 1:]
+                    pauli_str = "I" * n
+                    pauli_str = pauli_str[:i] + "Z" + pauli_str[i + 1 :]
                     pauli_op = Pauli(pauli_str)
-                    expectation_val = Statevector(state).expectation_value(pauli_op).real
+                    expectation_val = (
+                        Statevector(state).expectation_value(pauli_op).real
+                    )
                     vector.append(expectation_val)
 
                 return vector
@@ -253,6 +272,7 @@ class QuantumNetworkCircuit:
             # Try using get_subsystems_counts if available (legacy)
             try:
                 from qiskit.aqua.utils import get_subsystems_counts
+
                 all_register_counts = get_subsystems_counts(counts)
                 output_register_counts = all_register_counts[-1]
                 num_measurements = len(next(iter(output_register_counts)))
@@ -260,19 +280,21 @@ class QuantumNetworkCircuit:
 
                 for count_str, frequency in output_register_counts.items():
                     for i in range(num_measurements):
-                        if count_str[i] == '0':
+                        if count_str[i] == "0":
                             vector[i] += frequency
-                        elif count_str[i] == '1':
+                        elif count_str[i] == "1":
                             vector[i] -= frequency
                         else:
-                            raise ValueError(f"Measurement returned unrecognised value: {count_str[i]}")
+                            raise ValueError(
+                                f"Measurement returned unrecognised value: {count_str[i]}"
+                            )
 
                 return vector / sum(output_register_counts.values())
 
             except ImportError:
                 # Modern approach: process counts directly
                 if not counts:
-                    raise ValueError("No measurement counts found")
+                    raise ValueError("No measurement counts found") from None
 
                 # Get number of qubits from bitstring length
                 first_key = next(iter(counts.keys()))
@@ -282,14 +304,16 @@ class QuantumNetworkCircuit:
 
                 for bitstring, frequency in counts.items():
                     for i in range(num_measurements):
-                        if bitstring[i] == '0':
+                        if bitstring[i] == "0":
                             vector[i] += frequency
-                        elif bitstring[i] == '1':
+                        elif bitstring[i] == "1":
                             vector[i] -= frequency
                         else:
-                            raise ValueError(f"Measurement returned unrecognised value: {bitstring[i]}")
+                            raise ValueError(
+                                f"Measurement returned unrecognised value: {bitstring[i]}"
+                            ) from None
 
                 return vector / total_shots
 
         except Exception as e:
-            raise RuntimeError(f"Failed to process measurement results: {e}")
+            raise RuntimeError(f"Failed to process measurement results: {e}") from e

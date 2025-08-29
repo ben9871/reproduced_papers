@@ -20,9 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from qiskit import QuantumCircuit, QuantumRegister
-
 from ansatz.variational_ansatz import VariationalAnsatz
+from qiskit import QuantumCircuit, QuantumRegister
 
 
 class NullAnsatz(VariationalAnsatz):
@@ -33,6 +32,6 @@ class NullAnsatz(VariationalAnsatz):
         pass
 
     def get_quantum_circuit(self, n_data_qubits):
-        self.qr = QuantumRegister(n_data_qubits, name='qr')
-        self.qc = QuantumCircuit(self.qr, name='Shifted circ')
+        self.qr = QuantumRegister(n_data_qubits, name="qr")
+        self.qc = QuantumCircuit(self.qr, name="Shifted circ")
         return self.qc

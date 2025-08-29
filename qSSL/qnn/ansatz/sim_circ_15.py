@@ -20,10 +20,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
+from ansatz.variational_ansatz import VariationalAnsatz
 from qiskit import QuantumCircuit, QuantumRegister
 from qiskit.circuit import Parameter
-
-from ansatz.variational_ansatz import VariationalAnsatz
 
 
 class SimCirc15(VariationalAnsatz):
@@ -35,11 +34,11 @@ class SimCirc15(VariationalAnsatz):
         super().__init__(layers, sweeps_per_layer, activation_function)
 
     def get_quantum_circuit(self, n_data_qubits):
-        self.qr = QuantumRegister(n_data_qubits, name='qr')
-        self.qc = QuantumCircuit(self.qr, name='Shifted circ')
+        self.qr = QuantumRegister(n_data_qubits, name="qr")
+        self.qc = QuantumCircuit(self.qr, name="Shifted circ")
 
         for layer_no in range(self.layers):
-            for sweep in range(0, self.sweeps_per_layer):
+            for _sweep in range(0, self.sweeps_per_layer):
                 self.add_rotations(n_data_qubits)
                 self.add_entangling_gates(n_data_qubits, block=1)
                 self.add_rotations(n_data_qubits)
@@ -50,7 +49,7 @@ class SimCirc15(VariationalAnsatz):
 
     def add_rotations(self, n_data_qubits):
         for i in range(0, n_data_qubits):
-            param = Parameter("ansatz{}".format(str(self.param_counter)))
+            param = Parameter(f"ansatz{str(self.param_counter)}")
             self.qc.ry(param, self.qr[i])
             self.param_counter += 1
         return self.qc
@@ -62,6 +61,8 @@ class SimCirc15(VariationalAnsatz):
         elif block == 2:
             for i in range(n_data_qubits):
                 control_qubit = (i + n_data_qubits - 1) % n_data_qubits
-                self.qc.cx(self.qr[control_qubit], self.qr[(control_qubit + 3) % n_data_qubits])
+                self.qc.cx(
+                    self.qr[control_qubit], self.qr[(control_qubit + 3) % n_data_qubits]
+                )
 
         return self.qc

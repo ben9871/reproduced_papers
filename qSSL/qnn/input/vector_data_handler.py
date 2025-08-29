@@ -1,7 +1,6 @@
-from qiskit import QuantumRegister, QuantumCircuit
-from qiskit.circuit import Parameter
-
 from input.data_handler import DataHandler
+from qiskit import QuantumCircuit, QuantumRegister
+from qiskit.circuit import Parameter
 
 
 class VectorDataHandler(DataHandler):
@@ -10,7 +9,7 @@ class VectorDataHandler(DataHandler):
         self.qc = QuantumCircuit(self.qr)
 
         for index, _ in enumerate(input_data):
-            param = Parameter("input{}".format(str(index)))
+            param = Parameter(f"input{str(index)}")
             self.qc.rx(param, index)
 
         return self.qc

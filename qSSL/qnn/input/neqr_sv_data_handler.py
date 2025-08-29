@@ -1,7 +1,6 @@
 import numpy as np
-from qiskit import QuantumCircuit
-
 from input.data_handler import DataHandler
+from qiskit import QuantumCircuit
 
 
 class NEQRSVDataHandler(DataHandler):
@@ -14,7 +13,6 @@ class NEQRSVDataHandler(DataHandler):
         super().__init__()
 
     def get_quantum_circuit(self, input_data):
-
         encoded_data = self.encode_using_neqr(input_data)
 
         state = self.create_input_state(encoded_data)

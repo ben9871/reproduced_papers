@@ -24,23 +24,31 @@
 
 import logging
 
-from qiskit_aer import Aer
-from qiskit_ibm_runtime import QiskitRuntimeService
-from qiskit_ibm_runtime.exceptions import IBMRuntimeError, IBMAccountError
-from qiskit.exceptions import QiskitError
-
 from activation_function.activation_function import ActivationFunction
 from activation_function.activation_function_factory import ActivationFunctionFactory
 from ansatz.variational_ansatz import VariationalAnsatz
 from ansatz.variational_ansatz_factory import VariationalAnsatzFactory
 from input.data_handler import DataHandler
 from input.data_handler_factory import DataHandlerFactory
+from qiskit.exceptions import QiskitError
+from qiskit_aer import Aer
+from qiskit_ibm_runtime import QiskitRuntimeService
+from qiskit_ibm_runtime.exceptions import IBMAccountError, IBMRuntimeError
 
 
 class Config:
-    def __init__(self, encoding, data_handler_method=None, ansatz_type=None, layers=3, sweeps_per_layer=1,
-                 activation_function_type=None, meas_method='all', grad_method='parameter shift',
-                 backend_type='qasm_simulator'):
+    def __init__(
+        self,
+        encoding,
+        data_handler_method=None,
+        ansatz_type=None,
+        layers=3,
+        sweeps_per_layer=1,
+        activation_function_type=None,
+        meas_method="all",
+        grad_method="parameter shift",
+        backend_type="qasm_simulator",
+    ):
         """
         :param encoding:
         :param data_handler_method:
@@ -61,21 +69,28 @@ class Config:
         self.meas_method = meas_method
         self.grad_method = grad_method
         self.backend = self.get_backend(backend_type)
-        self.data_handler: DataHandler = DataHandlerFactory(encoding, data_handler_method).get()
-        self.activation_function: ActivationFunction = ActivationFunctionFactory(activation_function_type).get()
-        self.ansatz: VariationalAnsatz = VariationalAnsatzFactory(ansatz_type, layers, sweeps_per_layer,
-                                                                  self.activation_function).get()
+        self.data_handler: DataHandler = DataHandlerFactory(
+            encoding, data_handler_method
+        ).get()
+        self.activation_function: ActivationFunction = ActivationFunctionFactory(
+            activation_function_type
+        ).get()
+        self.ansatz: VariationalAnsatz = VariationalAnsatzFactory(
+            ansatz_type, layers, sweeps_per_layer, self.activation_function
+        ).get()
 
     def log_info(self):
-        logging.info(f"QNN configuration:\nencoding = {self.encoding}" +
-                     f"\ndata handler = {self.data_handler_method}" +
-                     f"\nansatz = {self.ansatz_type}" +
-                     f"\nnumber of layers = {self.layers}" +
-                     f"\nnumber of sweeps per layer = {self.sweeps_per_layer}" +
-                     f"\nactivation function = {self.activation_function_type}" +
-                     f"\noutput measurement = {self.meas_method}" +
-                     f"\ngradient method = {self.grad_method}" +
-                     f"\nsimulation backend = {self.backend}")
+        logging.info(
+            f"QNN configuration:\nencoding = {self.encoding}"
+            + f"\ndata handler = {self.data_handler_method}"
+            + f"\nansatz = {self.ansatz_type}"
+            + f"\nnumber of layers = {self.layers}"
+            + f"\nnumber of sweeps per layer = {self.sweeps_per_layer}"
+            + f"\nactivation function = {self.activation_function_type}"
+            + f"\noutput measurement = {self.meas_method}"
+            + f"\ngradient method = {self.grad_method}"
+            + f"\nsimulation backend = {self.backend}"
+        )
 
     def get_backend(self, backend_name):
         """
@@ -87,7 +102,7 @@ class Config:
         backend = None
 
         # First check if it's a local simulator
-        if backend_name in ['qasm_simulator', 'statevector_simulator']:
+        if backend_name in ["qasm_simulator", "statevector_simulator"]:
             try:
                 backend = Aer.get_backend(backend_name)
                 return backend
@@ -98,11 +113,12 @@ class Config:
         # Try to get IBM Quantum backend
         try:
             service = QiskitRuntimeService(
-                channel="ibm_quantum",
-                instance="ibm-q-oxford/oxford/default"
+                channel="ibm_quantum", instance="ibm-q-oxford/oxford/default"
             )
             backend = service.backend(backend_name)
-            logging.info(f"Successfully connected to IBM Quantum backend: {backend_name}")
+            logging.info(
+                f"Successfully connected to IBM Quantum backend: {backend_name}"
+            )
             return backend
 
         except IBMAccountError as e:
@@ -110,17 +126,25 @@ class Config:
         except IBMRuntimeError as e:
             logging.warning(f"IBM Runtime error: {e}")
         except Exception as e:
-            logging.debug(f"Failed to connect to IBM Quantum backend {backend_name}: {e}")
+            logging.debug(
+                f"Failed to connect to IBM Quantum backend {backend_name}: {e}"
+            )
 
         # Fallback to local simulators
         try:
             # Try common Aer backends as fallback
-            fallback_backends = ['qasm_simulator', 'statevector_simulator', 'aer_simulator']
+            fallback_backends = [
+                "qasm_simulator",
+                "statevector_simulator",
+                "aer_simulator",
+            ]
 
             for fallback in fallback_backends:
                 try:
                     backend = Aer.get_backend(fallback)
-                    logging.warning(f"Using fallback backend: {fallback} instead of {backend_name}")
+                    logging.warning(
+                        f"Using fallback backend: {fallback} instead of {backend_name}"
+                    )
                     return backend
                 except QiskitError:
                     continue

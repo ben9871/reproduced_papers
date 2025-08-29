@@ -5,9 +5,7 @@ import numpy as np
 
 
 class DataHandler(ABC):
-
     def __init__(self):
-
         self.n_location_qubits = None
         self.n_ancilla_qubits = None
         self.n_colour_qubits = None
@@ -34,7 +32,7 @@ class DataHandler(ABC):
         """
         n_location_bits = (len(input_data) - 1).bit_length()
 
-        location_strings = [i for i in product([0, 1], repeat=n_location_bits)]
+        location_strings = list(product([0, 1], repeat=n_location_bits))
 
         encoded_data = []
         for index, location_string in enumerate(location_strings):
@@ -43,10 +41,9 @@ class DataHandler(ABC):
         return encoded_data
 
     def encode_using_frqi(self, input_data):
-
         n_location_bits = (len(input_data) - 1).bit_length()
 
-        location_strings = np.array([i for i in product([0, 1], repeat=n_location_bits)])
+        location_strings = np.array(list(product([0, 1], repeat=n_location_bits)))
 
         colour_ints = np.array([])
         normalisation = 2 ** len(input_data[0])

@@ -1,8 +1,7 @@
 import numpy as np
-from qiskit import QuantumRegister, QuantumCircuit
-from qiskit.circuit import Parameter
-
 from input.data_handler import DataHandler
+from qiskit import QuantumCircuit, QuantumRegister
+from qiskit.circuit import Parameter
 
 
 class HavlicekDataHandler(DataHandler):
@@ -22,7 +21,7 @@ class HavlicekDataHandler(DataHandler):
         for index in range(num_qubits):
             self.qc.h(self.qr[index])
 
-            param = Parameter("input{}".format(str(index)))
+            param = Parameter(f"input{str(index)}")
             param_list.append(param)
 
             self.qc.rz(param, self.qr[index])

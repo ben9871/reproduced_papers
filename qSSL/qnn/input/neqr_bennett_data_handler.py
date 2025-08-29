@@ -1,9 +1,8 @@
 import logging
 
 import numpy as np
-from qiskit import QuantumCircuit, QuantumRegister
-
 from input.data_handler import DataHandler
+from qiskit import QuantumCircuit, QuantumRegister
 
 
 class NEQRBennettDataHandler(DataHandler):
@@ -31,12 +30,19 @@ class NEQRBennettDataHandler(DataHandler):
         self.n_ancilla_qubits = max(self.n_location_qubits - 2, 0)
         self.n_colour_qubits = len(input_data[0])
 
-        self.qr = QuantumRegister(self.n_location_qubits + self.n_ancilla_qubits + self.n_colour_qubits)
-        self.qc = QuantumCircuit(self.qr, name='NEQR')
+        self.qr = QuantumRegister(
+            self.n_location_qubits + self.n_ancilla_qubits + self.n_colour_qubits
+        )
+        self.qc = QuantumCircuit(self.qr, name="NEQR")
 
-        self.colour_register = self.qr[self.n_location_qubits:self.n_location_qubits + self.n_colour_qubits]
+        self.colour_register = self.qr[
+            self.n_location_qubits : self.n_location_qubits + self.n_colour_qubits
+        ]
         self.ancilla_register = self.qr[
-                                self.n_location_qubits + self.n_colour_qubits:self.n_location_qubits + self.n_colour_qubits + self.n_ancilla_qubits:]
+            self.n_location_qubits + self.n_colour_qubits : self.n_location_qubits
+            + self.n_colour_qubits
+            + self.n_ancilla_qubits :
+        ]
 
         encoded_data = self.encode_using_neqr(input_data)
 
@@ -52,17 +58,21 @@ class NEQRBennettDataHandler(DataHandler):
         return self.qc
 
     def prepare_base_colour(self, encoded_data):
-
         bit_frequency = np.zeros(self.n_colour_qubits)
 
         for bit_string in encoded_data:
-            bit_frequency += bit_string[-self.n_colour_qubits:]
+            bit_frequency += bit_string[-self.n_colour_qubits :]
 
         mode_bit_string = np.array(
-            [int(np.floor(((2 * val) - 1) / len(encoded_data))) if val != 0 else 0 for val in bit_frequency])
+            [
+                int(np.floor(((2 * val) - 1) / len(encoded_data))) if val != 0 else 0
+                for val in bit_frequency
+            ]
+        )
 
         logging.info(
-            "Over all pixels, the modal bit at each position creates the base colour {}".format(mode_bit_string))
+            f"Over all pixels, the modal bit at each position creates the base colour {mode_bit_string}"
+        )
 
         for colour_qubit_to_flip in np.where(mode_bit_string == 1)[0]:
             self.qc.x(self.colour_register[colour_qubit_to_flip])
@@ -70,18 +80,16 @@ class NEQRBennettDataHandler(DataHandler):
         return mode_bit_string
 
     def prepare_colour_pixels(self, encoded_data, base_colour):
-
         for bitstring in encoded_data:
-            location_string = bitstring[:self.n_location_qubits]
+            location_string = bitstring[: self.n_location_qubits]
             location_qubits_flipped = self.make_location_qubits_ones(location_string)
 
-            target_colour = bitstring[self.n_location_qubits:]
+            target_colour = bitstring[self.n_location_qubits :]
             self.change_base_colour_to_pixel_colour(target_colour, base_colour)
 
             self.reverse_location_flips(location_qubits_flipped)
 
     def make_location_qubits_ones(self, location_string):
-
         location_qubits_to_flip = np.where(location_string == 0)[0]
 
         for qubit in location_qubits_to_flip:
@@ -90,14 +98,16 @@ class NEQRBennettDataHandler(DataHandler):
         return location_qubits_to_flip
 
     def change_base_colour_to_pixel_colour(self, target_colour, base_colour):
-
         colour_qubits_to_flip = np.where(base_colour != target_colour)[0]
 
         for qubit in colour_qubits_to_flip:
-            self.qc.mct(self.location_register, self.colour_register[qubit],
-                        self.ancilla_register, mode='basic')
+            self.qc.mct(
+                self.location_register,
+                self.colour_register[qubit],
+                self.ancilla_register,
+                mode="basic",
+            )
 
     def reverse_location_flips(self, qubits_to_flip):
-
         for qubit in qubits_to_flip:
             self.qc.x(qubit)

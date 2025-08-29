@@ -23,9 +23,8 @@
 import logging
 from math import floor
 
-from qiskit import QuantumRegister, ClassicalRegister, QuantumCircuit
-
 from activation_function.activation_function import ActivationFunction
+from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister
 
 
 class PartialMeasActivationFunction(ActivationFunction):
@@ -39,21 +38,23 @@ class PartialMeasActivationFunction(ActivationFunction):
         self.n_measurements = n_measurements
 
     def get_quantum_circuit(self, n_qubits):
-
-        if self.n_measurements == 'half':
+        if self.n_measurements == "half":
             self.n_measurements = floor(n_qubits / 2)
 
         if self.n_measurements > n_qubits:
-            raise ValueError('Activation function was asked to measure more qubits than exist in the circuit.')
+            raise ValueError(
+                "Activation function was asked to measure more qubits than exist in the circuit."
+            )
 
         if n_qubits % self.n_measurements != 0:
             logging.warning(
-                f'In acivation function, number of qubits ({n_qubits}) is not multiple of number of measurements '
-                f'({self.n_measurements}), measurements will not be equally spaced in circuit.')
+                f"In acivation function, number of qubits ({n_qubits}) is not multiple of number of measurements "
+                f"({self.n_measurements}), measurements will not be equally spaced in circuit."
+            )
 
-        self.qr = QuantumRegister(n_qubits, name='qr')
-        self.cr = ClassicalRegister(self.n_measurements, name='activation_cr')
-        self.qc = QuantumCircuit(self.qr, self.cr, name='Partial measurement')
+        self.qr = QuantumRegister(n_qubits, name="qr")
+        self.cr = ClassicalRegister(self.n_measurements, name="activation_cr")
+        self.qc = QuantumCircuit(self.qr, self.cr, name="Partial measurement")
 
         step = floor(n_qubits / self.n_measurements)
 

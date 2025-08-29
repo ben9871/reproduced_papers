@@ -20,9 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from qiskit.circuit import Parameter
-
 from ansatz.variational_ansatz import VariationalAnsatz
+from qiskit.circuit import Parameter
 
 
 class SimCirc13Half(VariationalAnsatz):
@@ -36,14 +35,14 @@ class SimCirc13Half(VariationalAnsatz):
 
     def add_rotations(self, n_data_qubits):
         for i in range(0, n_data_qubits):
-            param = Parameter("ansatz{}".format(str(self.param_counter)))
+            param = Parameter(f"ansatz{str(self.param_counter)}")
             self.qc.ry(param, self.qr[i])
             self.param_counter += 1
         return self.qc
 
     def add_entangling_gates(self, n_data_qubits):
         for i in range(n_data_qubits):
-            param = Parameter("ansatz{}".format(str(self.param_counter)))
+            param = Parameter(f"ansatz{str(self.param_counter)}")
             self.qc.crz(param, self.qr[i], self.qr[(i + 1) % n_data_qubits])
             self.param_counter += 1
         return self.qc

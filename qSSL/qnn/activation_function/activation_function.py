@@ -24,7 +24,6 @@ from abc import ABC, abstractmethod
 
 
 class ActivationFunction(ABC):
-
     def __init__(self):
         self.qr = None
         self.cr = None

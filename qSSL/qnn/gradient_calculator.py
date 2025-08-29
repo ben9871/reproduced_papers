@@ -29,22 +29,32 @@ import numpy as np
 from qiskit import transpile
 
 
-def calculate_gradient_list(qnn, parameter_list, method='parameter shift', shots=100, eps=None):
+def calculate_gradient_list(
+    qnn, parameter_list, method="parameter shift", shots=100, eps=None
+):
     parameter_list = np.array(parameter_list, dtype=float)
 
-    if method == 'parameter shift':
+    if method == "parameter shift":
         r = 0.5  # for Farhi ansatz, e0 = -1, e1 = +1, a = 1 => r = 0.5 (Using notation in arXiv:1905.13311)
 
-        qc_plus_list, qc_minus_list = get_parameter_shift_circuits(qnn, parameter_list, r)
+        qc_plus_list, qc_minus_list = get_parameter_shift_circuits(
+            qnn, parameter_list, r
+        )
 
-        expectation_minus, expectation_plus = evaluate_gradient_jobs(qc_minus_list, qc_plus_list, qnn, shots)
+        expectation_minus, expectation_plus = evaluate_gradient_jobs(
+            qc_minus_list, qc_plus_list, qnn, shots
+        )
 
         gradient_list = r * (expectation_plus - expectation_minus)
 
-    elif method == 'finite difference':
-        qc_plus_list, qc_minus_list = get_finite_difference_circuits(qnn, parameter_list, eps)
+    elif method == "finite difference":
+        qc_plus_list, qc_minus_list = get_finite_difference_circuits(
+            qnn, parameter_list, eps
+        )
 
-        expectation_minus, expectation_plus = evaluate_gradient_jobs(qc_minus_list, qc_plus_list, qnn, shots)
+        expectation_minus, expectation_plus = evaluate_gradient_jobs(
+            qc_minus_list, qc_plus_list, qnn, shots
+        )
 
         gradient_list = (expectation_plus - expectation_minus) / (2 * eps)
 
@@ -56,8 +66,12 @@ def calculate_gradient_list(qnn, parameter_list, method='parameter shift', shots
 
 
 def evaluate_gradient_jobs(qc_minus_list, qc_plus_list, qnn, shots):
-    qc_minus_list = [transpile(circ, basis_gates=['cx', 'u1', 'u2', 'u3']) for circ in qc_minus_list]
-    qc_plus_list = [transpile(circ, basis_gates=['cx', 'u1', 'u2', 'u3']) for circ in qc_plus_list]
+    qc_minus_list = [
+        transpile(circ, basis_gates=["cx", "u1", "u2", "u3"]) for circ in qc_minus_list
+    ]
+    qc_plus_list = [
+        transpile(circ, basis_gates=["cx", "u1", "u2", "u3"]) for circ in qc_plus_list
+    ]
     results = qnn.backend.run(qc_minus_list + qc_plus_list, shots=shots).result()
     expectation_plus = []
     expectation_minus = []
@@ -65,7 +79,7 @@ def evaluate_gradient_jobs(qc_minus_list, qc_plus_list, qnn, shots):
     for i in range(num_params):
         expectation_minus.append(qnn.get_vector_from_results(results, i))
         expectation_plus.append(qnn.get_vector_from_results(results, num_params + i))
-        logging.debug("Gradient calculated for {} out of {} parameters".format(i, num_params))
+        logging.debug(f"Gradient calculated for {i} out of {num_params} parameters")
     return np.array(expectation_minus), np.array(expectation_plus)
 
 
@@ -86,7 +100,7 @@ def get_parameter_shift_circuits(qnn, parameter_list, r):
 
 
 def get_finite_difference_circuits(qnn, parameter_list, eps):
-    if type(eps) == float:
+    if type(eps) is float:
         qc_plus_list, qc_minus_list = [], []
         for i in range(len(parameter_list)):
             shifted_params_plus = np.copy(parameter_list)

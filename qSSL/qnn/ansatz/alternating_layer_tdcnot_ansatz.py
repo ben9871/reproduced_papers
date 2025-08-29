@@ -20,9 +20,8 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from qiskit.circuit import Parameter
-
 from ansatz.variational_ansatz import VariationalAnsatz
+from qiskit.circuit import Parameter
 
 
 class AlternatingLayerTDCnotAnsatz(VariationalAnsatz):
@@ -38,7 +37,6 @@ class AlternatingLayerTDCnotAnsatz(VariationalAnsatz):
         super().__init__(layers, sweeps_per_layer, activation_function)
 
     def add_entangling_gates(self, n_data_qubits):
-
         for i in range(n_data_qubits - 1)[::2]:
             ctrl, tgt = i, ((i + 1) % self.qc.num_qubits)
             self.build_tdcnot(ctrl, tgt)
@@ -50,7 +48,7 @@ class AlternatingLayerTDCnotAnsatz(VariationalAnsatz):
         return self.qc
 
     def build_tdcnot(self, ctrl, tgt):
-        params = [Parameter("ansatz{}".format(str(self.param_counter + j))) for j in range(4)]
+        params = [Parameter(f"ansatz{str(self.param_counter + j)}") for j in range(4)]
         self.qc.ry(params[0], self.qr[ctrl])
         self.qc.ry(params[1], self.qr[tgt])
         self.qc.cx(ctrl, tgt)

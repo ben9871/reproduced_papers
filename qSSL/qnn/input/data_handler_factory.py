@@ -6,7 +6,6 @@ from input.vector_data_handler import VectorDataHandler
 
 
 class DataHandlerFactory:
-
     def __init__(self, encoding, method):
         self.encoding = encoding
         self.method = method
@@ -15,19 +14,19 @@ class DataHandlerFactory:
         """
         Returns the appropriate data handler
         """
-        if self.encoding == 'vector':
+        if self.encoding == "vector":
             return VectorDataHandler()
-        if self.encoding == 'havlicek':
+        if self.encoding == "havlicek":
             return HavlicekDataHandler()
         if self.method is None:
             raise ValueError("This encoding requires a data handler method.")
-        elif self.encoding == 'frqi':
-            if self.method == 'bennett':
+        elif self.encoding == "frqi":
+            if self.method == "bennett":
                 return FRQIBennettDataHandler()
-        elif self.encoding == 'neqr':
-            if self.method == 'statevector':
+        elif self.encoding == "neqr":
+            if self.method == "statevector":
                 return NEQRSVDataHandler()
-            elif self.method == 'bennett':
+            elif self.method == "bennett":
                 return NEQRBennettDataHandler()
         else:
             raise ValueError("Invalid string used for encoding or data handler method.")

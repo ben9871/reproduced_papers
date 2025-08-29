@@ -21,9 +21,9 @@
 # SOFTWARE.
 
 import numpy as np
-from qiskit import QuantumRegister, QuantumCircuit
+from qiskit import QuantumCircuit, QuantumRegister
 from qiskit.circuit import Gate
-from qiskit.extensions import CXGate, U3Gate, U1Gate, U2Gate
+from qiskit.extensions import CXGate, U1Gate, U2Gate, U3Gate
 
 
 class RZXGate(Gate):
