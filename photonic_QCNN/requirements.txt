@@ -1,0 +1,13 @@
+matplotlib==3.10.6
+merlinquantum==0.1.2
+numpy==2.3.2
+pennylane==0.42.1
+perceval_quandela==0.13.2
+pytest==8.4.1
+qoptcraft==2.0.0
+scikit_learn==1.7.1
+scipy==1.16.1
+seaborn==0.13.2
+sympy==1.14.0
+torch==2.8.0
+tqdm==4.67.1
