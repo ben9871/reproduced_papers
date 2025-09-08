@@ -1,22 +1,13 @@
 """
-Photonic model training utilities for qLLM experiments using MerLin.
+MerLin models for the qLLM with different setups.
 """
 
-import copy
-import json
 import math
-import os
-from datetime import datetime
-
 import merlin as ml  # Using our Merlin framework
-import numpy as np
 import perceval as pcvl
 import torch
 import torch.nn as nn
-from classical_utils import evaluate
-from sklearn.base import BaseEstimator, ClassifierMixin
-from sklearn.metrics import accuracy_score
-from torch.utils.data import DataLoader, TensorDataset
+
 
 ##########################################
 ### Quantum classifier and its wrapper ###
@@ -24,7 +15,7 @@ from torch.utils.data import DataLoader, TensorDataset
 
 
 def create_quantum_circuit(m, size=400):
-    """Create quantum circuit with specified number of modes and input size"""
+    """Create a quantum circuit with specified number of modes and input size"""
 
     wl = pcvl.GenericInterferometer(
         m,
@@ -58,6 +49,46 @@ def create_quantum_circuit(m, size=400):
 
     return c
 
+def create_quantum_circuit_deep(m, size=400):
+    """Create a quantum circuit with specified number of modes and input size
+        The encoding is done in single rows of phase shifters then trainable interferometers
+    """
+
+    wl = pcvl.GenericInterferometer(
+        m,
+        lambda i: pcvl.BS()
+        // pcvl.PS(pcvl.P(f"phase_1_{i}"))
+        // pcvl.BS()
+        // pcvl.PS(pcvl.P(f"phase_2_{i}")),
+        shape=pcvl.InterferometerShape.RECTANGLE,
+    )
+
+    c = pcvl.Circuit(m)
+    c.add(0, wl, merge=True)
+    nb_encoding = size // m + 1
+    for layer_idx in range(nb_encoding):
+
+        c_var = pcvl.Circuit(m)
+        idx_max = min(m*layer_idx+m, size)
+        for i in range(layer_idx*m, idx_max):
+            px = pcvl.P(f"px-{i + 1}")
+            c_var.add(i % m, pcvl.PS(px))
+        print(c_var)
+        c.add(0, c_var, merge=True)
+
+        wr = pcvl.GenericInterferometer(
+            m,
+            lambda i: pcvl.BS()
+            // pcvl.PS(pcvl.P(f"phase_3_{layer_idx}_{i}"))
+            // pcvl.BS()
+            // pcvl.PS(pcvl.P(f"phase_4_{layer_idx}){i}")),
+            shape=pcvl.InterferometerShape.RECTANGLE,
+        )
+
+        c.add(0, wr, merge=True)
+
+    return c
+
 class ScaleLayer(nn.Module):
     def __init__(self, dim, scale_type = "learned"):
         super(ScaleLayer, self).__init__()
@@ -84,7 +115,18 @@ class DivideByPi(nn.Module):
         return x / torch.pi
 
 
+# First, we propose a very basic version of a QuantumClassifier following a simple architecture from Gan et al.
+
 class QuantumClassifier(nn.Module):
+    """
+        This QuantumClassifier consists of a simple "Sandwich" architecture to encode the data :
+            - data encoding:
+                - the 768 embeddings are mapped to a smaller space using a Linear Layer
+                - the data is scaled by a learnable layer (= size of the data) and scaled between 0 an 1;
+                - the data points are encoded in phase shifters
+            - quantum layer : [trainable interferometer] - data encoding - [trainable interferometer]
+            - outputs: the output of the quantum layer are mapped to num_classes using a Linear Layer
+    """
     def __init__(
         self,
         input_dim,
@@ -103,23 +145,23 @@ class QuantumClassifier(nn.Module):
         hidden_dim = modes
         self.downscaling_layer = nn.Linear(input_dim, hidden_dim, device=device)
         self.scale = ScaleLayer(dim = hidden_dim, scale_type="learned")
+        self.sig = nn.Sigmoid()
         self.pi_scale = DivideByPi()
+
         # building the QLayer with MerLin
         circuit = create_quantum_circuit(modes, size=hidden_dim)
         # default input state
         if input_state is None:
             input_state = [(i + 1) % 2 for i in range(modes)]
         photons_count = sum(input_state)
-        # PNR output size
+        # output_size of the interferometer
         output_size_slos = (
             math.comb(modes + photons_count - 1, photons_count)
             if not no_bunching
             else math.comb(modes, photons_count)
         )
-
         # build the QLayer with a linear output as in the original paper
         # "The measurement output of the second module is then passed through a single Linear layer"
-        self.sig = nn.Sigmoid()
         print("\n -> self.q_circuit")
         self.q_circuit = ml.QuantumLayer(
             input_size=hidden_dim,
@@ -139,18 +181,24 @@ class QuantumClassifier(nn.Module):
         self.output_layer = nn.Linear(output_size_slos, num_classes, device=device)
 
     def forward(self, x):
-        # forward pass
-        #print(f"x of shape {x.shape}")
         out = self.downscaling_layer(x)
-        #out = self.sig(x)
-        out = self.pi_scale(out)
         # casts the input to [0,1] + use q_circuit
+        out = self.sig(out)
+        # division by pi
+        #out = self.pi_scale(self.sig(out))
+
         out = self.q_circuit(out) #self.sig
-        out_scaled = out  # self.bn(out) #(out - out.mean(dim = 1, keepdim=True)) / (out.std(dim = 1, keepdim=True)+1e-6)
-        out = self.output_layer(out_scaled)
+        out = self.output_layer(out)
         return out
 
-class QuantumClassifier_v2(nn.Module):
+# Second, we propose a more advanced version using 2 quantum modules (1 that can be parallelised and one that process the quantum outputs)
+
+class QuantumClassifier_parallel(nn.Module):
+    """
+        This QuantumClassifier consists of 2 encoders:
+            - a first module that can parallelize E = 1 or E = 2 circuits and uses angle encoding (sandwich - not bunched)
+            - a second module that process the outputs of the first module in a similar manner
+    """
     def __init__(
         self,
         input_dim,
@@ -166,19 +214,23 @@ class QuantumClassifier_v2(nn.Module):
         print(
             f"Building a model with {modes} modes and {input_state} as an input state and no_bunching = {no_bunching} (input of shape {hidden_dim})"
         )
+
         # this layer downscale the inputs to fit in the QLayer
         hidden_dim = modes
         self.downscaling_layer = nn.Linear(input_dim, hidden_dim, device=device)
         self.pi_scale = DivideByPi()
+        self.sig = nn.Sigmoid()
         self.E = E
-        # building the QLayer with MerLin
-        circuit_1 = create_quantum_circuit(modes, size=hidden_dim)
-        circuit_2 = create_quantum_circuit(modes, size=hidden_dim)
 
         # default input state
         if input_state is None:
             input_state = [(i + 1) % 2 for i in range(modes)]
         photons_count = sum(input_state)
+
+        ### FIRST MODULE ###
+        # building the 2 parallel QLayer with MerLin and non bunched modes
+        circuit_1 = create_quantum_circuit(modes, size=hidden_dim)
+        circuit_2 = create_quantum_circuit(modes, size=hidden_dim)
 
         self.q_circuit_1 = ml.QuantumLayer(
             input_size=hidden_dim,
@@ -210,6 +262,7 @@ class QuantumClassifier_v2(nn.Module):
 
         output_encoder = math.comb(modes, photons_count)
 
+        ### SECOND MODULE ###
         # PNR output size
         output_size_slos = (
             math.comb(modes + photons_count - 1, photons_count)
@@ -217,9 +270,6 @@ class QuantumClassifier_v2(nn.Module):
             else math.comb(modes, photons_count)
         )
 
-        # build the QLayer with a linear output as in the original paper
-        # "The measurement output of the second module is then passed through a single Linear layer"
-        self.sig = nn.Sigmoid()
         print("\n -> self.q_circuit")
 
         circuit_final = create_quantum_circuit(modes, size=self.E*output_encoder)
@@ -237,29 +287,43 @@ class QuantumClassifier_v2(nn.Module):
             device=device,
             no_bunching=no_bunching,
         )
-        self.bn = nn.LayerNorm(output_size_slos).requires_grad_(False)  # works OK
-        print(f"\n -- Building the Linear layer with output size = {num_classes} -- ")
+
+        # build the QLayer with a linear output as in the original paper
+        # "The measurement output of the second module is then passed through a single Linear layer"
         self.output_layer = nn.Linear(output_size_slos, num_classes, device=device)
 
     def forward(self, x):
+
         # forward pass
-        #print(f"x of shape {x.shape}")
         x = self.downscaling_layer(x)
-        #out = self.sig(x)
+        x = self.sig(x)
         x = self.pi_scale(x)
 
+        ### first module ###
+        # first encoder
         e1 = self.q_circuit_1(x)
+        # no concatenation needed
+        e_cat = e1
         if self.E == 2:
+            # second encoder if necessary
             e2 = self.q_circuit_2(x)
-
+            # concatenation of the 2 outputs
             e_cat = torch.cat([e1,e2], dim=1)
-        else:
-            e_cat = e1
         # casts the input to [0,1] + use q_circuit
-        out = self.q_circuit_final(e_cat) #self.sig
-        out_scaled = out  # self.bn(out) #(out - out.mean(dim = 1, keepdim=True)) / (out.std(dim = 1, keepdim=True)+1e-6)
-        out = self.output_layer(out_scaled)
+        out = self.sig(e_cat)
+
+        ### second module ###
+        out = self.q_circuit_final(out)
+
+        ### final classification layer ###
+        out = self.output_layer(out)
+
         return out
+
+
+# Then, we propose another advanced version using:
+# - 2 quantum modules with deep circuits (1 that can be parallelised and one that process the quantum outputs);
+# - a measurement based on the expectation value of getting at least 1 photon in each mode
 
 def marginalize_photon_presence(keys, probs):
     """
@@ -294,6 +358,7 @@ def marginalize_photon_presence(keys, probs):
     marginalized = probs @ mask.T  # shape: (N, num_modes)
     return marginalized
 
+
 class QuantumClassifier_amplitude(nn.Module):
     def __init__(
         self,
@@ -314,15 +379,20 @@ class QuantumClassifier_amplitude(nn.Module):
         hidden_dim = modes
         self.downscaling_layer = nn.Linear(input_dim, hidden_dim, device=device)
         self.pi_scale = DivideByPi()
+        self.sig = nn.Sigmoid()
         self.E = E
-        # building the QLayer with MerLin
-        circuit_1 = create_quantum_circuit(modes, size=hidden_dim)
-        circuit_2 = create_quantum_circuit(modes, size=hidden_dim)
 
         # default input state
         if input_state is None:
             input_state = [(i + 1) % 2 for i in range(modes)]
         photons_count = sum(input_state)
+
+        ### FIRST MODULE ###
+
+        # building the QLayer with MerLin
+        circuit_1 = create_quantum_circuit_deep(modes, size=hidden_dim)
+        circuit_2 = create_quantum_circuit_deep(modes, size=hidden_dim)
+
 
         self.q_circuit_1 = ml.QuantumLayer(
             input_size=hidden_dim,
@@ -352,7 +422,7 @@ class QuantumClassifier_amplitude(nn.Module):
                 no_bunching=True,
             )
 
-        # we generate the keys associated with the probs
+        # We generate the keys associated with the probs
         dummy_input = torch.zeros(1, hidden_dim, dtype=torch.float32)
         # Get MerLin probability distribution (no gradients to avoid sampling warnings)
         with torch.no_grad():
@@ -374,13 +444,7 @@ class QuantumClassifier_amplitude(nn.Module):
             print(f"Therefore the input of the encoder is of shape {output_encoder}")
 
 
-
-
-        # build the QLayer with a linear output as in the original paper
-        # "The measurement output of the second module is then passed through a single Linear layer"
-        self.sig = nn.Sigmoid()
-        print("\n -> self.q_circuit")
-
+        ### SECOND MODULE ###
         circuit_final = create_quantum_circuit(modes, size=self.E*output_encoder)
 
         self.q_circuit_final = ml.QuantumLayer(
@@ -404,17 +468,17 @@ class QuantumClassifier_amplitude(nn.Module):
             else math.comb(modes, photons_count)
         )
 
-        self.bn = nn.LayerNorm(output_size_slos).requires_grad_(False)  # works OK
-        print(f"\n -- Building the Linear layer with output size = {num_classes} -- ")
+        # build the QLayer with a linear output as in the original paper
+        # "The measurement output of the second module is then passed through a single Linear layer"
         self.output_layer = nn.Linear(output_size_slos, num_classes, device=device)
 
     def forward(self, x):
         # forward pass
-        #print(f"x of shape {x.shape}")
         x = self.downscaling_layer(x)
-        #out = self.sig(x)
+        out = self.sig(x)
         x = self.pi_scale(x)
 
+        ### first module ###
         e1 = self.q_circuit_1(x)
         e1_expectation = marginalize_photon_presence(self.keys, e1)
         e_cat = e1_expectation
@@ -422,513 +486,202 @@ class QuantumClassifier_amplitude(nn.Module):
             e2 = self.q_circuit_2(x)
             e2_expectation = marginalize_photon_presence(self.keys, e2)
             e_cat = torch.cat([e1_expectation,e2_expectation], dim=1)
-
         # casts the input to [0,1] + use q_circuit
-        out = self.q_circuit_final(e_cat) #self.sig
-        out_scaled = out  # self.bn(out) #(out - out.mean(dim = 1, keepdim=True)) / (out.std(dim = 1, keepdim=True)+1e-6)
-        out = self.output_layer(out_scaled)
+        out = self.sig(e_cat)
+
+        ### second module ###
+        out = self.q_circuit_final(out)
+
+        ### final classification layer ###
+        out = self.output_layer(out)
         return out
 
 
-class QLayerTraining(BaseEstimator, ClassifierMixin):
-    def __init__(
-        self,
-        input_dim=768,
-        hidden_dim=100,
-        modes=10,
-        num_classes=2,
-        dropout_rate=0.2,
-        lr=0.001,
-        weight_decay=1e-5,
-        epochs=100,
-        batch_size=32,
-        device=None,
-        input_state=None,
-        no_bunching=False,
-        expectation = True,
-        vanilla = False,
-        E = 1,
-    ):
-        self.input_dim = input_dim
-        self.hidden_dim = hidden_dim
-        self.modes = modes
-        self.input_state = input_state
-        self.num_classes = num_classes
-        self.dropout_rate = dropout_rate
-        self.lr = lr
-        self.weight_decay = weight_decay
-        self.epochs = epochs
-        self.batch_size = batch_size
-        self.device = (
-            device if device else ("cuda" if torch.cuda.is_available() else "cpu")
-        )
-
-        # Initialize model
-        self.model = None
-        self.classes_ = None
-        self.is_fitted_ = False
-        # Training history
-        self.history = {"train_loss": [], "val_loss": [], "val_accuracy": []}
-        self.train_accuracies = []
-        self.val_accuracies = []
-        self.no_bunching = no_bunching
-        self.expectation = expectation
-        self.vanilla = vanilla
-        self.E = E
-
-    def _initialize_model(self):
-        """Initialize or re-initialize the model."""
-
-        if self.vanilla:
-            print(f" \n -------------------- \n Vanilla Quantum Head \n --------------------")
-            self.model = QuantumClassifier_amplitude(
-                input_dim=self.input_dim,
-                hidden_dim=self.hidden_dim,
-                modes=self.modes,
-                num_classes=len(self.classes_),
-                input_state=self.input_state,
-                device=self.device,
-                no_bunching=self.no_bunching,
-            )
-
-        elif self.expectation:
-            print(f" \n -------------------- \n Expectation encoding for second PQC \n --------------------")
-            self.model = QuantumClassifier_amplitude(
-                input_dim=self.input_dim,
-                hidden_dim=self.hidden_dim,
-                modes=self.modes,
-                num_classes=len(self.classes_),
-                input_state=self.input_state,
-                device=self.device,
-                no_bunching=self.no_bunching,
-                E=self.E,
-            )
-        else:
-            print(f" \n -------------------- \n Angle encoding for second PQC \n --------------------")
-            self.model = QuantumClassifier_v2(
-                input_dim=self.input_dim,
-                hidden_dim=self.hidden_dim,
-                modes=self.modes,
-                num_classes=len(self.classes_),
-                input_state=self.input_state,
-                device=self.device,
-                no_bunching=self.no_bunching,
-                E=self.E,
-            )
-
-        print(
-            f"\n ---- Number of parameters in Quantum head: {sum([p.numel() for p in self.model.parameters() if p.requires_grad])}"
-        )
-        self.model = self.model.to(self.device)
-
-    def _train_epoch(self, train_loader, criterion, optimizer):
-        """Train for one epoch."""
-        self.model.train()
-        epoch_loss = 0
-        correct_train = 0
-        total_train = 0
-
-        for x_batch, y_batch in train_loader:
-            x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
-
-            # Forward pass
-            outputs = self.model(x_batch)
-            loss = criterion(outputs, y_batch)
-
-            # Backward pass and optimizer step
-            optimizer.zero_grad()
-            loss.backward()
-            optimizer.step()
-
-            epoch_loss += loss.item()
-
-            # Calculate training accuracy
-            _, predicted = torch.max(outputs.data, 1)
-            total_train += y_batch.size(0)
-            correct_train += (predicted == y_batch).sum().item()
-
-        train_accuracy = 100 * correct_train / total_train
-        return epoch_loss / len(train_loader), train_accuracy
-
-    def _validate_epoch(self, val_loader, criterion):
-        """Validate for one epoch."""
-        self.model.eval()
-        epoch_loss = 0
-        correct = 0
-        total = 0
-
-        with torch.no_grad():
-            for x_batch, y_batch in val_loader:
-                x_batch, y_batch = x_batch.to(self.device), y_batch.to(self.device)
-
-                outputs = self.model(x_batch)
-                loss = criterion(outputs, y_batch)
-
-                epoch_loss += loss.item()
-                _, predicted = torch.max(outputs.data, 1)
-                total += y_batch.size(0)
-                correct += (predicted == y_batch).sum().item()
-
-        val_accuracy = 100 * correct / total
-        return epoch_loss / len(val_loader), val_accuracy
-
-    def fit(self, x, y, val_x=None, val_y=None):
-        """Train the QLayer with a manual training loop and optional validation data."""
-        # Store classes
-        self.classes_ = np.unique(y)
-        print(f"\n -- Self.classes_ = {self.classes_} --")
-
-        # Initialize model
-        self._initialize_model()
-
-        # Convert to PyTorch tensors
-        x_tensor = torch.tensor(x, dtype=torch.float32)
-        y_tensor = torch.tensor(y, dtype=torch.long)
-        train_dataset = TensorDataset(x_tensor, y_tensor)
-        train_loader = DataLoader(
-            train_dataset, batch_size=self.batch_size, shuffle=True
-        )
-
-        # Setup validation data if provided
-        val_loader = None
-        if val_x is not None and val_y is not None:
-            val_x_tensor = torch.tensor(val_x, dtype=torch.float32)
-            val_y_tensor = torch.tensor(val_y, dtype=torch.long)
-            val_dataset = TensorDataset(val_x_tensor, val_y_tensor)
-            val_loader = DataLoader(
-                val_dataset, batch_size=self.batch_size, shuffle=False
-            )
-
-        # Loss function and optimizer
-        criterion = nn.CrossEntropyLoss()
-        optimizer = torch.optim.Adam(
-            self.model.parameters(), lr=self.lr, weight_decay=self.weight_decay
-        )
-
-        # Add learning rate scheduler based on validation loss
-        scheduler = torch.optim.lr_scheduler.ExponentialLR(optimizer, gamma=0.99)
-
-        print(
-            f"\n Set up the optimizer with lr: {self.lr} and weight_decay = {self.weight_decay}"
-        )
-        best_val = 0
-        self.best_model_state_dict = None
-
-        # Training loop
-        print("Entering in the training loop")
-        for epoch in range(self.epochs):
-            # Train for one epoch
-            # print("\n -- train step ...")
-            train_loss, train_accuracy = self._train_epoch(
-                train_loader, criterion, optimizer
-            )
-            # print("\n --- train step done ---")
-            self.history["train_loss"].append(train_loss)
-            self.train_accuracies.append(train_accuracy)
-
-            # Validation phase
-            val_loss, val_accuracy = 0, 0
-            if val_loader is not None:
-                # print("\n -- val step ...")
-                val_loss, val_accuracy = self._validate_epoch(val_loader, criterion)
-                # print("\n --- val step done ---")
-                self.history["val_loss"].append(val_loss)
-                self.history["val_accuracy"].append(val_accuracy)
-                self.val_accuracies.append(val_accuracy)
-                if val_accuracy >= best_val:
-                    best_val = val_accuracy
-                    self.best_model_state_dict = copy.deepcopy(self.model.state_dict())
-
-                # Step the scheduler with validation loss
-                scheduler.step()
-
-            # if (epoch + 1) % 50 == 0:
-            if val_loader is not None:
-                print(
-                    f"Epoch {epoch + 1}/{self.epochs}, Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.2f}%, Val Loss: {val_loss:.4f}, Val Acc: {val_accuracy:.2f}% - Best Val Acc: {best_val:.2f} - [lr = {scheduler.get_last_lr()[0]}]"
-                )
-            else:
-                print(
-                    f"Epoch {epoch + 1}/{self.epochs}, Train Loss: {train_loss:.4f}, Train Acc: {train_accuracy:.2f}%"
-                )
-
-        if self.best_model_state_dict is not None:
-            self.model.load_state_dict(self.best_model_state_dict)
-            print(f"Best model loaded with validation accuracy: {best_val:.2f}%")
-        self.is_fitted_ = True
-        self.best_val = best_val
-        return self
-
-    def predict(self, x):
-        """Predict class labels for samples in X."""
-        self._check_is_fitted()
-        x_tensor = torch.tensor(x, dtype=torch.float32).to(self.device)
-
-        self.model.eval()
-        with torch.no_grad():
-            outputs = self.model(x_tensor)
-            _, predicted = torch.max(outputs, 1)
-            print(
-                f"Output and predicted in predict of shape and classes {outputs.shape} and {predicted.shape} and {self.classes_}"
-            )
-
-        return self.classes_[predicted.cpu().numpy()]
-
-    def predict_proba(self, x):
-        """Predict class probabilities for samples in X."""
-        self._check_is_fitted()
-        x_tensor = torch.tensor(x, dtype=torch.float32).to(self.device)
-
-        self.model.eval()
-        with torch.no_grad():
-            outputs = self.model(x_tensor)
-            probabilities = torch.softmax(outputs, dim=1).cpu().numpy()
-
-        return probabilities
-
-    def _check_is_fitted(self):
-        """Check if model is fitted."""
-        if not self.is_fitted_ or self.model is None:
-            raise ValueError(
-                "This model has not been fitted yet. Call 'fit' before using this method."
-            )
-
-
-def create_setfit_with_q_layer(
-    model,
-    input_dim=768,
-    hidden_dim=100,
-    modes=10,
-    num_classes=2,
-    epochs=100,
-    lr=0.001,
-    input_state=None,
-    no_bunching=False,
-    expectation = True,
-    vanilla = False,
-    E_dim = 1,
-):
+def test_module_building_and_gradients():
     """
-    Replace the classification head of a SetFit model with a quantum layer.
-
-    Args:
-        model: SetFit model to modify
-        input_dim: Dimension of input embeddings
-        hidden_dim: Dimension after downscaling
-        modes: Number of modes in the quantum circuit
-        num_classes: Number of output classes
-        epochs: Training epochs for the quantum head
-        input_state: Photon distribution across modes
-
-    Returns:
-        Modified SetFit model with quantum classification head
+    Test function to verify module building and gradient propagation for all quantum classifiers.
+    
+    Tests:
+    1. Module instantiation
+    2. Forward pass
+    3. Gradient computation and propagation
+    4. Parameter updates
     """
-    # Get the device the model is on
-    device = next(model.model_body.parameters()).device
-    # Replace model head with QLayer
-    model.model_head = QLayerTraining(
-        input_dim=input_dim,
-        hidden_dim=hidden_dim,
-        modes=modes,
-        num_classes=num_classes,
-        epochs=epochs,
-        input_state=input_state,
-        device=device,
-        no_bunching=no_bunching,
-        lr=lr,
-        expectation = expectation,
-        vanilla = vanilla,
-        E = E_dim,
-    )
-    print(f"\n -> Model with {modes} modes and input_state = {input_state} initialized")
-    return model
-
-
-### utility functions ###
-def save_experiment_results(results, filename="ft-qllm_exp.json"):
-    """
-    Append experiment results to a JSON file.
-
-    Args:
-        results (dict): Dictionary containing experiment results
-        filename (str): Path to the JSON file to store results
-    """
-    filename = os.path.join("./results", filename)
-
-    # Create results directory if it doesn't exist
-    os.makedirs("./results", exist_ok=True)
-
-    # Check if file exists and load existing data
-    if os.path.exists(filename):
+    print("=" * 60)
+    print("Testing Module Building and Gradient Propagation")
+    print("=" * 60)
+    
+    # Test parameters
+    input_dim = 768
+    hidden_dim = 10
+    modes = 10
+    num_classes = 2
+    batch_size = 4
+    device = "cpu"
+    
+    # Create dummy data
+    X = torch.randn(batch_size, input_dim, requires_grad=True)
+    y = torch.randint(0, num_classes, (batch_size,))
+    
+    # Test configurations
+    test_configs = [
+        ("QuantumClassifier", QuantumClassifier),
+        ("QuantumClassifier_parallel (E=1)", lambda **kwargs: QuantumClassifier_parallel(**kwargs, E=1)),
+        ("QuantumClassifier_parallel (E=2)", lambda **kwargs: QuantumClassifier_parallel(**kwargs, E=2)),
+        ("QuantumClassifier_amplitude (E=1)", lambda **kwargs: QuantumClassifier_amplitude(**kwargs, E=1)),
+        ("QuantumClassifier_amplitude (E=2)", lambda **kwargs: QuantumClassifier_amplitude(**kwargs, E=2)),
+    ]
+    
+    results = {}
+    
+    for name, model_class in test_configs:
+        print(f"\n{'='*40}")
+        print(f"Testing {name}")
+        print(f"{'='*40}")
+        
         try:
-            with open(filename) as file:
-                all_results = json.load(file)
-        except json.JSONDecodeError:
-            all_results = []
-    else:
-        all_results = []
-
-    # Append new results
-    all_results.append(results)
-
-    # Write updated data back to file
-    with open(filename, "w") as file:
-        json.dump(all_results, file, indent=4)
-
-    print(f"Results saved. Total experiments: {len(all_results)}")
-    return len(all_results)
-
-
-def train_quantum_heads(
-    model,
-    sentence_transformer,
-    train_embeddings,
-    global_train_max,
-    global_train_min,
-    train_labels,
-    eval_dataset,
-    test_dataset,
-    args,
-    num_classes,
-    device,
-    results_folder,
-    use_normalization,
-):
-    """Train quantum classification heads"""
-    if args.verbose:
-        print("\n4. Training Quantum Layer heads...")
-
-    quantum_results = {}
-
-    for mode in args.quantum_modes:
-        photon_max = int(mode // 2) if args.photons <= 0 else args.photons
-        if args.photons > int(mode // 2):
-            photon_max = int(mode // 2)
-        if args.photons_max:
-            photon_max = 3
-        for k in range(1, photon_max + 1):
-            # Create input state with k photons
-            input_state = [0] * mode
-            for p in range(k):
-                input_state[2 * p] = 1
-
-            if args.verbose:
-                print(f"\n   Training Quantum Head: {mode} modes, {k} photons")
-                print(f"   Input state: {input_state}")
-
-            # Create quantum model
-            model = create_setfit_with_q_layer(
-                model,
-                input_dim=args.embedding_dim,
-                hidden_dim=args.hidden_dim,
-                modes=mode,
+            # Test 1: Module instantiation
+            print("1. Testing module instantiation...")
+            model = model_class(
+                input_dim=input_dim,
+                hidden_dim=hidden_dim,
+                modes=modes,
                 num_classes=num_classes,
-                epochs=args.head_epochs,
-                input_state=input_state,
-                no_bunching=args.no_bunching,
-                lr=args.lr_q,
-                expectation = args.expectation_encoding,
-                vanilla = args.vanilla,
-                E_dim=args.e_dim,
+                device=device,
+                no_bunching=False
             )
-            # Move model to device BEFORE training to avoid parameter issues
-            model = model.to(device)
-            print("\n -> Model sent to device")
-
-            # Generate test embeddings for validation during training
-            test_embeddings = []
-
+            print(f"   ✓ {name} instantiated successfully")
+            
+            # Count parameters
+            total_params = sum(p.numel() for p in model.parameters())
+            trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+            print(f"   - Total parameters: {total_params}")
+            print(f"   - Trainable parameters: {trainable_params}")
+            
+            # Test 2: Forward pass
+            print("2. Testing forward pass...")
+            model.eval()
             with torch.no_grad():
-                num_batches = (
-                    len(test_dataset["sentence"]) + args.batch_size - 1
-                ) // args.batch_size
-                for batch_idx in range(num_batches):
-                    start_idx = batch_idx * args.batch_size
-                    end_idx = min(
-                        start_idx + args.batch_size, len(test_dataset["sentence"])
-                    )
-                    batch_texts = test_dataset["sentence"][start_idx:end_idx]
-                    batch_embeddings = sentence_transformer.encode(
-                        batch_texts, convert_to_tensor=True
-                    )
-                    test_embeddings.extend(batch_embeddings.detach().cpu().numpy())
-            # normalization
-            test_embeddings = np.array(test_embeddings)
-            if use_normalization:
-                test_embeddings = (test_embeddings - global_train_min) / (
-                    global_train_max - global_train_min
-                )
-                test_embeddings = np.clip(test_embeddings, 0, 1)
-            else:
-                test_embeddings = torch.tensor(test_embeddings)
-            # Val dataset
-            eval_embeddings = sentence_transformer.encode(eval_dataset["sentence"])
-            if use_normalization:
-                eval_embeddings = (eval_embeddings - global_train_min) / (
-                    global_train_max - global_train_min
-                )
-                eval_embeddings = torch.tensor(np.clip(eval_embeddings, 0, 1))
-            else:
-                eval_embeddings = torch.tensor(eval_embeddings)
-            print(f" -> test embeddings obtained: {test_embeddings.shape}")
+                output = model(X)
+            print(f"   ✓ Forward pass successful")
+            print(f"   - Input shape: {X.shape}")
+            print(f"   - Output shape: {output.shape}")
+            print(f"   - Output range: [{output.min():.4f}, {output.max():.4f}]")
+            
+            # Test 3: Gradient computation
+            print("3. Testing gradient computation...")
+            model.train()
+            
+            # Forward pass with gradients
+            output = model(X)
+            
+            # Compute loss
+            criterion = nn.CrossEntropyLoss()
+            loss = criterion(output, y)
+            print(f"   - Loss: {loss.item():.6f}")
+            
+            # Backward pass
+            loss.backward()
+            print(f"   ✓ Backward pass successful")
+            
+            # Test 4: Check gradients
+            print("4. Checking gradient propagation...")
+            grad_stats = {}
+            for name_param, param in model.named_parameters():
+                if param.requires_grad:
+                    if param.grad is not None:
+                        grad_norm = param.grad.norm().item()
+                        grad_stats[name_param] = grad_norm
+                        if grad_norm > 1e-8:
+                            print(f"   ✓ {name_param}: grad_norm = {grad_norm:.6e}")
+                        else:
+                            print(f"   ⚠ {name_param}: grad_norm = {grad_norm:.6e} (very small)")
+                    else:
+                        print(f"   ✗ {name_param}: No gradient computed")
+            
+            # Check for vanishing/exploding gradients
+            if grad_stats:
+                max_grad = max(grad_stats.values())
+                min_grad = min(grad_stats.values())
+                avg_grad = sum(grad_stats.values()) / len(grad_stats)
+                
+                print(f"   - Gradient statistics:")
+                print(f"     Max: {max_grad:.6e}")
+                print(f"     Min: {min_grad:.6e}")
+                print(f"     Avg: {avg_grad:.6e}")
+                
+                if max_grad > 10:
+                    print(f"   ⚠ Warning: Large gradients detected (max: {max_grad:.2e})")
+                elif max_grad < 1e-6:
+                    print(f"   ⚠ Warning: Very small gradients detected (max: {max_grad:.2e})")
+                else:
+                    print(f"   ✓ Gradients appear normal")
+            
+            # Test 5: Parameter update simulation
+            print("5. Testing parameter updates...")
+            optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
+            
+            # Store initial parameters
+            initial_params = {}
+            for name_param, param in model.named_parameters():
+                if param.requires_grad:
+                    initial_params[name_param] = param.data.clone()
+            
+            # Take optimization step
+            optimizer.step()
+            
+            # Check parameter updates
+            updated = 0
+            for name_param, param in model.named_parameters():
+                if param.requires_grad and name_param in initial_params:
+                    param_change = (param.data - initial_params[name_param]).norm().item()
+                    if param_change > 1e-8:
+                        updated += 1
+            
+            print(f"   ✓ {updated}/{len(initial_params)} parameters updated")
+            
+            results[name] = {
+                "status": "SUCCESS",
+                "total_params": total_params,
+                "trainable_params": trainable_params,
+                "output_shape": output.shape,
+                "loss": loss.item(),
+                "grad_stats": grad_stats,
+                "params_updated": updated
+            }
+            
+            print(f"   ✓ All tests passed for {name}")
+            
+        except Exception as e:
+            print(f"   ✗ Error in {name}: {str(e)}")
+            results[name] = {
+                "status": "FAILED",
+                "error": str(e)
+            }
+    
+    # Summary
+    print(f"\n{'='*60}")
+    print("TEST SUMMARY")
+    print(f"{'='*60}")
+    
+    successful_tests = sum(1 for r in results.values() if r["status"] == "SUCCESS")
+    total_tests = len(results)
+    
+    print(f"Successful tests: {successful_tests}/{total_tests}")
+    
+    for name, result in results.items():
+        if result["status"] == "SUCCESS":
+            print(f"✓ {name}: {result['trainable_params']} trainable params, loss={result['loss']:.4f}")
+        else:
+            print(f"✗ {name}: {result['error']}")
+    
+    if successful_tests == total_tests:
+        print("\n🎉 All module building and gradient tests passed!")
+    else:
+        print(f"\n⚠ {total_tests - successful_tests} tests failed.")
+    
+    return results
 
-            # Train the quantum head with test data as validation
-            print("\n Training the quantum head")
-            model.model_head.fit(
-                train_embeddings, train_labels, eval_embeddings, eval_dataset["label"]
-            )
 
-            # Fallback to using the predict method
-            q_val_predictions = model.model_head.predict(eval_embeddings.cpu().numpy())
-            q_val_accuracy = accuracy_score(eval_dataset["label"], q_val_predictions)
-
-            # Test evaluation using the same method as MLP
-            test_embeddings_tensor = torch.tensor(test_embeddings, dtype=torch.float32)
-            q_test_accuracy, _ = evaluate(
-                model, test_embeddings_tensor, test_dataset["label"]
-            )
-            best_val_decimal = (
-                model.model_head.best_val / 100.0
-            )  # Convert from percentage to decimal
-            if args.verbose:
-                print(
-                    f"   Quantum {mode}-{k} - Val: {q_val_accuracy:.4f}, Test: {q_test_accuracy:.4f}, Best Val: {best_val_decimal:.4f}"
-                )
-
-            quantum_results[f"{mode}-qlayer-{k}"] = [
-                q_val_accuracy,
-                q_test_accuracy,
-                best_val_decimal,
-            ]
-
-            # Save individual result immediately after each experiment
-            save_individual_quantum_result(
-                mode,
-                k,
-                [q_val_accuracy, q_test_accuracy, best_val_decimal],
-                results_folder,
-            )
-
-    return quantum_results
-
-
-def save_individual_quantum_result(mode, photons, result, results_folder):
-    """Save individual quantum experiment result to prevent data loss"""
-    individual_result = {
-        "mode": mode,
-        "photons": photons,
-        "config": f"{mode}-qlayer-{photons}",
-        "val_accuracy": result[0],
-        "test_accuracy": result[1],
-        "best_val": result[2],
-        "timestamp": datetime.now().isoformat(),
-    }
-
-    # Save to individual result file
-    individual_file = f"{results_folder}/quantum_individual_results.json"
-    with open(individual_file, "a") as f:
-        f.write(json.dumps(individual_result) + "\n")
-
-    print(
-        f"Saved individual result for {mode} modes, {photons} photons to {individual_file}"
-    )
+if __name__ == "__main__":
+    test_module_building_and_gradients()
