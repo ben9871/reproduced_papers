@@ -134,11 +134,33 @@ python src/main.py --model merlin-parallel \
 ```
 
 ### TorchQuantum Model
+
 ```bash
 python src/main.py --model torchquantum \
   --encoder-configs '[{"n_qubits": 8, "n_layers": 2, "connectivity": 1}, {"n_qubits": 6, "n_layers": 1, "connectivity": 1}]' \
   --pqc-config '[{"n_qubits": 8, "n_main_layers": 3, "connectivity": 2, "n_reuploading": 2}]'
 ```
+
+This model is inspired by  [Quantum Large Language Model Fine Tuning](https://arxiv.org/abs/2504.08732). Our goal was to reproduce this model and the results of this paper. However, some specificities of the model and training parameters are not clear:
+
+#### Model Implementation Notes
+
+This model is inspired by  [Quantum Large Language Model Fine Tuning](https://arxiv.org/abs/2504.08732). Our goal was to reproduce this model and the results of this paper. However, some specificities of the model and training parameters are not clear:
+
+**Data Handling**
+- Custom dataset splitting approach differs from the original paper, potentially affecting few-shot learning performance comparisons
+- Data encoding procedure lacks specification for handling cases where embedding dimension doesn't match Hilbert space dimension (no guidance on truncation vs. padding strategies)
+
+**Model Architecture**
+- Output represents measurements of 1 qubit, but the final classification layer accepts input of shape `Q_c + 1` (discrepancy not explained in paper)
+- When using E = 2 encoders in the first module, the paper doesn't specify how the two outputs are merged or concatenated before forwarding to the second module
+- Final hyperparameters selected after the hyperparameter study are not clearly documented
+
+**Training Configuration**
+- Weight decay is explored in hyperparameter studies, but the learning rate scheduler implementation is not specified
+- **Note**: This implementation does not incorporate noise modeling
+
+These ambiguities may lead to differences between our results and those reported in the original paper.
 
 ### Classical Comparison
 ```bash
