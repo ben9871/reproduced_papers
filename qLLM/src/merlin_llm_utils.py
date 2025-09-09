@@ -142,7 +142,7 @@ class QuantumClassifier(nn.Module):
             f"Building a model with {modes} modes and {input_state} as an input state and no_bunching = {no_bunching} (input of shape {hidden_dim})"
         )
         # this layer downscale the inputs to fit in the QLayer
-        hidden_dim = modes
+        print(f"Input dim = {input_dim} and hidden dim = {hidden_dim}")
         self.downscaling_layer = nn.Linear(input_dim, hidden_dim, device=device)
         self.scale = ScaleLayer(dim = hidden_dim, scale_type="learned")
         self.sig = nn.Sigmoid()
@@ -359,7 +359,7 @@ def marginalize_photon_presence(keys, probs):
     return marginalized
 
 
-class QuantumClassifier_amplitude(nn.Module):
+class QuantumClassifier_expectation(nn.Module):
     def __init__(
         self,
         input_dim,
@@ -528,8 +528,8 @@ def test_module_building_and_gradients():
         ("QuantumClassifier", QuantumClassifier),
         ("QuantumClassifier_parallel (E=1)", lambda **kwargs: QuantumClassifier_parallel(**kwargs, E=1)),
         ("QuantumClassifier_parallel (E=2)", lambda **kwargs: QuantumClassifier_parallel(**kwargs, E=2)),
-        ("QuantumClassifier_amplitude (E=1)", lambda **kwargs: QuantumClassifier_amplitude(**kwargs, E=1)),
-        ("QuantumClassifier_amplitude (E=2)", lambda **kwargs: QuantumClassifier_amplitude(**kwargs, E=2)),
+        ("QuantumClassifier_expectation (E=1)", lambda **kwargs: QuantumClassifier_expectation(**kwargs, E=1)),
+        ("QuantumClassifier_expectation (E=2)", lambda **kwargs: QuantumClassifier_expectation(**kwargs, E=2)),
     ]
     
     results = {}

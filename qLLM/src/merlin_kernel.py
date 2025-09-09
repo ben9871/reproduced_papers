@@ -1,4 +1,3 @@
-import torch
 import perceval as pcvl
 import numpy as np
 from typing import Generator
@@ -7,8 +6,6 @@ from sklearn.svm import SVC
 
 from merlin import AutoDiffProcess, CircuitConverter,  build_slos_distribution_computegraph
 from merlin_llm_utils import create_quantum_circuit
-#from ..pcvl_pytorch.locirc_to_tensor import CircuitConverter
-#from ..pcvl_pytorch.slos_torchscript import build_slos_distribution_computegraph as build_slos_graph
 
 from typing import Union
 import torch
@@ -554,7 +551,6 @@ def test_kernel_training():
         y_pred = svc.predict(K_test)
 
 def create_setfit_with_q_kernel(
-    model,
     input_dim=768,
     modes=10,
     photons = 0,
@@ -563,7 +559,7 @@ def create_setfit_with_q_kernel(
 ):
     if photons == 0:
         photons = modes//2
-    model.model_head = SVC(kernel = "precomputed")
+    model  = SVC(kernel = "precomputed")
     kernel = get_quantum_kernel(modes = modes, input_size=input_dim, photons = photons, no_bunching = no_bunching)
 
     return model, kernel
