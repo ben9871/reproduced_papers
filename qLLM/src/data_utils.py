@@ -2,13 +2,14 @@
 Data loading and preprocessing utilities for qLLM experiments.
 """
 
+import json
+import os
+from typing import Any
+
 import numpy as np
 import torch
-from datasets import concatenate_datasets, load_dataset
-from datasets import Dataset
-import os
-import json
-from typing import Dict, Any
+from datasets import Dataset, concatenate_datasets, load_dataset
+
 
 def load_data(args):
     """Load and prepare the dataset according to paper: 256 samples per label, 85% train, 15% val"""
@@ -123,6 +124,7 @@ def load_data(args):
 
     return train_dataset, eval_dataset, test_dataset, features, labels
 
+
 def prepare_data(x_train, y_train, x_val, y_val, x_test, y_test):
     if not isinstance(x_train, torch.Tensor):
         x_train = torch.FloatTensor(x_train)
@@ -135,7 +137,7 @@ def prepare_data(x_train, y_train, x_val, y_val, x_test, y_test):
     return x_train, y_train, x_val, y_val, x_test, y_test
 
 
-def load_embeddings_from_json(file_path: str) -> Dict[str, Any]:
+def load_embeddings_from_json(file_path: str) -> dict[str, Any]:
     """
     Load embeddings from a JSON file.
 
@@ -143,15 +145,16 @@ def load_embeddings_from_json(file_path: str) -> Dict[str, Any]:
         file_path: path to the JSON file
 
     Returns:
-        Dictionary containing embeddings, labels, sentences, and metadata
+        dictionary containing embeddings, labels, sentences, and metadata
     """
-    with open(file_path, 'r') as f:
+    with open(file_path) as f:
         data = json.load(f)
 
     # Convert embeddings back to numpy array
-    data['embeddings'] = np.array(data['embeddings'])
+    data["embeddings"] = np.array(data["embeddings"])
 
     return data
+
 
 def create_dataset_from_embeddings(embeddings_dir: str, split_name: str) -> Dataset:
     """
@@ -171,10 +174,14 @@ def create_dataset_from_embeddings(embeddings_dir: str, split_name: str) -> Data
 
     data = load_embeddings_from_json(file_path)
 
-    dataset = Dataset.from_dict({
-        "sentence": data["sentences"],
-        "label": data["labels"],
-        "embedding": data["embeddings"].tolist()  # Convert to list for Dataset compatibility
-    })
+    dataset = Dataset.from_dict(
+        {
+            "sentence": data["sentences"],
+            "label": data["labels"],
+            "embedding": data[
+                "embeddings"
+            ].tolist(),  # Convert to list for Dataset compatibility
+        }
+    )
 
     return dataset

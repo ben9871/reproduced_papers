@@ -399,13 +399,21 @@ def generate_embeddings(sentence_transformer, train_dataset, args):
         global_train_min,
     )
 
-def generate_val_test_emnbeddings(sentence_transformer, eval_dataset, test_dataset, normalization, global_train_max, global_train_min):
+
+def generate_val_test_emnbeddings(
+    sentence_transformer,
+    eval_dataset,
+    test_dataset,
+    normalization,
+    global_train_max,
+    global_train_min,
+):
     eval_embeddings = sentence_transformer.encode(eval_dataset["sentence"])
 
     # eval embeddings
     if normalization:
         eval_embeddings = (eval_embeddings - global_train_min) / (
-                global_train_max - global_train_min
+            global_train_max - global_train_min
         )
         eval_embeddings = torch.tensor(np.clip(eval_embeddings, 0, 1))
     else:
@@ -415,11 +423,10 @@ def generate_val_test_emnbeddings(sentence_transformer, eval_dataset, test_datas
     test_embeddings = sentence_transformer.encode(test_dataset["sentence"])
     if normalization:
         test_embeddings = (test_embeddings - global_train_min) / (
-                global_train_max - global_train_min
+            global_train_max - global_train_min
         )
         test_embeddings = torch.tensor(np.clip(test_embeddings, 0, 1))
     else:
         test_embeddings = torch.tensor(test_embeddings)
 
     return eval_embeddings, test_embeddings
-

@@ -3,11 +3,11 @@ MerLin models for the qLLM with different setups.
 """
 
 import math
+
 import merlin as ml  # Using our Merlin framework
 import perceval as pcvl
 import torch
 import torch.nn as nn
-
 
 ##########################################
 ### Quantum classifier and its wrapper ###
@@ -49,9 +49,10 @@ def create_quantum_circuit(m, size=400):
 
     return c
 
+
 def create_quantum_circuit_deep(m, size=400):
     """Create a quantum circuit with specified number of modes and input size
-        The encoding is done in single rows of phase shifters then trainable interferometers
+    The encoding is done in single rows of phase shifters then trainable interferometers
     """
 
     wl = pcvl.GenericInterferometer(
@@ -67,10 +68,9 @@ def create_quantum_circuit_deep(m, size=400):
     c.add(0, wl, merge=True)
     nb_encoding = size // m + 1
     for layer_idx in range(nb_encoding):
-
         c_var = pcvl.Circuit(m)
-        idx_max = min(m*layer_idx+m, size)
-        for i in range(layer_idx*m, idx_max):
+        idx_max = min(m * layer_idx + m, size)
+        for i in range(layer_idx * m, idx_max):
             px = pcvl.P(f"px-{i + 1}")
             c_var.add(i % m, pcvl.PS(px))
         print(c_var)
@@ -78,10 +78,10 @@ def create_quantum_circuit_deep(m, size=400):
 
         wr = pcvl.GenericInterferometer(
             m,
-            lambda i: pcvl.BS()
-            // pcvl.PS(pcvl.P(f"phase_3_{layer_idx}_{i}"))
+            lambda i, id=layer_idx: pcvl.BS()
+            // pcvl.PS(pcvl.P(f"phase_3_{id}_{i}"))
             // pcvl.BS()
-            // pcvl.PS(pcvl.P(f"phase_4_{layer_idx}){i}")),
+            // pcvl.PS(pcvl.P(f"phase_4_{id}_{i}")),
             shape=pcvl.InterferometerShape.RECTANGLE,
         )
 
@@ -89,9 +89,10 @@ def create_quantum_circuit_deep(m, size=400):
 
     return c
 
+
 class ScaleLayer(nn.Module):
-    def __init__(self, dim, scale_type = "learned"):
-        super(ScaleLayer, self).__init__()
+    def __init__(self, dim, scale_type="learned"):
+        super().__init__()
         # Create a single learnable parameter (initialized to 1.0 by default)
         # Caution: MerLin already mutltiplies by pi
         if scale_type == "learned":
@@ -102,11 +103,12 @@ class ScaleLayer(nn.Module):
             self.scale = torch.full((dim,), torch.pi)
         elif scale_type == "1":
             self.scale = torch.full((dim,), 1)
-        #print(f"SELF.SCALE: {self.scale.shape}")
+        # print(f"SELF.SCALE: {self.scale.shape}")
 
     def forward(self, x):
         # Element-wise multiplication of each input element by the learned scale
         return x * self.scale
+
 
 class DivideByPi(nn.Module):
     """Normalizes phases to be within quantum-friendly range"""
@@ -117,16 +119,18 @@ class DivideByPi(nn.Module):
 
 # First, we propose a very basic version of a QuantumClassifier following a simple architecture from Gan et al.
 
+
 class QuantumClassifier(nn.Module):
     """
-        This QuantumClassifier consists of a simple "Sandwich" architecture to encode the data :
-            - data encoding:
-                - the 768 embeddings are mapped to a smaller space using a Linear Layer
-                - the data is scaled by a learnable layer (= size of the data) and scaled between 0 an 1;
-                - the data points are encoded in phase shifters
-            - quantum layer : [trainable interferometer] - data encoding - [trainable interferometer]
-            - outputs: the output of the quantum layer are mapped to num_classes using a Linear Layer
+    This QuantumClassifier consists of a simple "Sandwich" architecture to encode the data :
+        - data encoding:
+            - the 768 embeddings are mapped to a smaller space using a Linear Layer
+            - the data is scaled by a learnable layer (= size of the data) and scaled between 0 an 1;
+            - the data points are encoded in phase shifters
+        - quantum layer : [trainable interferometer] - data encoding - [trainable interferometer]
+        - outputs: the output of the quantum layer are mapped to num_classes using a Linear Layer
     """
+
     def __init__(
         self,
         input_dim,
@@ -144,7 +148,7 @@ class QuantumClassifier(nn.Module):
         # this layer downscale the inputs to fit in the QLayer
         print(f"Input dim = {input_dim} and hidden dim = {hidden_dim}")
         self.downscaling_layer = nn.Linear(input_dim, hidden_dim, device=device)
-        self.scale = ScaleLayer(dim = hidden_dim, scale_type="learned")
+        self.scale = ScaleLayer(dim=hidden_dim, scale_type="learned")
         self.sig = nn.Sigmoid()
         self.pi_scale = DivideByPi()
 
@@ -185,20 +189,23 @@ class QuantumClassifier(nn.Module):
         # casts the input to [0,1] + use q_circuit
         out = self.sig(out)
         # division by pi
-        #out = self.pi_scale(self.sig(out))
+        # out = self.pi_scale(self.sig(out))
 
-        out = self.q_circuit(out) #self.sig
+        out = self.q_circuit(out)  # self.sig
         out = self.output_layer(out)
         return out
 
+
 # Second, we propose a more advanced version using 2 quantum modules (1 that can be parallelised and one that process the quantum outputs)
 
-class QuantumClassifier_parallel(nn.Module):
+
+class QuantumClassifierParallel(nn.Module):
     """
-        This QuantumClassifier consists of 2 encoders:
-            - a first module that can parallelize E = 1 or E = 2 circuits and uses angle encoding (sandwich - not bunched)
-            - a second module that process the outputs of the first module in a similar manner
+    This QuantumClassifier consists of 2 encoders:
+        - a first module that can parallelize E = 1 or E = 2 circuits and uses angle encoding (sandwich - not bunched)
+        - a second module that process the outputs of the first module in a similar manner
     """
+
     def __init__(
         self,
         input_dim,
@@ -208,7 +215,7 @@ class QuantumClassifier_parallel(nn.Module):
         input_state=None,
         device="cpu",
         no_bunching=False,
-        E = 1,
+        e=1,
     ):
         super().__init__()
         print(
@@ -220,7 +227,7 @@ class QuantumClassifier_parallel(nn.Module):
         self.downscaling_layer = nn.Linear(input_dim, hidden_dim, device=device)
         self.pi_scale = DivideByPi()
         self.sig = nn.Sigmoid()
-        self.E = E
+        self.E = e
 
         # default input state
         if input_state is None:
@@ -237,7 +244,9 @@ class QuantumClassifier_parallel(nn.Module):
             output_size=None,  # but we do not use it
             circuit=circuit_1,
             trainable_parameters=[
-                p.name for p in circuit_1.get_parameters() if not p.name.startswith("px")
+                p.name
+                for p in circuit_1.get_parameters()
+                if not p.name.startswith("px")
             ],
             input_parameters=["px"],
             input_state=input_state,
@@ -251,7 +260,9 @@ class QuantumClassifier_parallel(nn.Module):
                 output_size=None,  # but we do not use it
                 circuit=circuit_2,
                 trainable_parameters=[
-                    p.name for p in circuit_2.get_parameters() if not p.name.startswith("px")
+                    p.name
+                    for p in circuit_2.get_parameters()
+                    if not p.name.startswith("px")
                 ],
                 input_parameters=["px"],
                 input_state=input_state,
@@ -272,14 +283,16 @@ class QuantumClassifier_parallel(nn.Module):
 
         print("\n -> self.q_circuit")
 
-        circuit_final = create_quantum_circuit(modes, size=self.E*output_encoder)
+        circuit_final = create_quantum_circuit(modes, size=self.E * output_encoder)
 
         self.q_circuit_final = ml.QuantumLayer(
-            input_size=self.E*output_encoder,
+            input_size=self.E * output_encoder,
             output_size=None,  # but we do not use it
             circuit=circuit_final,
             trainable_parameters=[
-                p.name for p in circuit_final.get_parameters() if not p.name.startswith("px")
+                p.name
+                for p in circuit_final.get_parameters()
+                if not p.name.startswith("px")
             ],
             input_parameters=["px"],
             input_state=input_state,
@@ -293,7 +306,6 @@ class QuantumClassifier_parallel(nn.Module):
         self.output_layer = nn.Linear(output_size_slos, num_classes, device=device)
 
     def forward(self, x):
-
         # forward pass
         x = self.downscaling_layer(x)
         x = self.sig(x)
@@ -308,7 +320,7 @@ class QuantumClassifier_parallel(nn.Module):
             # second encoder if necessary
             e2 = self.q_circuit_2(x)
             # concatenation of the 2 outputs
-            e_cat = torch.cat([e1,e2], dim=1)
+            e_cat = torch.cat([e1, e2], dim=1)
         # casts the input to [0,1] + use q_circuit
         out = self.sig(e_cat)
 
@@ -324,6 +336,7 @@ class QuantumClassifier_parallel(nn.Module):
 # Then, we propose another advanced version using:
 # - 2 quantum modules with deep circuits (1 that can be parallelised and one that process the quantum outputs);
 # - a measurement based on the expectation value of getting at least 1 photon in each mode
+
 
 def marginalize_photon_presence(keys, probs):
     """
@@ -359,7 +372,7 @@ def marginalize_photon_presence(keys, probs):
     return marginalized
 
 
-class QuantumClassifier_expectation(nn.Module):
+class QuantumClassifierExpectation(nn.Module):
     def __init__(
         self,
         input_dim,
@@ -369,7 +382,7 @@ class QuantumClassifier_expectation(nn.Module):
         input_state=None,
         device="cpu",
         no_bunching=False,
-        E = 1,
+        e=1,
     ):
         super().__init__()
         print(
@@ -380,7 +393,7 @@ class QuantumClassifier_expectation(nn.Module):
         self.downscaling_layer = nn.Linear(input_dim, hidden_dim, device=device)
         self.pi_scale = DivideByPi()
         self.sig = nn.Sigmoid()
-        self.E = E
+        self.E = e
 
         # default input state
         if input_state is None:
@@ -393,13 +406,14 @@ class QuantumClassifier_expectation(nn.Module):
         circuit_1 = create_quantum_circuit_deep(modes, size=hidden_dim)
         circuit_2 = create_quantum_circuit_deep(modes, size=hidden_dim)
 
-
         self.q_circuit_1 = ml.QuantumLayer(
             input_size=hidden_dim,
             output_size=None,  # but we do not use it
             circuit=circuit_1,
             trainable_parameters=[
-                p.name for p in circuit_1.get_parameters() if not p.name.startswith("px")
+                p.name
+                for p in circuit_1.get_parameters()
+                if not p.name.startswith("px")
             ],
             input_parameters=["px"],
             input_state=input_state,
@@ -413,7 +427,9 @@ class QuantumClassifier_expectation(nn.Module):
                 output_size=None,  # but we do not use it
                 circuit=circuit_2,
                 trainable_parameters=[
-                    p.name for p in circuit_2.get_parameters() if not p.name.startswith("px")
+                    p.name
+                    for p in circuit_2.get_parameters()
+                    if not p.name.startswith("px")
                 ],
                 input_parameters=["px"],
                 input_state=input_state,
@@ -443,16 +459,17 @@ class QuantumClassifier_expectation(nn.Module):
             output_encoder = probs_marginalized.shape[-1]
             print(f"Therefore the input of the encoder is of shape {output_encoder}")
 
-
         ### SECOND MODULE ###
-        circuit_final = create_quantum_circuit(modes, size=self.E*output_encoder)
+        circuit_final = create_quantum_circuit(modes, size=self.E * output_encoder)
 
         self.q_circuit_final = ml.QuantumLayer(
-            input_size=self.E*output_encoder,
+            input_size=self.E * output_encoder,
             output_size=None,  # but we do not use it
             circuit=circuit_final,
             trainable_parameters=[
-                p.name for p in circuit_final.get_parameters() if not p.name.startswith("px")
+                p.name
+                for p in circuit_final.get_parameters()
+                if not p.name.startswith("px")
             ],
             input_parameters=["px"],
             input_state=input_state,
@@ -485,7 +502,7 @@ class QuantumClassifier_expectation(nn.Module):
         if self.E == 2:
             e2 = self.q_circuit_2(x)
             e2_expectation = marginalize_photon_presence(self.keys, e2)
-            e_cat = torch.cat([e1_expectation,e2_expectation], dim=1)
+            e_cat = torch.cat([e1_expectation, e2_expectation], dim=1)
         # casts the input to [0,1] + use q_circuit
         out = self.sig(e_cat)
 
@@ -500,7 +517,7 @@ class QuantumClassifier_expectation(nn.Module):
 def test_module_building_and_gradients():
     """
     Test function to verify module building and gradient propagation for all quantum classifiers.
-    
+
     Tests:
     1. Module instantiation
     2. Forward pass
@@ -510,7 +527,7 @@ def test_module_building_and_gradients():
     print("=" * 60)
     print("Testing Module Building and Gradient Propagation")
     print("=" * 60)
-    
+
     # Test parameters
     input_dim = 768
     hidden_dim = 10
@@ -518,27 +535,39 @@ def test_module_building_and_gradients():
     num_classes = 2
     batch_size = 4
     device = "cpu"
-    
+
     # Create dummy data
-    X = torch.randn(batch_size, input_dim, requires_grad=True)
+    x = torch.randn(batch_size, input_dim, requires_grad=True)
     y = torch.randint(0, num_classes, (batch_size,))
-    
+
     # Test configurations
     test_configs = [
         ("QuantumClassifier", QuantumClassifier),
-        ("QuantumClassifier_parallel (E=1)", lambda **kwargs: QuantumClassifier_parallel(**kwargs, E=1)),
-        ("QuantumClassifier_parallel (E=2)", lambda **kwargs: QuantumClassifier_parallel(**kwargs, E=2)),
-        ("QuantumClassifier_expectation (E=1)", lambda **kwargs: QuantumClassifier_expectation(**kwargs, E=1)),
-        ("QuantumClassifier_expectation (E=2)", lambda **kwargs: QuantumClassifier_expectation(**kwargs, E=2)),
+        (
+            "QuantumClassifierParallel (E=1)",
+            lambda **kwargs: QuantumClassifierParallel(**kwargs, E=1),
+        ),
+        (
+            "QuantumClassifierParallel (E=2)",
+            lambda **kwargs: QuantumClassifierParallel(**kwargs, E=2),
+        ),
+        (
+            "QuantumClassifier_expectation (E=1)",
+            lambda **kwargs: QuantumClassifierExpectation(**kwargs, E=1),
+        ),
+        (
+            "QuantumClassifier_expectation (E=2)",
+            lambda **kwargs: QuantumClassifierExpectation(**kwargs, E=2),
+        ),
     ]
-    
+
     results = {}
-    
+
     for name, model_class in test_configs:
-        print(f"\n{'='*40}")
+        print(f"\n{'=' * 40}")
         print(f"Testing {name}")
-        print(f"{'='*40}")
-        
+        print(f"{'=' * 40}")
+
         try:
             # Test 1: Module instantiation
             print("1. Testing module instantiation...")
@@ -548,42 +577,44 @@ def test_module_building_and_gradients():
                 modes=modes,
                 num_classes=num_classes,
                 device=device,
-                no_bunching=False
+                no_bunching=False,
             )
             print(f"   ✓ {name} instantiated successfully")
-            
+
             # Count parameters
             total_params = sum(p.numel() for p in model.parameters())
-            trainable_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+            trainable_params = sum(
+                p.numel() for p in model.parameters() if p.requires_grad
+            )
             print(f"   - Total parameters: {total_params}")
             print(f"   - Trainable parameters: {trainable_params}")
-            
+
             # Test 2: Forward pass
             print("2. Testing forward pass...")
             model.eval()
             with torch.no_grad():
-                output = model(X)
-            print(f"   ✓ Forward pass successful")
-            print(f"   - Input shape: {X.shape}")
+                output = model(x)
+            print("   ✓ Forward pass successful")
+            print(f"   - Input shape: {x.shape}")
             print(f"   - Output shape: {output.shape}")
             print(f"   - Output range: [{output.min():.4f}, {output.max():.4f}]")
-            
+
             # Test 3: Gradient computation
             print("3. Testing gradient computation...")
             model.train()
-            
+
             # Forward pass with gradients
-            output = model(X)
-            
+            output = model(x)
+
             # Compute loss
             criterion = nn.CrossEntropyLoss()
             loss = criterion(output, y)
             print(f"   - Loss: {loss.item():.6f}")
-            
+
             # Backward pass
             loss.backward()
-            print(f"   ✓ Backward pass successful")
-            
+            print("   ✓ Backward pass successful")
+
             # Test 4: Check gradients
             print("4. Checking gradient propagation...")
             grad_stats = {}
@@ -595,51 +626,59 @@ def test_module_building_and_gradients():
                         if grad_norm > 1e-8:
                             print(f"   ✓ {name_param}: grad_norm = {grad_norm:.6e}")
                         else:
-                            print(f"   ⚠ {name_param}: grad_norm = {grad_norm:.6e} (very small)")
+                            print(
+                                f"   ⚠ {name_param}: grad_norm = {grad_norm:.6e} (very small)"
+                            )
                     else:
                         print(f"   ✗ {name_param}: No gradient computed")
-            
+
             # Check for vanishing/exploding gradients
             if grad_stats:
                 max_grad = max(grad_stats.values())
                 min_grad = min(grad_stats.values())
                 avg_grad = sum(grad_stats.values()) / len(grad_stats)
-                
-                print(f"   - Gradient statistics:")
+
+                print("   - Gradient statistics:")
                 print(f"     Max: {max_grad:.6e}")
                 print(f"     Min: {min_grad:.6e}")
                 print(f"     Avg: {avg_grad:.6e}")
-                
+
                 if max_grad > 10:
-                    print(f"   ⚠ Warning: Large gradients detected (max: {max_grad:.2e})")
+                    print(
+                        f"   ⚠ Warning: Large gradients detected (max: {max_grad:.2e})"
+                    )
                 elif max_grad < 1e-6:
-                    print(f"   ⚠ Warning: Very small gradients detected (max: {max_grad:.2e})")
+                    print(
+                        f"   ⚠ Warning: Very small gradients detected (max: {max_grad:.2e})"
+                    )
                 else:
-                    print(f"   ✓ Gradients appear normal")
-            
+                    print("   ✓ Gradients appear normal")
+
             # Test 5: Parameter update simulation
             print("5. Testing parameter updates...")
             optimizer = torch.optim.Adam(model.parameters(), lr=0.001)
-            
+
             # Store initial parameters
             initial_params = {}
             for name_param, param in model.named_parameters():
                 if param.requires_grad:
                     initial_params[name_param] = param.data.clone()
-            
+
             # Take optimization step
             optimizer.step()
-            
+
             # Check parameter updates
             updated = 0
             for name_param, param in model.named_parameters():
                 if param.requires_grad and name_param in initial_params:
-                    param_change = (param.data - initial_params[name_param]).norm().item()
+                    param_change = (
+                        (param.data - initial_params[name_param]).norm().item()
+                    )
                     if param_change > 1e-8:
                         updated += 1
-            
+
             print(f"   ✓ {updated}/{len(initial_params)} parameters updated")
-            
+
             results[name] = {
                 "status": "SUCCESS",
                 "total_params": total_params,
@@ -647,39 +686,38 @@ def test_module_building_and_gradients():
                 "output_shape": output.shape,
                 "loss": loss.item(),
                 "grad_stats": grad_stats,
-                "params_updated": updated
+                "params_updated": updated,
             }
-            
+
             print(f"   ✓ All tests passed for {name}")
-            
+
         except Exception as e:
             print(f"   ✗ Error in {name}: {str(e)}")
-            results[name] = {
-                "status": "FAILED",
-                "error": str(e)
-            }
-    
+            results[name] = {"status": "FAILED", "error": str(e)}
+
     # Summary
-    print(f"\n{'='*60}")
+    print(f"\n{'=' * 60}")
     print("TEST SUMMARY")
-    print(f"{'='*60}")
-    
+    print(f"{'=' * 60}")
+
     successful_tests = sum(1 for r in results.values() if r["status"] == "SUCCESS")
     total_tests = len(results)
-    
+
     print(f"Successful tests: {successful_tests}/{total_tests}")
-    
+
     for name, result in results.items():
         if result["status"] == "SUCCESS":
-            print(f"✓ {name}: {result['trainable_params']} trainable params, loss={result['loss']:.4f}")
+            print(
+                f"✓ {name}: {result['trainable_params']} trainable params, loss={result['loss']:.4f}"
+            )
         else:
             print(f"✗ {name}: {result['error']}")
-    
+
     if successful_tests == total_tests:
         print("\n🎉 All module building and gradient tests passed!")
     else:
         print(f"\n⚠ {total_tests - successful_tests} tests failed.")
-    
+
     return results
 
 

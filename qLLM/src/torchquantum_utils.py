@@ -1,16 +1,15 @@
 """
-TorchQuantum model training utilities for qLLM experiments using MerLin.
+TorchQuantum model training utilities for QLLM experiments using MerLin.
 """
 
 # to install torchquantum: clone the original repo https://github.com/mit-han-lab/torchquantum/tree/main
 # pip install --editable . (I think pip install torchquantum is not up to date with latest qiskit versions)
 # some guidance can be found in the original GitHub repo: https://github.com/mit-han-lab/torchquantum/tree/main
 
-
+import numpy as np
 import torch
 import torch.nn as nn
 import torchquantum as tq
-import numpy as np
 
 #####################
 ### Data Encoding ###
@@ -34,7 +33,7 @@ class AmplitudeEncodingModule(tq.QuantumModule):
     def __init__(self, n_qubits: int, normalize: bool = True):
         super().__init__()
         self.n_qubits = n_qubits
-        self.n_amplitudes = 2 ** n_qubits
+        self.n_amplitudes = 2**n_qubits
         self.normalize = normalize
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
@@ -67,12 +66,14 @@ class AmplitudeEncodingModule(tq.QuantumModule):
 
         return amplitudes
 
+
 ### Angle encoding ###
 """
 Quote: In this scheme, classical data determines the phases of qubits.
 The qubits are rotated around the Bloch sphere by an angle proportional to the respective data values  x = x1 x2 . . . xn  ⊤.
 An example of angular encoding, using the y-axis is:  |ψ(x)⟩ = RY (x1) ⊗ RY (x2) ⊗ · · · ⊗ RY (xn) |0⟩⊗n
 """
+
 
 class AngleEncodingModule(tq.QuantumModule):
     """
@@ -88,7 +89,12 @@ class AngleEncodingModule(tq.QuantumModule):
         for _ in range(n_qubits):
             self.ry_gates.append(tq.RY(has_params=False, trainable=False))
 
-    def forward(self, qdev: tq.QuantumDevice, data_vector: torch.Tensor, reset_state: bool = True) -> tq.QuantumDevice:
+    def forward(
+        self,
+        qdev: tq.QuantumDevice,
+        data_vector: torch.Tensor,
+        reset_state: bool = True,
+    ) -> tq.QuantumDevice:
         """Encode data vector using angle encoding"""
         batch_size = data_vector.shape[0]
 
@@ -136,6 +142,7 @@ the embedding vectors from SetFit of dimension equal to 768 into output vectors 
         INPUTS: n_qubits (Q), n_main_layers (R), n_reuploading (N), connectivity (C)
 """
 
+
 class SimpleParameterizedQuantumCircuit(tq.QuantumModule):
     """
     Simple parameterized quantum circuit following the working single encoder pattern.
@@ -151,7 +158,7 @@ class SimpleParameterizedQuantumCircuit(tq.QuantumModule):
         # Build parameterized layers
         self.quantum_layers = nn.ModuleList()
 
-        for layer_idx in range(n_layers):
+        for _layer_idx in range(n_layers):
             layer_gates = nn.ModuleList()
 
             # Create CNOT + RY blocks for this layer
@@ -168,7 +175,7 @@ class SimpleParameterizedQuantumCircuit(tq.QuantumModule):
 
         # Store wire patterns for each layer
         self.wire_patterns = []
-        for layer_idx in range(n_layers):
+        for _layer_idx in range(n_layers):
             layer_wires = []
             for offset in range(1, connectivity + 1):
                 for qubit_idx in range(n_qubits):
@@ -233,12 +240,14 @@ class SimulatedQuantumEncoder(tq.QuantumModule):
             # Try using StatePreparation if available
             state_prep = tq.StatePreparation()
             state_prep(qdev, amplitudes)
-        except:
+        except (ValueError, RuntimeError, AttributeError):
             # Fallback: use RY rotations to approximate amplitude encoding
             for i in range(self.n_qubits):
                 if i < amplitudes.shape[1]:
                     angle = torch.arccos(torch.clamp(amplitudes[:, i], -1, 1))
-                    tq.RY(has_params=False, trainable=False)(qdev, wires=i, params=angle)
+                    tq.RY(has_params=False, trainable=False)(
+                        qdev, wires=i, params=angle
+                    )
 
         # Step 4: Apply parameterized quantum circuit
         qdev = self.pqc(qdev)
@@ -266,7 +275,7 @@ class MultiSimulatedQuantumEncoder(nn.Module):
             encoder = SimulatedQuantumEncoder(
                 n_qubits=config["n_qubits"],
                 n_layers=config["n_layers"],
-                connectivity=config.get("connectivity", 1)
+                connectivity=config.get("connectivity", 1),
             )
             self.encoders.append(encoder)
 
@@ -346,7 +355,13 @@ class QuantumProcessingUnit(tq.QuantumModule):
     This implementation is noiseless
     """
 
-    def __init__(self, n_qubits: int, n_main_layers: int, n_reuploading: int, connectivity: int = 1):
+    def __init__(
+        self,
+        n_qubits: int,
+        n_main_layers: int,
+        n_reuploading: int,
+        connectivity: int = 1,
+    ):
         super().__init__()
         self.n_qubits = n_qubits
         self.n_main_layers = n_main_layers
@@ -357,14 +372,18 @@ class QuantumProcessingUnit(tq.QuantumModule):
         self.angle_encoder = AngleEncodingModule(n_qubits)
 
         # Main parameterized quantum circuit
-        self.main_pqc = SimpleParameterizedQuantumCircuit(n_qubits, n_main_layers, connectivity)
+        self.main_pqc = SimpleParameterizedQuantumCircuit(
+            n_qubits, n_main_layers, connectivity
+        )
 
         # Re-uploading circuits (one for each re-upload)
         # REMARK : from the paper, we could understand that the same pqc is used multiple times (drop in performance)
         self.reuploading_pqcs = nn.ModuleList()
         # pqc = SimpleParameterizedQuantumCircuit(n_qubits, 1, connectivity)
         for _ in range(n_reuploading):
-            pqc = SimpleParameterizedQuantumCircuit(n_qubits, 1, connectivity)  # Single layer per re-upload
+            pqc = SimpleParameterizedQuantumCircuit(
+                n_qubits, 1, connectivity
+            )  # Single layer per re-upload
             self.reuploading_pqcs.append(pqc)
 
         # Measurement (single qubit as per paper: Qm = 1)
@@ -378,7 +397,9 @@ class QuantumProcessingUnit(tq.QuantumModule):
         batch_size = x.shape[0]
 
         if qdev is None:
-            qdev = tq.QuantumDevice(n_wires=self.n_qubits, bsz=batch_size, device=x.device)
+            qdev = tq.QuantumDevice(
+                n_wires=self.n_qubits, bsz=batch_size, device=x.device
+            )
 
         # Initial angle encoding
         qdev = self.angle_encoder(qdev, x)
@@ -393,33 +414,45 @@ class QuantumProcessingUnit(tq.QuantumModule):
         # Main parameterized circuit - ensure it's applied
         qdev = self.main_pqc(qdev)
         # Measure single qubit (Qm = 1 as per paper)
-        output = tq.expval(qdev, wires=[self.measured_qubit], observables=[self.observable])
+        output = tq.expval(
+            qdev, wires=[self.measured_qubit], observables=[self.observable]
+        )
 
         return output
 
 
-class qLLM(nn.Module):
+class QLLM(nn.Module):
     """
-    Complete qLLM model with modular design
+    Complete QLLM model with modular design
     """
 
     def __init__(
-            self,
-            llm_output_dim: int = 768,
-            encoder_configs: list[dict] = [{"n_qubits": 10, "n_layers": 3, "connectivity": 2}],
-            qpu_config: dict = {"n_qubits": 10, "n_main_layers": 3, "n_reuploading": 2, "connectivity": 2},
-            fusion_method: str = "concatenate",
-            n_classes: int = 2,
+        self,
+        llm_output_dim: int = 768,
+        encoder_configs: list[dict] | None = None,
+        qpu_config: dict | None = None,
+        fusion_method: str = "concatenate",
+        n_classes: int = 2,
     ):
         super().__init__()
+
+        if encoder_configs is None:
+            encoder_configs = [{"n_qubits": 10, "n_layers": 3, "connectivity": 2}]
+
+        if qpu_config is None:
+            qpu_config = {
+                "n_qubits": 10,
+                "n_main_layers": 3,
+                "n_reuploading": 2,
+                "connectivity": 2,
+            }
 
         self.llm_output_dim = llm_output_dim
         self.n_classes = n_classes
 
         # First module: Multi-encoder simulated quantum block
         self.first_module = MultiSimulatedQuantumEncoder(
-            encoder_configs=encoder_configs,
-            fusion_method=fusion_method
+            encoder_configs=encoder_configs, fusion_method=fusion_method
         )
 
         # Second module: Quantum processing unit
@@ -427,7 +460,7 @@ class qLLM(nn.Module):
             n_qubits=qpu_config["n_qubits"],
             n_main_layers=qpu_config["n_main_layers"],
             n_reuploading=qpu_config["n_reuploading"],
-            connectivity=qpu_config.get("connectivity", 2)
+            connectivity=qpu_config.get("connectivity", 2),
         )
 
         # Calculate combined input dimension for final linear layer
@@ -444,7 +477,7 @@ class qLLM(nn.Module):
 
     def forward(self, llm_features: torch.Tensor) -> torch.Tensor:
         """
-        Forward pass through complete qLLM model
+        Forward pass through complete QLLM model
         """
         batch_size = llm_features.shape[0]
 
@@ -461,7 +494,7 @@ class qLLM(nn.Module):
             padding = torch.zeros(
                 batch_size,
                 n_qpu_qubits - first_output.shape[1],
-                device=first_output.device
+                device=first_output.device,
             )
             qpu_input = torch.cat([first_output, padding], dim=1)
         else:
@@ -498,21 +531,26 @@ def test_gradient_propagation():
     # Create model
     encoder_configs = [
         {"n_qubits": 4, "n_layers": 2, "connectivity": 1},
-        {"n_qubits": 3, "n_layers": 2, "connectivity": 1}
+        {"n_qubits": 3, "n_layers": 2, "connectivity": 1},
     ]
-    qpu_config = {"n_qubits": 4, "n_main_layers": 2, "n_reuploading": 1, "connectivity": 1}
+    qpu_config = {
+        "n_qubits": 4,
+        "n_main_layers": 2,
+        "n_reuploading": 1,
+        "connectivity": 1,
+    }
 
-    model = qLLM(
+    model = QLLM(
         llm_output_dim=llm_output_dim,
         encoder_configs=encoder_configs,
         qpu_config=qpu_config,
         fusion_method="concatenate",
-        n_classes=n_classes
+        n_classes=n_classes,
     )
 
     # Create dummy data
     dummy_features = torch.randn(batch_size, llm_output_dim, requires_grad=True)
-    dummy_targets = torch.randint(0, n_classes, (batch_size,))
+    _dummy_targets = torch.randint(0, n_classes, (batch_size,))
 
     # Forward pass
     outputs = model(dummy_features)
@@ -540,7 +578,7 @@ def test_gradient_propagation():
                 gradient_stats["no_gradient"] += 1
                 print(f"  ✗ {name}: NO GRADIENT")
 
-    print(f"\nGradient Summary:")
+    print("\nGradient Summary:")
     print(f"  Parameters with gradients: {gradient_stats['has_gradient']}")
     print(f"  Parameters without gradients: {gradient_stats['no_gradient']}")
     print(f"  Total trainable parameters: {gradient_stats['total_params']}")
