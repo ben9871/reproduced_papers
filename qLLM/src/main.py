@@ -62,12 +62,6 @@ def parse_args():
     ### Dataset parameters ###
     parser.add_argument("--dataset", type=str, default="sst2", help="Dataset name")
     parser.add_argument(
-        "--samples_per_class",
-        type=int,
-        default=8,
-        help="Number of samples per class (few-shot setting)",
-    )
-    parser.add_argument(
         "--eval-size", type=int, default=250, help="Validation set size"
     )
 
