@@ -338,7 +338,7 @@ def pick_model(args, device):
         model = None
         model_name = "kernel_method"
 
-    return {model_name: [model]}
+    return {model_name: [model] if not args.model == "mlps" else model}
 
 def train_kernel_method(args,train_dataset, eval_dataset, test_dataset):
     train_embeddings = np.array(train_dataset["embedding"])
@@ -484,9 +484,3 @@ if __name__ == '__main__':
     print(f"\n{'=' * 60}")
     print(f"\n  Training is complete")
     print(f"\n{'=' * 60}")
-
-
-
-
-
-

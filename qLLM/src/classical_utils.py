@@ -7,10 +7,8 @@ import copy
 import numpy as np
 import torch
 import torch.nn as nn
-from setfit import SetFitModel
 from sklearn.base import BaseEstimator, ClassifierMixin
 from sklearn.metrics import accuracy_score
-from sklearn.svm import SVC
 from tqdm import tqdm
 
 # the `ModelWrapper` class provides a unified interface for
@@ -99,7 +97,7 @@ def evaluate(model, embeddings, labels):
     Evaluate SetFit model on given texts and labels.
 
     Args:
-        model: SetFit model with a trained classification head
+        model: model to evaluate
         texts: List of text strings to classify
         labels: True labels for evaluation
 
@@ -129,7 +127,7 @@ def evaluate(model, embeddings, labels):
             all_embeddings.extend(batch_embeddings_cpu)
 
     # Use the classification head to predict
-    predictions = model.model_head.predict(np.array(all_embeddings))
+    predictions = model.predict(np.array(all_embeddings))
     accuracy = accuracy_score(labels, predictions)
     return accuracy, predictions
 
@@ -350,63 +348,6 @@ def replace_setfit_head_with_mlp(
     return model
 
 
-def load_model(args, device):
-    """Load the pre-trained model"""
-    if args.verbose:
-        print(f"\nLoading pre-trained model: {args.model_name}")
-
-    model = SetFitModel.from_pretrained(args.model_name)
-    sentence_transformer = model.model_body
-
-    # Move model to device
-    model = model.to(device)
-    sentence_transformer = sentence_transformer.to(device)
-
-    if args.verbose:
-        print(f"Model loaded: {type(sentence_transformer).__name__}")
-        print(f"Embedding dimension: {args.embedding_dim}")
-        print(f"Model moved to device: {device}")
-
-    return model, sentence_transformer
-
-
-def train_body_with_contrastive_learning(
-    sentence_transformer, features, labels, args, device
-):
-    """Train the model body with contrastive learning"""
-    if args.verbose:
-        print("\nTraining model body with contrastive learning...")
-
-    model_wrapped = ModelWrapper(sentence_transformer)
-    criterion = SupConLoss(model=model_wrapped)
-    # Move labels to device
-    labels = labels.to(device)
-
-    # Enable gradients for fine-tuning
-    for param in sentence_transformer.parameters():
-        param.requires_grad = True
-
-    optimizer = torch.optim.Adam(model_wrapped.parameters(), lr=args.learning_rate)
-    model_wrapped.train()
-
-    # Training loop
-    for iteration in tqdm(range(args.body_epochs), desc="Contrastive Learning"):
-        optimizer.zero_grad()
-        loss = criterion(features, labels)
-        loss.backward()
-        optimizer.step()
-
-        if args.verbose and (iteration + 1) % 5 == 0:
-            print(
-                f"Iteration {iteration + 1}/{args.body_epochs}, Loss: {loss.item():.6f}"
-            )
-
-    if args.verbose:
-        print("Model body fine-tuning completed!")
-
-    return sentence_transformer
-
-
 def generate_embeddings(sentence_transformer, train_dataset, args):
     """Generate embeddings from the fine-tuned model"""
     if args.verbose:
@@ -458,288 +399,27 @@ def generate_embeddings(sentence_transformer, train_dataset, args):
         global_train_min,
     )
 
-
-## SupConLoss ##
-
-
-class SupConLoss(nn.Module):
-    """Supervised Contrastive Learning: https://arxiv.org/pdf/2004.11362.pdf."""
-
-    def __init__(
-        self, model, temperature=0.07, contrast_mode="all", base_temperature=0.07
-    ):
-        super().__init__()
-        self.model = model
-        self.temperature = temperature
-        self.contrast_mode = contrast_mode
-        self.base_temperature = base_temperature
-
-    def forward(self, sentence_features, labels=None, mask=None):
-        """Computes loss for model."""
-        # Au lieu d'utiliser encode() qui peut détacher le graphe de calcul,
-        # utilisons directement le modèle pour générer les embeddings
-        # Tokenize the inputs
-        tokenized_inputs = self.model.tokenize(sentence_features[0])
-
-        # Si le modèle est sur un device particulier, déplacer les inputs sur ce device
-        device = next(self.model.parameters()).device
-        tokenized_inputs = {k: v.to(device) for k, v in tokenized_inputs.items()}
-
-        # Forward pass avec le modèle
-        outputs = self.model(tokenized_inputs)
-
-        # Récupérer les embeddings
-        if isinstance(outputs, dict) and "sentence_embedding" in outputs:
-            features = outputs["sentence_embedding"]
-        else:
-            # Si le modèle renvoie un format différent, adaptez ici
-            features = outputs  # Ou une autre méthode pour extraire les embeddings
-
-        # Normalize embeddings
-        features = torch.nn.functional.normalize(features, p=2, dim=1)
-        # Add n_views dimension
-        features = torch.unsqueeze(features, 1)
-        device = features.device
-
-        # Le reste du code reste inchangé
-        if len(features.shape) < 3:
-            raise ValueError(
-                "`features` needs to be [bsz, n_views, ...],"
-                "at least 3 dimensions are required"
-            )
-        if len(features.shape) > 3:
-            features = features.view(features.shape[0], features.shape[1], -1)
-
-        batch_size = features.shape[0]
-        if labels is not None and mask is not None:
-            raise ValueError("Cannot define both `labels` and `mask`")
-        elif labels is None and mask is None:
-            mask = torch.eye(batch_size, dtype=torch.float32).to(device)
-        elif labels is not None:
-            labels = labels.contiguous().view(-1, 1)
-            if labels.shape[0] != batch_size:
-                raise ValueError("Num of labels does not match num of features")
-            mask = torch.eq(labels, labels.T).float().to(device)
-        else:
-            mask = mask.float().to(device)
-
-        contrast_count = features.shape[1]
-        contrast_feature = torch.cat(torch.unbind(features, dim=1), dim=0)
-        if self.contrast_mode == "one":
-            anchor_feature = features[:, 0]
-            anchor_count = 1
-        elif self.contrast_mode == "all":
-            anchor_feature = contrast_feature
-            anchor_count = contrast_count
-        else:
-            raise ValueError(f"Unknown mode: {self.contrast_mode}")
-
-        # Compute logits
-        anchor_dot_contrast = torch.div(
-            torch.matmul(anchor_feature, contrast_feature.T), self.temperature
-        )
-        # For numerical stability
-        logits_max, _ = torch.max(anchor_dot_contrast, dim=1, keepdim=True)
-        logits = anchor_dot_contrast - logits_max.detach()
-
-        # Tile mask
-        mask = mask.repeat(anchor_count, contrast_count)
-        # Mask-out self-contrast cases
-        logits_mask = torch.scatter(
-            torch.ones_like(mask),
-            1,
-            torch.arange(batch_size * anchor_count).view(-1, 1).to(device),
-            0,
-        )
-        mask = mask * logits_mask
-
-        # Compute log_prob
-        exp_logits = torch.exp(logits) * logits_mask
-        log_prob = logits - torch.log(exp_logits.sum(1, keepdim=True))
-
-        # Compute mean of log-likelihood over positive
-        mean_log_prob_pos = (mask * log_prob).sum(1) / mask.sum(1)
-
-        # Loss
-        loss = -(self.temperature / self.base_temperature) * mean_log_prob_pos
-        loss = loss.view(anchor_count, batch_size).mean()
-
-        return loss
-
-
-def train_classical_heads(
-    sentence_transformer,
-    train_embeddings,
-    train_labels,
-    global_train_max,
-    global_train_min,
-    eval_dataset,
-    test_dataset,
-    args,
-    device,
-    use_normalization,
-):
-    """Train classical classification heads"""
-    results = {}
-    num_classes = len(set(train_labels))
-
-    if args.verbose:
-        print(
-            f"\nTraining classical classification heads for {num_classes}-class classification..."
-        )
-        print("\n Extracting validation and test embeddings...")
+def generate_val_test_emnbeddings(sentence_transformer, eval_dataset, test_dataset, normalization, global_train_max, global_train_min):
+    eval_embeddings = sentence_transformer.encode(eval_dataset["sentence"])
 
     # eval embeddings
-    eval_embeddings = sentence_transformer.encode(eval_dataset["sentence"])
-    if use_normalization:
+    if normalization:
         eval_embeddings = (eval_embeddings - global_train_min) / (
-            global_train_max - global_train_min
+                global_train_max - global_train_min
         )
         eval_embeddings = torch.tensor(np.clip(eval_embeddings, 0, 1))
     else:
         eval_embeddings = torch.tensor(eval_embeddings)
+
     # test embeddings
     test_embeddings = sentence_transformer.encode(test_dataset["sentence"])
-    if use_normalization:
+    if normalization:
         test_embeddings = (test_embeddings - global_train_min) / (
-            global_train_max - global_train_min
+                global_train_max - global_train_min
         )
         test_embeddings = torch.tensor(np.clip(test_embeddings, 0, 1))
     else:
         test_embeddings = torch.tensor(test_embeddings)
 
-    model = SetFitModel.from_pretrained(args.model_name)
-    model.model_body = sentence_transformer
+    return eval_embeddings, test_embeddings
 
-    # Logistic Regression
-    if args.verbose:
-        print("\n1. Training Logistic Regression head...")
-
-    model.model_head.fit(train_embeddings, train_labels)
-
-    lg_val_accuracy, _ = evaluate(model, eval_embeddings, eval_dataset["label"])
-    lg_test_accuracy, _ = evaluate(model, test_embeddings, test_dataset["label"])
-
-    if args.verbose:
-        print(
-            f"Logistic Regression - Val: {lg_val_accuracy:.4f}, Test: {lg_test_accuracy:.4f}"
-        )
-
-    results["LogisticRegression"] = [lg_val_accuracy, lg_test_accuracy]
-
-    # SVM with varying parameter counts (targeting 296 and 435 parameters)
-    if args.verbose:
-        print("\n2. Training SVM heads with varying parameter counts...")
-
-    # Configuration 1: Target ~296 parameters (moderate regularization)
-    if args.verbose:
-        print("   2a. Training SVM targeting ~296 parameters...")
-
-    model.model_head = SVC(C=1.0, kernel="rbf", gamma="scale", probability=True)
-    model.model_head.fit(train_embeddings, train_labels)
-
-    svc_296_val_accuracy, _ = evaluate(model, eval_embeddings, eval_dataset["label"])
-    svc_296_test_accuracy, _ = evaluate(model, test_embeddings, test_dataset["label"])
-
-    n_support_vectors_296 = model.model_head.n_support_.sum()
-
-    if args.verbose:
-        print(
-            f"   SVM (296 target) - Support vectors: {n_support_vectors_296}, Val: {svc_296_val_accuracy:.4f}, Test: {svc_296_test_accuracy:.4f}"
-        )
-
-    # Configuration 2: Target ~435 parameters (low regularization to use more support vectors)
-    if args.verbose:
-        print("   2b. Training SVM targeting ~435 parameters...")
-
-    model.model_head = SVC(C=100.0, kernel="rbf", gamma="scale", probability=True)
-    model.model_head.fit(train_embeddings, train_labels)
-
-    svc_435_val_accuracy, _ = evaluate(model, eval_embeddings, eval_dataset["label"])
-    svc_435_test_accuracy, _ = evaluate(model, test_embeddings, test_dataset["label"])
-
-    n_support_vectors_435 = model.model_head.n_support_.sum()
-
-    if args.verbose:
-        print(
-            f"   SVM (435 target) - Support vectors: {n_support_vectors_435}, Val: {svc_435_val_accuracy:.4f}, Test: {svc_435_test_accuracy:.4f}"
-        )
-
-    results["SVC_296"] = [
-        svc_296_val_accuracy,
-        svc_296_test_accuracy,
-        int(n_support_vectors_296),
-    ]
-    results["SVC_435"] = [
-        svc_435_val_accuracy,
-        svc_435_test_accuracy,
-        int(n_support_vectors_435),
-    ]
-
-    print("\n -> Generating test embeddings for MLP evaluation")
-    # Generate test embeddings for validation during training
-    test_embeddings = []
-    eval_labels = eval_dataset["label"]
-
-    with torch.no_grad():
-        num_batches = (
-            len(test_dataset["sentence"]) + args.batch_size - 1
-        ) // args.batch_size
-        for batch_idx in range(num_batches):
-            start_idx = batch_idx * args.batch_size
-            end_idx = min(start_idx + args.batch_size, len(test_dataset["sentence"]))
-            batch_texts = test_dataset["sentence"][start_idx:end_idx]
-            batch_embeddings = sentence_transformer.encode(
-                batch_texts, convert_to_tensor=True
-            )
-            test_embeddings.extend(batch_embeddings.detach().cpu().numpy())
-
-    test_embeddings = np.array(test_embeddings)
-    if use_normalization:
-        test_embeddings = (test_embeddings - global_train_min) / (
-            global_train_max - global_train_min
-        )
-        test_embeddings = torch.tensor(np.clip(test_embeddings, 0, 1))
-    # Train with validation data (convert tensor back to numpy for consistent processing)
-    eval_embeddings_numpy = (
-        eval_embeddings.cpu().numpy()
-        if isinstance(eval_embeddings, torch.Tensor)
-        else eval_embeddings
-    )
-    print("\n ... Done !")
-    # MLP
-    if args.verbose:
-        print("\n3. Training MLP head...")
-    hidden_dims = [0, 48, 96, 144, 192]
-    for hidden_dim in hidden_dims:
-        print(f"\n3. Training MLP head with hidden dimension = {hidden_dim}...")
-        model = replace_setfit_head_with_mlp(
-            model,
-            input_dim=args.embedding_dim,
-            hidden_dim=hidden_dim,
-            num_classes=num_classes,
-            epochs=args.head_epochs,
-            lr=args.lr_cl,
-            gamma=args.gamma_cl,
-            wd=args.wd_cl,
-        )
-
-        model.model_head.fit(
-            train_embeddings, train_labels, eval_embeddings_numpy, eval_labels
-        )
-
-        # Fallback to using the predict method
-        mlp_val_predictions = model.model_head.predict(eval_embeddings_numpy)
-        mlp_val_accuracy = accuracy_score(eval_dataset["label"], mlp_val_predictions)
-        mlp_test_accuracy, _ = evaluate(model, test_embeddings, test_dataset["label"])
-        best_val = (
-            model.model_head.best_val / 100.0
-        )  # Convert from percentage to decimal
-        if args.verbose:
-            print(
-                f"MLP - Val: {mlp_val_accuracy:.4f}, Test: {mlp_test_accuracy:.4f}, Best Val: {best_val:.4f}"
-            )
-
-        results[f"MLP-{hidden_dim}"] = [mlp_val_accuracy, mlp_test_accuracy, best_val]
-
-    return results, model, num_classes

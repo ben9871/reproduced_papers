@@ -36,6 +36,8 @@ def generate_all_fock_states(m, n, no_bunching = False) -> Generator:
             for state in generate_all_fock_states(m-1, n-i):
                 yield (i,) + state
 
+# For this Quantum Kernel, I am using the Quantum kernel from https://github.com/merlinquantum/merlin/pull/7 made by @anthonyrtw
+
 dtype_to_torch = {
     'float': torch.float64,
     'complex': torch.complex128,
@@ -473,7 +475,6 @@ def get_quantum_kernel(modes = 10, input_size = 10, photons = 4, no_bunching = F
     )
     return quantum_kernel
 
-import torch.nn as nn
 
 
 
@@ -555,7 +556,6 @@ def create_setfit_with_q_kernel(
     modes=10,
     photons = 0,
     no_bunching = False,
-    num_classes=2,
 ):
     if photons == 0:
         photons = modes//2
