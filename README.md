@@ -1,8 +1,12 @@
-# reproduced_papers
+# MerLin Reproduced Papers
 
 ## About this repository
 
-This repository contains implementations and resources for reproducing key quantum machine learning papers, with a focus on photonic and optical quantum computing. It is part of the MerLin project and complements the online documentation available at:
+
+This repository contains implementations and resources for reproducing key quantum machine learning papers, with a focus on photonic and optical quantum computing.
+
+It is part of the main MerLin project: [https://github.com/merlinquantum/merlin](https://github.com/merlinquantum/merlin)
+and complements the online documentation available at:
 
 [https://merlinquantum.ai/research/reproduced_papers.html](https://merlinquantum.ai/research/reproduced_papers.html)
 
