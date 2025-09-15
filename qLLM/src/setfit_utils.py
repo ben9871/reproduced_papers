@@ -2,17 +2,14 @@
 Classical model training utilities for qLLM experiments.
 """
 
-
 import torch
 import torch.nn as nn
 from setfit import SetFitModel
-from tqdm import tqdm
 
 # the `ModelWrapper` class provides a unified interface for
 ## handling tokenization
 ## forward passes with sentence transformer models
 # here, we can work with different model architectures seamlessly
-
 
 
 def load_model(args, device):
@@ -29,49 +26,10 @@ def load_model(args, device):
 
     if args.verbose:
         print(f"Model loaded: {type(sentence_transformer).__name__}")
-        #print(f"Embedding dimension: {args.embedding_dim}")
+        # print(f"Embedding dimension: {args.embedding_dim}")
         print(f"Model moved to device: {device}")
 
     return model, sentence_transformer
-
-
-def train_body_with_contrastive_learning(
-    sentence_transformer, features, labels, args, device
-):
-    """Train the model body with contrastive learning"""
-    if args.verbose:
-        print("\nTraining model body with contrastive learning...")
-
-    model_wrapped = ModelWrapper(sentence_transformer)
-    criterion = SupConLoss(model=model_wrapped)
-    # Move labels to device
-    labels = labels.to(device)
-
-    # Enable gradients for fine-tuning
-    for param in sentence_transformer.parameters():
-        param.requires_grad = True
-
-    optimizer = torch.optim.Adam(model_wrapped.parameters(), lr=args.learning_rate)
-    model_wrapped.train()
-
-    # Training loop
-    for iteration in tqdm(range(args.body_epochs), desc="Contrastive Learning"):
-        optimizer.zero_grad()
-        loss = criterion(features, labels)
-        loss.backward()
-        optimizer.step()
-
-        if args.verbose and (iteration + 1) % 5 == 0:
-            print(
-                f"Iteration {iteration + 1}/{args.body_epochs}, Loss: {loss.item():.6f}"
-            )
-
-    if args.verbose:
-        print("Model body fine-tuning completed!")
-
-    return sentence_transformer
-
-
 
 
 ## SupConLoss ##
@@ -180,4 +138,3 @@ class SupConLoss(nn.Module):
         loss = loss.view(anchor_count, batch_size).mean()
 
         return loss
-
