@@ -446,8 +446,8 @@ def train_kernel_method(args, train_dataset, eval_dataset, test_dataset):
         n_support_vectors_296 = model.n_support_.sum()
 
         print(
-                f"   SVM (296 target) - Support vectors: {n_support_vectors_296}, Val: {svc_296_val_accuracy:.4f}, Test: {svc_296_test_accuracy:.4f}"
-            )
+            f"   SVM (296 target) - Support vectors: {n_support_vectors_296}, Val: {svc_296_val_accuracy:.4f}, Test: {svc_296_test_accuracy:.4f}"
+        )
 
         # Configuration 2: Target ~435 parameters (low regularization to use more support vectors)
         print("   b. Training SVM targeting ~435 parameters...")
@@ -465,8 +465,8 @@ def train_kernel_method(args, train_dataset, eval_dataset, test_dataset):
         n_support_vectors_435 = model.n_support_.sum()
 
         print(
-                f"   SVM (435 target) - Support vectors: {n_support_vectors_435}, Val: {svc_435_val_accuracy:.4f}, Test: {svc_435_test_accuracy:.4f}"
-            )
+            f"   SVM (435 target) - Support vectors: {n_support_vectors_435}, Val: {svc_435_val_accuracy:.4f}, Test: {svc_435_test_accuracy:.4f}"
+        )
 
         accuracy_dict = {
             "svm_296": {
@@ -488,8 +488,8 @@ def train_kernel_method(args, train_dataset, eval_dataset, test_dataset):
         lg_test_accuracy, _ = evaluate(model, test_embeddings, test_dataset["label"])
 
         print(
-                f"Logistic Regression - Val: {lg_val_accuracy:.4f}, Test: {lg_test_accuracy:.4f}"
-            )
+            f"Logistic Regression - Val: {lg_val_accuracy:.4f}, Test: {lg_test_accuracy:.4f}"
+        )
         accuracy_dict = {args.model: lg_test_accuracy}
 
     return accuracy_dict
