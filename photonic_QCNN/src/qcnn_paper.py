@@ -548,13 +548,13 @@ class _InsertMainModes(torch.nn.Module):
         insertions (list): List of mode indices to insert empty modes
             after.
     """
+
     def __init__(self, dims, insertions: list[int]):
         d = dims[0]
 
         super().__init__()
         if max(insertions) > 2 * d:
-            raise ValueError(
-                f"Insertions {insertions} exceed input dimensions {d}")
+            raise ValueError(f"Insertions {insertions} exceed input dimensions {d}")
 
         self.insertions = insertions
         self.in_dims = dims
@@ -569,22 +569,21 @@ class _InsertMainModes(torch.nn.Module):
             [insert - dims[0] for insert in insertions if insert >= dims[0]]
         )
         if len(insertions_x) != len(insertions_y):
-            raise NotImplementedError(
-                'Asymmetric insertions not supported yet.')
+            raise NotImplementedError("Asymmetric insertions not supported yet.")
 
-        x = torch.arange(d ** 2)
-        y = torch.arange(d ** 2)
+        x = torch.arange(d**2)
+        y = torch.arange(d**2)
 
         # f, h represent the channel indices.
         # In basis: |e_f>|e_i>|e_j><e_h|<e_l|<e_m|
-        f = x // (d ** 2)
-        h = y // (d ** 2)
+        f = x // (d**2)
+        h = y // (d**2)
 
         # Let i, j, m, n represent the one hot indices
-        i = (x % (d ** 2)) // d
-        j = (x % (d ** 2)) % d
-        m = (y % (d ** 2)) // d
-        n = (y % (d ** 2)) % d
+        i = (x % (d**2)) // d
+        j = (x % (d**2)) % d
+        m = (y % (d**2)) // d
+        n = (y % (d**2)) % d
 
         # Apply insertions to shift indices
         if insertions_x.numel():
@@ -596,7 +595,7 @@ class _InsertMainModes(torch.nn.Module):
             n += (insertions_y[None, :] <= n[:, None]).sum(dim=1)
 
         # Create & flatten meshgrids for channel indices
-        f_grid, h_grid = torch.meshgrid(f, h, indexing='ij')
+        f_grid, h_grid = torch.meshgrid(f, h, indexing="ij")
         f_flat = f_grid.flatten()
         h_flat = h_grid.flatten()
 
@@ -606,8 +605,8 @@ class _InsertMainModes(torch.nn.Module):
         m = m.repeat_interleave(len(f))
 
         # Calculate new density matrix coordinates
-        self._new_x = i * self._new_d + j + f_flat * self._new_d ** 2
-        self._new_y = m * self._new_d + n + h_flat * self._new_d ** 2
+        self._new_x = i * self._new_d + j + f_flat * self._new_d**2
+        self._new_y = m * self._new_d + n + h_flat * self._new_d**2
 
         x_flat = x.repeat(len(y))
         y_flat = y.repeat_interleave(len(x))
@@ -623,8 +622,7 @@ class _InsertMainModes(torch.nn.Module):
         new_y = self._new_y.unsqueeze(0).expand(b, -1).reshape(-1)
 
         new_rho = torch.zeros(
-            b, self._new_d ** 2, self._new_d ** 2,
-            dtype=rho.dtype, device=rho.device
+            b, self._new_d**2, self._new_d**2, dtype=rho.dtype, device=rho.device
         )
         values = rho[:, self._mask_coords[0], self._mask_coords[1]].reshape(-1)
 
