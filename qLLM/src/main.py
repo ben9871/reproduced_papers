@@ -289,7 +289,7 @@ def train_model(model, train_dataset, eval_dataset, test_dataset, args):
             best_model_state = model.state_dict().copy()
 
         # Print progress
-        if (epoch + 1) % 10 == 0 or epoch == 0:
+        if (epoch + 1) % 10 == 0 or epoch == 0 or epoch == args.epochs - 1:
             print(f"Epoch [{epoch + 1}/{args.epochs}]")
             print(
                 f"Train Loss: {train_loss / len(train_loader):.4f}, Train Acc: {train_acc:.2f}%"
@@ -428,12 +428,10 @@ def train_kernel_method(args, train_dataset, eval_dataset, test_dataset):
 
     elif args.model == "svm":
         # SVM with varying parameter counts (targeting 296 and 435 parameters)
-        if args.verbose:
-            print("\nTraining SVM heads with varying parameter counts...")
+        print("\nTraining SVM heads with varying parameter counts...")
 
         # Configuration 1: Target ~296 parameters (moderate regularization)
-        if args.verbose:
-            print("   a. Training SVM targeting ~296 parameters...")
+        print("   a. Training SVM targeting ~296 parameters...")
 
         model = SVC(C=1.0, kernel="rbf", gamma="scale", probability=True)
         model.fit(train_embeddings, train_dataset["label"])
@@ -447,14 +445,12 @@ def train_kernel_method(args, train_dataset, eval_dataset, test_dataset):
 
         n_support_vectors_296 = model.n_support_.sum()
 
-        if args.verbose:
-            print(
+        print(
                 f"   SVM (296 target) - Support vectors: {n_support_vectors_296}, Val: {svc_296_val_accuracy:.4f}, Test: {svc_296_test_accuracy:.4f}"
             )
 
         # Configuration 2: Target ~435 parameters (low regularization to use more support vectors)
-        if args.verbose:
-            print("   b. Training SVM targeting ~435 parameters...")
+        print("   b. Training SVM targeting ~435 parameters...")
 
         model = SVC(C=100.0, kernel="rbf", gamma="scale", probability=True)
         model.fit(train_embeddings, train_dataset["label"])
@@ -468,8 +464,7 @@ def train_kernel_method(args, train_dataset, eval_dataset, test_dataset):
 
         n_support_vectors_435 = model.n_support_.sum()
 
-        if args.verbose:
-            print(
+        print(
                 f"   SVM (435 target) - Support vectors: {n_support_vectors_435}, Val: {svc_435_val_accuracy:.4f}, Test: {svc_435_test_accuracy:.4f}"
             )
 
@@ -485,16 +480,14 @@ def train_kernel_method(args, train_dataset, eval_dataset, test_dataset):
         }
 
     elif args.model == "log-reg":
-        if args.verbose:
-            print("\nTraining Logistic Regression head...")
+        print("\nTraining Logistic Regression head...")
         model = LogisticRegression()
         model.fit(train_embeddings, train_dataset["label"])
 
         lg_val_accuracy, _ = evaluate(model, eval_embeddings, eval_dataset["label"])
         lg_test_accuracy, _ = evaluate(model, test_embeddings, test_dataset["label"])
 
-        if args.verbose:
-            print(
+        print(
                 f"Logistic Regression - Val: {lg_val_accuracy:.4f}, Test: {lg_test_accuracy:.4f}"
             )
         accuracy_dict = {args.model: lg_test_accuracy}

@@ -1,7 +1,8 @@
 # qLLM: Quantum Large Language Models
 
-This repository implements various quantum and classical machine learning models for text classification tasks, as described in the qLLM paper. The models can be trained and evaluated using pre-computed embeddings from sentence transformers.
+This repository implements various quantum and classical machine learning models for sentiment analysis, as described in a recent work : [Quantum Large Language Model Fine Tuning](https://arxiv.org/abs/2504.08732). The models can be trained and evaluated using pre-computed embeddings from sentence transformers.
 
+The dataset used in this repo is the SST-2 (Stanford Sentiment Treebank) binary sentiment classification dataset that can be found on [Hugging Face](https://huggingface.co/datasets/SetFit/sst2) .
 ## Overview
 
 The codebase provides implementations of:
