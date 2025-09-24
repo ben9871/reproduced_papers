@@ -1,18 +1,12 @@
-import importlib.util
 import pathlib
 import sys
 
+# Ensure this tests directory is on sys.path to import shared helper
+_TESTS_DIR = pathlib.Path(__file__).parent
+if str(_TESTS_DIR) not in sys.path:
+    sys.path.insert(0, str(_TESTS_DIR))
 
-def _load_impl_module():
-    impl_path = pathlib.Path(__file__).resolve().parents[1] / "implementation.py"
-    assert impl_path.exists(), "implementation.py missing"
-    # Ensure local 'lib' package is importable
-    sys.path.insert(0, str(impl_path.parent))
-    spec = importlib.util.spec_from_file_location("impl", impl_path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+from common import _load_impl_module
 
 
 def test_cli_help_exits_cleanly():
