@@ -28,7 +28,7 @@ def default_config():
     """Return default configuration as a plain dictionary."""
     return {
         "seed": 42,
-    "outdir": "outdir",
+        "outdir": "outdir",
         "device": "cpu",
         "dataset": {
             "name": "<DATASET_NAME>",

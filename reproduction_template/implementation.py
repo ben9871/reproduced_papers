@@ -5,6 +5,7 @@ Generic CLI entry-point for paper reproduction experiments.
 - Allows CLI overrides for common hyperparameters
 - Sets up logging, output directory, and config snapshot
 """
+
 from __future__ import annotations
 
 import argparse
@@ -20,6 +21,7 @@ from lib.config import deep_update, default_config, load_config
 # -----------------------------
 # Core placeholders
 # -----------------------------
+
 
 def setup_seed(seed: int) -> None:
     random.seed(seed)
@@ -38,7 +40,9 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
     logger.debug("Resolved config: %s", json.dumps(cfg, indent=2))
     # TODO: Implement dataset/model/training loop specific to the paper
     # Save a minimal artifact example
-    (run_dir / "done.txt").write_text("Training placeholder complete. Replace with actual implementation.\n")
+    (run_dir / "done.txt").write_text(
+        "Training placeholder complete. Replace with actual implementation.\n"
+    )
     logger.info("Wrote placeholder artifact: %s", run_dir / "done.txt")
 
 
@@ -46,12 +50,15 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
 # CLI
 # -----------------------------
 
+
 def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Paper reproduction runner")
     p.add_argument("--config", type=str, help="Path to JSON config", default=None)
     p.add_argument("--seed", type=int, help="Random seed", default=None)
     p.add_argument("--outdir", type=str, help="Base output directory", default=None)
-    p.add_argument("--device", type=str, help="Device string (cpu, cuda:0, mps)", default=None)
+    p.add_argument(
+        "--device", type=str, help="Device string (cpu, cuda:0, mps)", default=None
+    )
 
     # Common training overrides
     p.add_argument("--epochs", type=int, default=None)
@@ -84,7 +91,9 @@ def configure_logging(level: str = "info", log_file: Path | None = None) -> None
     for h in list(root.handlers):
         root.removeHandler(h)
 
-    fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s", "%Y-%m-%d %H:%M:%S")
+    fmt = logging.Formatter(
+        "%(asctime)s | %(levelname)s | %(name)s | %(message)s", "%Y-%m-%d %H:%M:%S"
+    )
     sh = logging.StreamHandler()
     sh.setFormatter(fmt)
     root.addHandler(sh)

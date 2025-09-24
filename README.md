@@ -23,13 +23,13 @@ NAME/                     # Non-ambiguous acronym or fullname of the reproduced 
 ├── .gitignore            # specific .gitignore rules for clean repository
 ├── implementation.py     # Main engine to train a model - the cli can accept parameters or config file
 ├── notebook.ipynb        # Interactive exploration of key concepts
-├── README.md             # Paper overview and results
-├── requirements.txt      # additional requirements for the paper
+├── README.md             # Paper overview and results overview
+├── requirements.txt      # additional requirements for the scripts
 ├── configs/              # predefined configurations to train models
-├── data/                 # Datasets and preprocessing
+├── data/                 # Datasets and preprocessing if any
 ├── lib/                  # code used by implementation.py and notebook.ipynb - as a integrated library
 ├── models/               # Trained models 
-├── results/              # Generated figures, tables, or outputs from trained models
+├── results/              # Selected generated figures, tables, or outputs from trained models
 ├── tests/                # Validation tests
 └── utils/                # additional commandline utilities for visualization, launch of multiple trainings, etc...
 ```
@@ -69,7 +69,7 @@ Then edit the placeholders in:
 Notes:
 - Configs are JSON-only in the template.
 - Each run creates a timestamped folder under the base `outdir` (default `outdir/`): `run_YYYYMMDD-HHMMSS/` with `config_snapshot.json` and your artifacts.
-- Tests are intended to be run from inside the paper folder (e.g., `cd NAME && pytest -q`).
+- Tests are intended to be run from inside the paper folder (e.g., `cd NAME && PYTHONPATH=. pytest -q`).
 
 ### Submission process
 
