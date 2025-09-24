@@ -10,13 +10,12 @@ from __future__ import annotations
 import argparse
 import datetime as dt
 import json
+import logging
+import os
 import random
 from pathlib import Path
-import os
-import logging
 
-from lib.config import load_config, deep_update, default_config
-
+from lib.config import deep_update, default_config, load_config
 
 # -----------------------------
 # Core placeholders

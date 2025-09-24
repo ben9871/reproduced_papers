@@ -20,7 +20,7 @@ def test_cli_help_exits_cleanly():
     except SystemExit as e:
         assert e.code == 0
     else:
-        assert False, "Expected SystemExit when parsing --help"
+        raise AssertionError("Expected SystemExit when parsing --help")
 
 
 def test_train_and_evaluate_writes_artifact(tmp_path):

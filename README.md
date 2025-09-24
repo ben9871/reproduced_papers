@@ -54,8 +54,8 @@ pip install -r requirements.txt
 # 3) Run with the example config (JSON-only)
 python implementation.py --config configs/example.json
 
-# 4) See outputs (default base outdir is `results/`)
-ls results
+# 4) See outputs (default base outdir is `outdir/`)
+ls outdir
 
 # 5) Run tests (from inside NAME/)
 pytest -q
