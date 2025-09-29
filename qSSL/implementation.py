@@ -148,60 +148,78 @@ parser.add_argument("--config", type=str, default=None, help="Path to JSON confi
 
 if __name__ == "__main__":
     args = parser.parse_args()
-    # Load config if provided and map to args
+
+    # Helper to check if a CLI flag was explicitly provided
+    def _provided(*names: str) -> bool:
+        import sys as _sys
+
+        return any(n in _sys.argv for n in names)
+
+    # Load config if provided and map to args (config takes effect unless CLI overrides are explicitly passed)
     if args.config is not None and os.path.exists(args.config):
         cfg = deep_update(default_config(), load_config(Path(args.config)))
-        # Map cfg to args Namespace while preserving CLI overrides
-        # Dataset
-        args.datadir = getattr(args, "datadir", None) or cfg["dataset"]["root"]
-        args.classes = getattr(args, "classes", None) or cfg["dataset"]["classes"]
-        args.batch_size = (
-            getattr(args, "batch_size", None) or cfg["dataset"]["batch_size"]
-        )
-        # Training
-        args.epochs = getattr(args, "epochs", None) or cfg["training"]["epochs"]
-        args.ckpt_step = (
-            getattr(args, "ckpt_step", None) or cfg["training"]["ckpt_step"]
-        )
-        args.le_epochs = (
-            getattr(args, "le_epochs", None) or cfg["training"]["le_epochs"]
-        )
-        # Model common
-        args.width = getattr(args, "width", None) or cfg["model"]["width"]
-        args.loss_dim = getattr(args, "loss_dim", None) or cfg["model"]["loss_dim"]
-        args.batch_norm = (
-            getattr(args, "batch_norm", None) or cfg["model"]["batch_norm"]
-        )
-        args.temperature = (
-            getattr(args, "temperature", None) or cfg["model"]["temperature"]
-        )
-        # Backends
+
+        # Backend resolution: CLI flags win if present, else config
         backend = cfg["model"].get("backend", "classical")
+        if _provided("--merlin"):
+            backend = "merlin"
+        elif _provided("--qiskit"):
+            backend = "qiskit"
         args.merlin = backend == "merlin"
         args.qiskit = backend == "qiskit"
+
+        # Dataset
+        if not _provided("-d", "--datadir"):
+            args.datadir = cfg["dataset"]["root"]
+        if not _provided("-cl", "--classes"):
+            args.classes = cfg["dataset"]["classes"]
+        if not _provided("-bs", "--batch_size"):
+            args.batch_size = cfg["dataset"]["batch_size"]
+
+        # Training
+        if not _provided("-e", "--epochs"):
+            args.epochs = cfg["training"]["epochs"]
+        if not _provided("-ckpt", "--ckpt-step"):
+            args.ckpt_step = cfg["training"]["ckpt_step"]
+        if not _provided("-le", "--le-epochs"):
+            args.le_epochs = cfg["training"]["le_epochs"]
+
+        # Model (common)
+        if not _provided("-w", "--width"):
+            args.width = cfg["model"]["width"]
+        if not _provided("-ld", "--loss_dim"):
+            args.loss_dim = cfg["model"]["loss_dim"]
+        if not _provided("-tau", "--temperature"):
+            args.temperature = cfg["model"]["temperature"]
+        # batch_norm and no_bunching are store_true; only set from config if the flag wasn't provided
+        if not _provided("-bn", "--batch_norm"):
+            args.batch_norm = cfg["model"]["batch_norm"]
+
         # Qiskit specific
-        args.layers = getattr(args, "layers", None) or cfg["model"].get("layers", 2)
-        args.q_backend = getattr(args, "q_backend", None) or cfg["model"].get(
-            "q_backend", "qasm_simulator"
-        )
-        args.encoding = getattr(args, "encoding", None) or cfg["model"].get(
-            "encoding", "vector"
-        )
-        args.q_ansatz = getattr(args, "q_ansatz", None) or cfg["model"].get(
-            "q_ansatz", "sim_circ_14_half"
-        )
-        args.q_sweeps = getattr(args, "q_sweeps", None) or cfg["model"].get(
-            "q_sweeps", 1
-        )
-        args.activation = getattr(args, "activation", None) or cfg["model"].get(
-            "activation", "null"
-        )
-        args.shots = getattr(args, "shots", None) or cfg["model"].get("shots", 100)
-        # Merlin specific
-        args.modes = getattr(args, "modes", None) or cfg["model"].get("modes", 10)
-        args.no_bunching = getattr(args, "no_bunching", None) or cfg["model"].get(
-            "no_bunching", False
-        )
+        if not _provided("--layers"):
+            args.layers = cfg["model"].get("layers", 2)
+        if not _provided("--q_backend"):
+            args.q_backend = cfg["model"].get("q_backend", "qasm_simulator")
+        if not _provided("--encoding"):
+            args.encoding = cfg["model"].get("encoding", "vector")
+        if not _provided("--q_ansatz"):
+            args.q_ansatz = cfg["model"].get("q_ansatz", "sim_circ_14_half")
+        if not _provided("--q_sweeps"):
+            args.q_sweeps = cfg["model"].get("q_sweeps", 1)
+        if not _provided("--activation"):
+            args.activation = cfg["model"].get("activation", "null")
+        if not _provided("--shots"):
+            args.shots = cfg["model"].get("shots", 100)
+        if not _provided("--save-dhs"):
+            # store_true default is False; config doesn't define it, keep False
+            if not hasattr(args, "save_dhs"):
+                args.save_dhs = False
+
+        # MerLin specific
+        if not _provided("-m", "--modes"):
+            args.modes = cfg["model"].get("modes", 10)
+        if not _provided("-bunch", "--no_bunching"):
+            args.no_bunching = cfg["model"].get("no_bunching", False)
 
     results_dir = get_results_dir(args)
     # Save training arguments to JSON file for reproducibility
