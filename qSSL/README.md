@@ -15,6 +15,21 @@ In this folder, you will find an implementation and evaluation of the core ideas
   - Classical MLP baseline
 - Metrics: SSL losses over epochs and linear-probing accuracy curves; checkpoints and run metadata saved per experiment.
 
+## Results reproduced
+
+Pretrained models in `./results` give the following results:
+
+| Number of epochs | Number of classes (CIFAR10) | Qiskit based | Classical SSL | Quantum SSL (`no_bunching=False`) | Quantum SSL (`no_bunching=True`) |
+|------------------|-----------------------------|--------------|---------------|----------------------------------|---------------------------------|
+| 2                | 5                           | 48.37 <br> ✅ OK <br> #32 <br> x0.08/x0.008 | 48.08 <br> 🚫 <br> #144 <br> x1/x1 | 8 modes: **49.22** <br> #184 <br> x0.97/x0.95 <br><br> 10 modes: 47.28 <br> #320 <br> x0.89/x0.88 <br><br> 12 modes: 46.46 <br> #488 <br> x0.83/x0.65 | 8 modes: 45.58 <br> #184 <br> x0.97/x0.97 <br><br> 10 modes: 45.58 <br> #320 <br> x0.97/x0.93 <br><br> 12 modes: 45.76 <br> #488 <br> x0.94/x0.82 |
+| 5                | 5                           | 47.88  | 49.04 | 8 modes: 49.9 <br><br> 10 modes: **51.12** <br><br> 12 modes: 50.64 | 8 modes: 49.3 <br><br> 10 modes: 48.86 <br><br> 12 modes: **51.74** |
+
+Legend:
+- #number of parameters
+- x ... speed-up (relative to classical baseline)
+
+Overall, we reproduced the results highlighted in the paper and we have a photonic implementantion of it, using MerLin, that is faster and more accurate (but has more trainable parameters).
+
 ## Project structure
 - `implementation.py` — main entry point (replaces the old `main.py`)
 - `lib/` — core library modules used by scripts
@@ -25,7 +40,7 @@ In this folder, you will find an implementation and evaluation of the core ideas
 - `configs/` — example JSON configs (default uses MerLin)
   - `qssl_default.json`
 - Other
-  - `linear_probing.py` — evaluate frozen features with a linear head
+  - `linear_probing.py` — evaluate frozen features with a linear head. Pretrained models can be found in `results/`
   - `requirements.txt` — Python dependencies
   - `utils/`, `tests/` — placeholders following the template
 
@@ -64,6 +79,10 @@ See `configs/qssl_default.json`. Key fields:
 You can combine `--config` with CLI overrides. The runner resolves the final configuration and saves it to the results directory (`args.json`).
 
 ## Training pipeline (pedagogical overview)
+
+
+![SSL Model](SSL_model.png)
+
 1) SSL pretraining
 - Input: for each image, generate two strong augmentations (query/key) using `TwoCropsTransform`.
 - Backbone: ResNet18 (final FC replaced by Identity).
@@ -77,7 +96,10 @@ You can combine `--config` with CLI overrides. The runner resolves the final con
 - Train a linear classifier on top using lightly augmented train data and minimal val transforms.
 - Report accuracy curves and final/best validation accuracy.
 
+
+
 ## Models explained
+
 - MerLin (default)
   - Photonic circuit built with Perceval: two trainable interferometers around a phase-encoding layer.
   - Features are Sigmoid-normalized and scaled by 1/π to map into phase parameters.

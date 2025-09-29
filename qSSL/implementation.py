@@ -9,7 +9,6 @@ from pathlib import Path
 
 import torch
 import torch.nn as nn
-from torchsummary import summary
 from lib.config import deep_update, default_config, load_config
 from lib.data_utils import load_finetuning_data, load_transformed_data
 from lib.model import QSSL
@@ -19,6 +18,7 @@ from lib.training_utils import (
     save_results_to_json,
     train,
 )
+from torchsummary import summary
 
 # Command-line argument parser for configuring the experiment
 parser = argparse.ArgumentParser(description="PyTorch Quantum self-sup training")
@@ -155,28 +155,26 @@ if __name__ == "__main__":
         # Dataset
         args.datadir = getattr(args, "datadir", None) or cfg["dataset"]["root"]
         args.classes = getattr(args, "classes", None) or cfg["dataset"]["classes"]
-        args.batch_size = getattr(args, "batch_size", None) or cfg["dataset"][
-            "batch_size"
-        ]
+        args.batch_size = (
+            getattr(args, "batch_size", None) or cfg["dataset"]["batch_size"]
+        )
         # Training
         args.epochs = getattr(args, "epochs", None) or cfg["training"]["epochs"]
-        args.ckpt_step = getattr(args, "ckpt_step", None) or cfg["training"][
-            "ckpt_step"
-        ]
-        args.le_epochs = getattr(args, "le_epochs", None) or cfg["training"][
-            "le_epochs"
-        ]
+        args.ckpt_step = (
+            getattr(args, "ckpt_step", None) or cfg["training"]["ckpt_step"]
+        )
+        args.le_epochs = (
+            getattr(args, "le_epochs", None) or cfg["training"]["le_epochs"]
+        )
         # Model common
         args.width = getattr(args, "width", None) or cfg["model"]["width"]
-        args.loss_dim = getattr(args, "loss_dim", None) or cfg["model"][
-            "loss_dim"
-        ]
-        args.batch_norm = getattr(args, "batch_norm", None) or cfg["model"][
-            "batch_norm"
-        ]
-        args.temperature = getattr(args, "temperature", None) or cfg["model"][
-            "temperature"
-        ]
+        args.loss_dim = getattr(args, "loss_dim", None) or cfg["model"]["loss_dim"]
+        args.batch_norm = (
+            getattr(args, "batch_norm", None) or cfg["model"]["batch_norm"]
+        )
+        args.temperature = (
+            getattr(args, "temperature", None) or cfg["model"]["temperature"]
+        )
         # Backends
         backend = cfg["model"].get("backend", "classical")
         args.merlin = backend == "merlin"
