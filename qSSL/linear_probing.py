@@ -12,8 +12,8 @@ import torch
 import torch.nn as nn
 from lib.data_utils import load_finetuning_data
 from lib.model import QSSL
-from torchsummary import summary
 from lib.training_utils import linear_evaluation
+from torchsummary import summary
 
 # Command-line argument parser for configuring the experiment
 parser = argparse.ArgumentParser(description="PyTorch Quantum self-sup training")

@@ -20,9 +20,10 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .variational_ansatz import VariationalAnsatz
 from qiskit import QuantumCircuit, QuantumRegister
 from qiskit.circuit import Parameter
+
+from .variational_ansatz import VariationalAnsatz
 
 
 class SimCirc14(VariationalAnsatz):

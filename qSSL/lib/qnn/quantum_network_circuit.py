@@ -47,8 +47,9 @@ except ImportError:
         PRIMITIVES_AVAILABLE = False
         Sampler = None
         Estimator = None
-from .config import Config
 from qiskit.quantum_info import Pauli, Statevector
+
+from .config import Config
 
 logging.basicConfig(level=logging.INFO)
 logging.getLogger("qiskit").setLevel(logging.WARN)

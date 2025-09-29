@@ -1,10 +1,7 @@
-import os
 import sys
-import importlib.util
-from types import SimpleNamespace
 from pathlib import Path
+from types import SimpleNamespace
 
-import pytest
 import torch
 
 # Ensure qSSL/lib is importable as `lib` (prepend qSSL/ to sys.path)
@@ -18,23 +15,23 @@ from lib.model import QSSL  # noqa: E402
 
 def _make_base_args():
     # Common defaults
-    return dict(
-        width=4,
-        batch_norm=False,
-        layers=1,
-        loss_dim=8,
-        temperature=0.07,
+    return {
+        "width": 4,
+        "batch_norm": False,
+        "layers": 1,
+        "loss_dim": 8,
+        "temperature": 0.07,
         # Qiskit/MerLin optional fields
-        modes=4,
-        no_bunching=False,
-        encoding="vector",
-        q_ansatz="sim_circ_14_half",
-        q_sweeps=1,
-        activation="null",
-        shots=10,
-        q_backend="qasm_simulator",
-        save_dhs=False,
-    )
+        "modes": 4,
+        "no_bunching": False,
+        "encoding": "vector",
+        "q_ansatz": "sim_circ_14_half",
+        "q_sweeps": 1,
+        "activation": "null",
+        "shots": 10,
+        "q_backend": "qasm_simulator",
+        "save_dhs": False,
+    }
 
 
 def _make_args_classical():

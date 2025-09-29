@@ -23,8 +23,9 @@
 import logging
 from math import floor
 
-from .activation_function import ActivationFunction
 from qiskit import ClassicalRegister, QuantumCircuit, QuantumRegister
+
+from .activation_function import ActivationFunction
 
 
 class PartialMeasActivationFunction(ActivationFunction):

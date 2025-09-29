@@ -20,8 +20,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .variational_ansatz import VariationalAnsatz
 from qiskit.circuit import Parameter
+
+from .variational_ansatz import VariationalAnsatz
 
 
 class SimCirc14Half(VariationalAnsatz):

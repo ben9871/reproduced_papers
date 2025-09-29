@@ -20,8 +20,9 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .activation_function import ActivationFunction
 from qiskit import QuantumCircuit, QuantumRegister
+
+from .activation_function import ActivationFunction
 
 
 class NullActivationFunction(ActivationFunction):

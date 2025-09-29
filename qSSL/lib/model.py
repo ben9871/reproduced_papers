@@ -3,70 +3,54 @@
 # Based on "Quantum Self-Supervised Learning" by Jaderberg et al. (2022)
 
 import math
-import sys
-from pathlib import Path
 
-import perceval as pcvl  # Photonic quantum computing library
+# Lazy-import quantum libs to avoid hard dependency during classical tests
 import torch
 import torch.nn as nn
 import torchvision
-from merlin import OutputMappingStrategy, QuantumLayer  # MerLin quantum layer
-from .training_utils import InfoNCELoss
 
 # Import QNet from relocated package within lib
 from .qnn.qnet import QNet
+from .training_utils import InfoNCELoss
 
 
 def create_quantum_circuit(modes=10, feature_size=10):
     """
     Create a photonic quantum circuit for feature encoding and processing.
-
-    Args:
-        modes (int): Number of photonic modes in the circuit
-        feature_size (int): Dimension of input features to encode
-
-    Returns:
-        pcvl.Circuit: Complete photonic circuit with trainable parameters
     """
+    # Local import to avoid requiring perceval unless MerLin backend is used
+    import perceval as pcvl  # type: ignore
+
     # First trainable interferometer - processes input photons
     pre_circuit = pcvl.GenericInterferometer(
         modes,
         lambda i: (
-            pcvl.BS()  # Beam splitter for photon interference
-            .add(0, pcvl.PS(pcvl.P(f"phase_train_1_{i}")))  # Trainable phase shifter
-            .add(0, pcvl.BS())  # Second beam splitter
-            .add(
-                0, pcvl.PS(pcvl.P(f"phase_train_2_{i}"))
-            )  # Second trainable phase shifter
+            pcvl.BS()
+            .add(0, pcvl.PS(pcvl.P(f"phase_train_1_{i}")))
+            .add(0, pcvl.BS())
+            .add(0, pcvl.PS(pcvl.P(f"phase_train_2_{i}")))
         ),
     )
     # Data encoding layer - embed classical features into quantum states
-    # Uses phase encoding: classical data modulates phase shifters
     var = pcvl.Circuit(modes)
     for k in range(0, feature_size):
-        # Distribute features across available modes using modulo operation
         var.add(k % modes, pcvl.PS(pcvl.P(f"feature-{k}")))
 
     # Second trainable interferometer - processes encoded features
     post_circuit = pcvl.GenericInterferometer(
         modes,
         lambda i: (
-            pcvl.BS()  # Beam splitter for quantum processing
-            .add(0, pcvl.PS(pcvl.P(f"phase_train_3_{i}")))  # Trainable phase shifter
-            .add(0, pcvl.BS())  # Second beam splitter
-            .add(
-                0, pcvl.PS(pcvl.P(f"phase_train_4_{i}"))
-            )  # Second trainable phase shifter
+            pcvl.BS()
+            .add(0, pcvl.PS(pcvl.P(f"phase_train_3_{i}")))
+            .add(0, pcvl.BS())
+            .add(0, pcvl.PS(pcvl.P(f"phase_train_4_{i}")))
         ),
     )
 
-    # Combine all components into complete quantum circuit
-    # Structure: pre_processing -> data_encoding -> post_processing
     circuit = pcvl.Circuit(modes)
-
-    circuit.add(0, pre_circuit, merge=True)  # Add first trainable layer
-    circuit.add(0, var, merge=True)  # Add data encoding layer
-    circuit.add(0, post_circuit, merge=True)  # Add second trainable layer
+    circuit.add(0, pre_circuit, merge=True)
+    circuit.add(0, var, merge=True)
+    circuit.add(0, post_circuit, merge=True)
 
     return circuit
 
@@ -145,6 +129,9 @@ class QSSL(nn.Module):
         # ========== Quantum Representation Network (MerLin) ==========
         if self.merlin:
             print("\n -> Building the quantum representation network with MerLin")
+            # Local import to avoid hard dependency unless used
+            from merlin import OutputMappingStrategy, QuantumLayer  # type: ignore
+
             self.modes = args.modes  # Number of photonic modes
             self.no_bunching = args.no_bunching  # Photon bunching configuration
 
@@ -161,20 +148,18 @@ class QSSL(nn.Module):
 
             # Create quantum layer using MerLin framework
             self.representation_network = QuantumLayer(
-                input_size=self.width,  # Classical input dimension
-                output_size=None,  # Auto-compute based on quantum measurements
-                circuit=self.circuit,  # Photonic circuit defined above
+                input_size=self.width,
+                output_size=None,
+                circuit=self.circuit,
                 trainable_parameters=[
                     p.name
                     for p in self.circuit.get_parameters()
-                    if not p.name.startswith(
-                        "feature"
-                    )  # Only circuit params, not data encoding
+                    if not p.name.startswith("feature")
                 ],
-                input_parameters=["feature"],  # Parameters that encode classical data
-                input_state=input_state,  # Initial quantum state
-                no_bunching=self.no_bunching,  # Photon statistics configuration
-                output_mapping_strategy=OutputMappingStrategy.NONE,  # Raw quantum output
+                input_parameters=["feature"],
+                input_state=input_state,
+                no_bunching=self.no_bunching,
+                output_mapping_strategy=OutputMappingStrategy.NONE,
             )
 
             self.rep_net_output_size = self.representation_network.output_size

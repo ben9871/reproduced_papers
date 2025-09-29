@@ -1,6 +1,7 @@
 import numpy as np
-from .data_handler import DataHandler
 from qiskit import QuantumCircuit
+
+from .data_handler import DataHandler
 
 
 class NEQRSVDataHandler(DataHandler):

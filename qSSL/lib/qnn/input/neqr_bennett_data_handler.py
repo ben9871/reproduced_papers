@@ -1,8 +1,9 @@
 import logging
 
 import numpy as np
-from .data_handler import DataHandler
 from qiskit import QuantumCircuit, QuantumRegister
+
+from .data_handler import DataHandler
 
 
 class NEQRBennettDataHandler(DataHandler):

@@ -24,16 +24,17 @@
 
 import logging
 
+from qiskit.exceptions import QiskitError
+from qiskit_aer import Aer
+from qiskit_ibm_runtime import QiskitRuntimeService
+from qiskit_ibm_runtime.exceptions import IBMAccountError, IBMRuntimeError
+
 from .activation_function.activation_function import ActivationFunction
 from .activation_function.activation_function_factory import ActivationFunctionFactory
 from .ansatz.variational_ansatz import VariationalAnsatz
 from .ansatz.variational_ansatz_factory import VariationalAnsatzFactory
 from .input.data_handler import DataHandler
 from .input.data_handler_factory import DataHandlerFactory
-from qiskit.exceptions import QiskitError
-from qiskit_aer import Aer
-from qiskit_ibm_runtime import QiskitRuntimeService
-from qiskit_ibm_runtime.exceptions import IBMAccountError, IBMRuntimeError
 
 
 class Config:

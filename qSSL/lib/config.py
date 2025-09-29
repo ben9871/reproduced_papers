@@ -24,11 +24,7 @@ def default_config():
         "seed": 42,
         "outdir": "outdir",
         "device": "cpu",
-        "dataset": {
-            "root": "./data",
-            "classes": 2,
-            "batch_size": 128
-        },
+        "dataset": {"root": "./data", "classes": 2, "batch_size": 128},
         "model": {
             "backend": "classical",  # classical | qiskit | merlin
             "width": 8,
@@ -42,12 +38,8 @@ def default_config():
             "activation": "null",
             "shots": 100,
             "modes": 10,
-            "no_bunching": False
+            "no_bunching": False,
         },
-        "training": {
-            "epochs": 2,
-            "ckpt_step": 1,
-            "le_epochs": 100
-        },
-        "logging": {"level": "info"}
+        "training": {"epochs": 2, "ckpt_step": 1, "le_epochs": 100},
+        "logging": {"level": "info"},
     }

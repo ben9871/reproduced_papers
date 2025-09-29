@@ -20,7 +20,6 @@
 # OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 # SOFTWARE.
 
-from .activation_function import ActivationFunction
 from .null_activation_function import NullActivationFunction
 from .partial_meas_activation_function import PartialMeasActivationFunction
 

@@ -26,12 +26,13 @@ import logging
 import numpy as np
 import torch
 import torch.nn as nn
+from torch import cuda
+from torch.autograd import Function
+
 from .config import Config
 from .gradient_calculator import calculate_gradient_list
 from .input.vector_data_handler import VectorDataHandler
 from .quantum_network_circuit import QuantumNetworkCircuit
-from torch import cuda
-from torch.autograd import Function
 
 
 class QNetFunction(Function):

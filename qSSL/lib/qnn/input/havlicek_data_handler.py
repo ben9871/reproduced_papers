@@ -1,7 +1,8 @@
 import numpy as np
-from .data_handler import DataHandler
 from qiskit import QuantumCircuit, QuantumRegister
 from qiskit.circuit import Parameter
+
+from .data_handler import DataHandler
 
 
 class HavlicekDataHandler(DataHandler):
