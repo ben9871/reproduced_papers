@@ -4,7 +4,7 @@ Reproduction of: “Quantum Self-Supervised Learning” (Jaderberg et al.), arXi
 
 In this folder, you will find an implementation and evaluation of the core ideas from the paper. It supports three representation networks under the same SSL pipeline: a photonic (MerLin/Perceval) model, a gate-model (Qiskit) model, and a classical MLP baseline.
 
-— Default backend in this repo: MerLin (photonic).
+The default backend in this repo is MerLin (photonic).
 
 ## What is reproduced
 - Dataset and task: CIFAR-10, restricted to the first k labels (e.g., k=5).
