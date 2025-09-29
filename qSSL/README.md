@@ -113,3 +113,9 @@ python linear_probing.py --pretrained ./results/merlin/<timestamp>/
 
 ## Troubleshooting
 - For Qiskit, ensure `qiskit-aer` is installed and the selected backend (e.g., `qasm_simulator`) is available.
+
+## Tests:
+Tests are in the ./tests folder and contain tests to validate one forward pass in the classical, MerLin and Qiskit models as well as a test on the InfoNCE loss. Once the environment is installed, you can run them
+```
+python3 -m pytest tests/
+```
