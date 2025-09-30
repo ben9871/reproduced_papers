@@ -201,6 +201,8 @@ All the results are stored in `results/` directory and you can reproduce them ea
 - `architecture_grid_{n_layers}_{dataset}.png` - Mini benchmark of architecture design on the {dataset} dataset with {n_layers} reuploading layers
 - `tau_alpha_grid_{n_layers}_{dataset}.png` - Mini benchmark of tau and alpha on the {dataset} dataset with {n_layers} reuploading layers
 
+Note that the file `./results/requirements.txt` was created using `pip freeze > ./results/requirements.txt` so you can see every single library installed in our virtual environment at the moment of writing this.
+
 Comparing Figure 2 from the reference paper with `architecture_grid_1_circles.png`, `architecture_grid_2_circles.png` and `architecture_grid_3_circles.png`, we see that increasing the number of layers from 1 to 2 improves the final decision boundary of the model. However, it is not so clear, in our results, that increasing the number of layers from 2 to 3 improves the decision boundary once again. Whereas, in the paper, it is really clear. This difference may stem from the usage of different base MZI circuits. Indeed, using various circuit designs shows us that 2 data reuploading layers is enough to capture the dataset pattern.
 
 When looking at Figure 5 from the paper and our corresponding results, there are not many differences between the two. The most obvious one is that we reach better accuracies on the Tetromino dataset for pretty much every number of data reuploading layers. This could be due to the fact that in the paper, they use noisy images for training and noiseless ones for testing. In our implementation, we have used noisy images for training and testing for the training data distribution represents the test data distribution which leads to better results.

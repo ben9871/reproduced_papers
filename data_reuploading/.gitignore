@@ -20,6 +20,7 @@ __pycache__/
 /results/*
 !results/.gitkeep
 !results/*.png
+!results/requirements.txt
 /outdir/*
 !outdir/.gitkeep
 
