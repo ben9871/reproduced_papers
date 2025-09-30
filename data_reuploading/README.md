@@ -229,7 +229,7 @@ Finally, here are some conclusions we have reached upon reproducing the experime
 First letter = data encoding block, Second letter = trainable block
 
 **Next Steps:**
-- Extend to more complex datasets (tetromino, overhead MNIST)
+- Extend to more complex datasets (overhead MNIST 10 classes)
 - Compare with classical baseline models
 - Deploy on actual quantum photonic hardware
 - Optimize for hardware-specific noise models
