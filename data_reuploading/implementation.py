@@ -51,23 +51,10 @@ def reproduce_figure_5(cfg, run_dir: Path) -> None:
     logger = logging.getLogger(__name__)
     logger.info("Reproducing Figure 5 from paper")
 
-    # Get dataset
+    # Get dataset hyperparameters
     dataset_name = cfg["experiment"]["dataset"]
-    if dataset_name == "circles":
-        dataset = CirclesDataset(n_train=400, n_test=100)
-    elif dataset_name == "moons":
-        dataset = MoonsDataset(n_train=400, n_test=100)
-    elif dataset_name == "tetromino":
-        dataset = TetrominoDataset(n_train=400, n_test=100)
-    elif dataset_name == "overhead":
-        dataset = OverheadMNISTDataset(
-            n_train=400, n_test=100, balanced=True, root="data/overhead"
-        )
-    else:
-        raise ValueError(f"Unknown dataset: {dataset_name}")
-
-    X_train, y_train = dataset.train
-    X_test, y_test = dataset.test
+    train_size = cfg["dataset"]["train_size"]
+    test_size = cfg["dataset"]["test_size"]
 
     # Parameters from the paper
     alpha = cfg["experiment"]["alpha"]
@@ -104,14 +91,17 @@ def reproduce_figure_5(cfg, run_dir: Path) -> None:
 
             # Recreate dataset for each repetition to get different random splits
             if dataset_name == "circles":
-                rep_dataset = CirclesDataset(n_train=400, n_test=100)
+                rep_dataset = CirclesDataset(n_train=train_size, n_test=test_size)
             elif dataset_name == "moons":
-                rep_dataset = MoonsDataset(n_train=400, n_test=100)
+                rep_dataset = MoonsDataset(n_train=train_size, n_test=test_size)
             elif dataset_name == "tetromino":
-                rep_dataset = TetrominoDataset(n_train=100, n_test=48)
+                rep_dataset = TetrominoDataset(n_train=train_size, n_test=test_size)
             elif dataset_name == "overhead":
                 rep_dataset = OverheadMNISTDataset(
-                    n_train=1776, n_test=222, balanced=True, root="data/overhead"
+                    n_train=train_size,
+                    n_test=test_size,
+                    balanced=True,
+                    root="data/overhead",
                 )
             else:
                 raise ValueError(f"Unknown dataset: {dataset_name}")
@@ -295,8 +285,8 @@ def resolve_config(args: argparse.Namespace):
         "dataset": "circles",
         "alpha": np.pi / 10,
         "tau": 1.0,
-        "max_layers": 3,
-        "repetitions": 3,
+        "max_layers": 15,
+        "repetitions": 5,
         "designs": "AA",
     }
 
@@ -310,6 +300,17 @@ def resolve_config(args: argparse.Namespace):
     }
 
     cfg["dataset"]["batch_size"] = 400  # Full batch as in paper
+    cfg["dataset"]["train_size"] = 400
+    cfg["dataset"]["test_size"] = 100
+    if args.dataset is not None:
+        if args.dataset == "tetromino":
+            cfg["dataset"]["train_size"] = 100
+            cfg["dataset"]["test_size"] = 48
+        elif args.dataset == "overhead":
+            cfg["dataset"]["train_size"] = 1776
+            cfg["dataset"]["test_size"] = 222
+            cfg["experiment"]["max_layers"] = 4
+            cfg["experiment"]["min_layers"] = 4
     cfg["outdir"] = "results"
 
     # Load from file if provided
@@ -332,9 +333,6 @@ def resolve_config(args: argparse.Namespace):
         cfg["device"] = args.device
     if args.dataset is not None:
         cfg["experiment"]["dataset"] = args.dataset
-        if args.dataset == "overhead":
-            cfg["experiment"]["min_layers"] = 4
-            cfg["experiment"]["max_layers"] = 4
     if args.epochs is not None:
         cfg["training"]["epochs"] = args.epochs
     if args.batch_size is not None:

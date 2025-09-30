@@ -23,6 +23,7 @@ import seaborn as sns
 from PIL import Image
 from sklearn.datasets import make_circles, make_moons
 from sklearn.decomposition import PCA
+from sklearn.preprocessing import MinMaxScaler
 
 plt.rcParams.update(
     {
@@ -361,6 +362,10 @@ class OverheadMNISTDataset(PaperDataset):
         X_test_flat = self._X_test_raw.reshape(len(self._X_test_raw), -1) / 255.0
         X_train_pca = self._pca.fit_transform(X_train_flat)
         X_test_pca = self._pca.transform(X_test_flat)
+
+        scaler = MinMaxScaler()
+        X_train_pca = scaler.fit_transform(X_train_pca)
+        X_test_pca = scaler.transform(X_test_pca)
 
         # Convert labels: car=0, ship=1 (original has car=0, ship=7)
         y_train = (self._y_train_raw == 7).astype(int)

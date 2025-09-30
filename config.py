@@ -35,6 +35,8 @@ def default_config():
             "root": "data",
             "split": "train",
             "batch_size": 32,
+            "train_size": 400,
+            "test_size": 100,
         },
         "model": {
             "name": "<MODEL_NAME>",

@@ -11,7 +11,7 @@
 
 The reference paper's goal is to present a well performing and resource-efficient data re-uploading scheme on a photonic quantum processor. They also provide new theoretical insights about this algorithm.
 
-The scope of this reproduction englobes the experiments on the 4 different binary classification tasks: circles, moons, tetromino and overhead MNIST. We report the training and test classification accuracies in function of the number of layers used. In addition, we have also visualized the decision boundary of the classifier (trained on the circles dataset) based on its number of layers.
+The scope of this reproduction englobes the experiments on the 4 different binary classification tasks: circles, moons, tetromino and overhead MNIST. We report the training and test classification accuracies in function of the number of layers used which corresponds to Figure 5 form the paper. In addition, we have also visualized the decision boundary of the classifier (trained on the circles dataset) based on its number of layers during the mini benchmarking of architecture design. This corresponds to the Figure 2 from the paper.
 
 A deviation from the paper is that we have included the variable alpha into the map function from data to phases instead of directly setting the scaling to $\pi/2$:
 
@@ -77,7 +77,15 @@ python implementation.py --config configs/quick_test.json
 ```
 
 #### 2. Architecture Design Benchmark
-Compares 9 different circuit designs (combinations of A, B, C data/trainable blocks):
+Here are the different architecture designs, considering that $\theta_i$ can either be an encoded data component or a trainable parameter depending on whether it is inside a `data block` or a `trainable block`:
+
+A: PS_0($\theta_i$) ; BS() ; PS_0($\theta_{i+1}$) ; BS()
+
+B: PS_0($\theta_i$) ; BS_0($\theta_{i+1}$)
+
+C: PS_0($\theta_i$) ; PS_1($\theta_{i+1}$) ; BS_0()
+
+This benchmark compares 9 different circuit designs (combinations of A, B, C data/trainable blocks) for different number of reuploading layers:
 
 ```bash
 # Run architecture benchmark on circles
@@ -184,21 +192,28 @@ Configuration files are stored in `configs/` directory:
 - `tau`: Fisher loss temperature parameter
 - `max_layers`: Maximum number of reuploading layers
 - `repetitions`: Number of statistical repetitions
-- `batch_size`: 400 (full batch) as used in paper
+- `batch_size`: 400 (full batch) as used in paper for the circles and moons datasets
 
 ## Results and Analysis
 
-- Where results are stored, how to reproduce key figures/tables
-- Any divergence from reported metrics and possible causes
-- Post-hoc analyses (ablation, sensitivity, robustness)
+All the results are stored in `results/` directory and you can reproduce them easily by looking at the `How to Run` section of this README:
+- `figure_5_{dataset}.png` - Figure 5 reproduction on the {dataset} dataset
+- `architecture_grid_{n_layers}_{dataset}.png` - Mini benchmark of architecture design on the {dataset} dataset with {n_layers} reuploading layers
+- `tau_alpha_grid_{n_layers}_{dataset}.png` - Mini benchmark of tau and alpha on the {dataset} dataset with {n_layers} reuploading layers
 
+Comparing Figure 2 from the reference paper with `architecture_grid_1_circles.png`, `architecture_grid_2_circles.png` and `architecture_grid_3_circles.png`, we see that increasing the number of layers from 1 to 2 improves the final decision boundary of the model. However, it is not so clear, in our results, that increasing the number of layers from 2 to 3 improves the decision boundary once again. Whereas, in the paper, it is really clear. This difference may stem from the usage of different base MZI circuits. Indeed, using various circuit designs shows us that 2 data reuploading layers is enough to capture the dataset pattern.
 
+When looking at Figure 5 from the paper and our corresponding results, there are not many differences between the two. The most obvious one is that we reach better accuracies on the Tetromino dataset for pretty much every number of data reuploading layers. This could be due to the fact that in the paper, they use noisy images for training and noiseless ones for testing. In our implementation, we have used noisy images for training and testing for the training data distribution represents the test data distribution which leads to better results.
+
+Finally, here are some conclusions we have reached upon reproducing the experiments from this paper:
+- Using MinMaxScaling on PCAed overhead MNIST was crucial to reach good accuracies
+- Increasing the number of data reuploading layers does increase model expressivity, but that is not always better for a classifying task.
+- Using the circuit design C for the data encoding block will refrain the model from learning. Interestingly, using it for the trainable block can yield good results.
+- There is no clear better design choice between design A and B.
+- A high value of alpha ($\frac{\pi}{2}$) will lead to overcomplex decision boundaries which hurts the model. Whereas a low value of alpha ($\frac{\pi}{100}$) will often lead to decision boundaries that are too simple.
+- A similar phenomenon happens with the value of tau, but less obviously. We conclude that tau values around 1.0 often yield the best results. 
 
 ## Extensions and Next Steps
-
-- Potential model variations to explore
-- Additional datasets or tasks
-- Improved training strategies or evaluation metrics
 
 **Additional Benchmarks Included:**
 1. **Architecture Design Grid**: Tests 9 different circuit designs (AA, AB, AC, BA, BB, BC, CA, CB, CC) across multiple depths

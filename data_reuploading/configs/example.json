@@ -6,7 +6,9 @@
     "name": "<DATASET_NAME>",
     "root": "data",
     "split": "train",
-    "batch_size": 32
+    "batch_size": 32,
+    "train_size": 100,
+    "test_size": 25
   },
   "model": {
     "name": "<MODEL_NAME>",
