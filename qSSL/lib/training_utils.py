@@ -250,7 +250,7 @@ def linear_evaluation(model, train_loader, val_loader, args, results_dir):
 
             # Calculate accuracy
             _, predicted = torch.max(output.data, 1)
-            accuracy = (predicted == target).sum().item()
+            accuracy = (predicted == target).sum().item() / target.size(0)
             train_acc += accuracy
             train_loss_total += loss.item()
             pbar.set_postfix(
