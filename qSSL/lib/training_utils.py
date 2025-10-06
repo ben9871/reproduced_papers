@@ -278,8 +278,8 @@ def linear_evaluation(model, train_loader, val_loader, args, results_dir):
                     }
                 )
 
-        avg_train_acc = train_acc / len(train_loader.dataset)
-        avg_val_acc = val_acc / len(val_loader.dataset)
+        avg_train_acc = train_acc / len(train_loader)
+        avg_val_acc = val_acc / len(val_loader)
         avg_train_loss = train_loss_total / len(train_loader)
         avg_val_loss = val_loss_total / len(val_loader)
 
