@@ -47,7 +47,7 @@ Overall, we reproduced the results highlighted in the paper and we have a photon
 ## Install
 ```bash
 python -m venv ssl-venv
-source .venv/bin/activate
+source ssl-venv/bin/activate
 pip install -r requirements.txt
 ```
 
