@@ -4,7 +4,7 @@ Reproduction of: “Quantum Self-Supervised Learning” (Jaderberg et al.), arXi
 
 In this folder, you will find an implementation and evaluation of the core ideas from the paper. It supports three representation networks under the same SSL pipeline: a photonic (MerLin/Perceval) model, a gate-model (Qiskit) model, and a classical MLP baseline.
 
-The default backend in this repo is MerLin (photonic).
+— Default backend in this repo: MerLin (photonic).
 
 ## What is reproduced
 - Dataset and task: CIFAR-10, restricted to the first k labels (e.g., k=5).
@@ -125,7 +125,7 @@ Evaluate pretrained encoders with a frozen representation and train a linear hea
 # Single checkpoint file
 python linear_probing.py --pretrained ./results/merlin/<timestamp>/model-cl-5-epoch-5.pth
 
-# Or point to a results directory (auto-discovers .pth files)
+# Or point to a results directory (the code will evaluate all .pth files in the folder)
 python linear_probing.py --pretrained ./results/merlin/<timestamp>/
 ```
 
