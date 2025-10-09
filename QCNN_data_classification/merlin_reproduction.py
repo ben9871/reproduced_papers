@@ -149,8 +149,9 @@ def create_quantum_circuit(n_modes: int, n_features: int):
     return wl // c_var // wr
 
 def required_input_params(n_modes: int, n_features: int) -> int:
-    # Parallel-columns requires K = n_features * n_modes input parameters ("pl*")
-    return n_features * n_modes
+    if n_features > n_modes:
+        raise ValueError("n_features cannot exceed n_modes when matching inputs one-to-one.")
+    return n_features
 
 # ======================= Data / Utils =======================
 
@@ -241,49 +242,31 @@ class SingleGI(nn.Module):
     ):
         super().__init__()
         self.K = required_inputs
-        self.adapter = adapter
         self.input_dim = input_dim
+        if self.input_dim != self.K:
+            raise ValueError(
+                f"Quantum layer expects {self.K} features but received {self.input_dim}. "
+                "Set circuit and preprocessing parameters so they match exactly."
+            )
         self.q = build_single_gi_layer(
             n_modes, n_features, n_photons=n_photons,
             reservoir_mode=reservoir_mode, state_pattern=state_pattern
         )
-        # Optional learnable adapter
-        if self.adapter == "linear":
-            self.lin = nn.Linear(self.input_dim, self.K)
 
     def _adapt(self, features: torch.Tensor) -> torch.Tensor:
-        """Remap features to the K inputs expected by the quantum layer."""
+        """
+        Identity pass-through kept for backward compatibility with previous API.
+        Validates shapes to ensure the quantum circuit receives exactly K inputs.
+        """
         if features.dim() == 1:
             features = features.unsqueeze(0)
         current_dim = features.shape[-1]
-        if current_dim == self.K and self.adapter not in ("repeat", "linear"):
-            return features
-        if self.adapter in ("auto", "slice"):
-            if current_dim >= self.K:
-                return features[..., :self.K]
-            return F.pad(features, (0, self.K - current_dim), value=0.0)
-        if self.adapter == "zero_pad":
-            if current_dim >= self.K:
-                return features[..., :self.K]
-            return F.pad(features, (0, self.K - current_dim), value=0.0)
-        if self.adapter == "repeat":
-            if current_dim == 0:
-                raise ValueError("Cannot repeat features with zero width.")
-            reps = (self.K + current_dim - 1) // current_dim
-            if features.dim() == 1:
-                expanded = features.repeat(reps)
-            elif features.dim() == 2:
-                expanded = features.repeat(1, reps)
-            else:
-                repeat_dims = [1] * (features.dim() - 1) + [reps]
-                expanded = features.repeat(*repeat_dims)
-            return expanded[..., :self.K]
-        if self.adapter == "linear":
-            return self.lin(features)
-        # Fallback: slice or pad as needed
-        if current_dim >= self.K:
-            return features[..., :self.K]
-        return F.pad(features, (0, self.K - current_dim), value=0.0)
+        if current_dim != self.K:
+            raise ValueError(
+                f"Expected feature width {self.K}, received {current_dim}. "
+                "Adjust preprocessing so the feature dimension matches the circuit requirements."
+            )
+        return features
 
     def forward(self, angles: torch.Tensor) -> torch.Tensor:
         adapted = self._adapt(angles)  # [..., K]
@@ -301,48 +284,25 @@ class QuantumPatchKernel(nn.Module):
         q_layer: ML.QuantumLayer,
         required_inputs: int,
         patch_dim: int,
-        adapter: str = "auto",
     ):
         super().__init__()
         self.q = q_layer
         self.K = required_inputs
         self.patch_dim = patch_dim
-        self.adapter = adapter
-        if self.adapter == "linear":
-            self.lin = nn.Linear(patch_dim, self.K)
-
-    def _adapt(self, features: torch.Tensor) -> torch.Tensor:
-        if features.dim() == 1:
-            features = features.unsqueeze(0)
-        current_dim = features.shape[-1]
-        if current_dim == self.K and self.adapter not in ("repeat", "linear"):
-            return features
-        if self.adapter in ("auto", "slice"):
-            if current_dim >= self.K:
-                return features[..., :self.K]
-            return F.pad(features, (0, self.K - current_dim), value=0.0)
-        if self.adapter == "zero_pad":
-            if current_dim >= self.K:
-                return features[..., :self.K]
-            return F.pad(features, (0, self.K - current_dim), value=0.0)
-        if self.adapter == "repeat":
-            if current_dim == 0:
-                raise ValueError("Cannot repeat features with zero width.")
-            reps = (self.K + current_dim - 1) // current_dim
-            if features.dim() == 1:
-                expanded = features.repeat(reps)
-            else:
-                expanded = features.repeat(1, reps)
-            return expanded[..., :self.K]
-        if self.adapter == "linear":
-            return self.lin(features)
-        if current_dim >= self.K:
-            return features[..., :self.K]
-        return F.pad(features, (0, self.K - current_dim), value=0.0)
+        if self.patch_dim != self.K:
+            raise ValueError(
+                f"Quantum kernel expects patch size {self.K}, received {self.patch_dim}. "
+                "Ensure kernel_size equals the number of encoded quantum features."
+            )
 
     def forward(self, patch: torch.Tensor) -> torch.Tensor:
-        adapted = self._adapt(patch)
-        return self.q(adapted)
+        if patch.dim() == 1:
+            patch = patch.unsqueeze(0)
+        if patch.shape[-1] != self.K:
+            raise ValueError(
+                f"Expected patch with last dimension {self.K}, got {patch.shape[-1]}."
+            )
+        return self.q(patch)
 
     @property
     def output_size(self) -> int:
@@ -533,8 +493,6 @@ def main():
                     help="use classical learnable kernels instead of QuantumLayer kernels")
     ap.add_argument("--compare_classical", action="store_true",
                     help="run both quantum and classical qconv variants with matching kernel counts")
-    ap.add_argument("--qconv_adapter", choices=["auto","slice","zero_pad","repeat","linear"], default="auto",
-                    help="adapter strategy from PCA patches to quantum kernel inputs")
     ap.add_argument("--qconv_kernel_modes", type=int, default=8,
                     help="number of optical modes per quantum kernel (default: qconv_kernel_size)")
     ap.add_argument("--qconv_kernel_features", type=int, default=2,
@@ -590,14 +548,13 @@ def main():
                     circuit=create_quantum_circuit(kernel_modes, args.qconv_kernel_features),
                     trainable_parameters=["theta"],
                     input_parameters=["px"],
-                    input_state=[1, 0, 1, 0, 1, 0, 1, 0],
+                    input_state=([1, 0] * (kernel_modes // 2) + [0]) if kernel_modes % 2 == 1 else [1, 0] * (kernel_modes // 2),
                     output_mapping_strategy=ML.OutputMappingStrategy.GROUPING,
                 )
                 return QuantumPatchKernel(
                     q_layer,
                     required_inputs=kernel_required_inputs,
                     patch_dim=args.qconv_kernel_size,
-                    adapter=args.qconv_adapter,
                 )
 
             sample_kernel = _make_kernel()
@@ -670,6 +627,7 @@ def main():
         for s in range(args.seeds):
             print(f"[Seed {s+1}/{args.seeds}]")
             model = builder()
+            print(f"Number of trainable parameters = {sum(p.numel() for p in model.parameters() if p.requires_grad)}")
             acc = train_once(
                 Ztr, ytr, Zte, yte,
                 args.n_modes, args.n_features,
