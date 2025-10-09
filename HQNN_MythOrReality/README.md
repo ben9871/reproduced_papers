@@ -45,5 +45,5 @@ The search space looks as follows:
 To run the HQNN experiments ```python3 implementation.py``` 
 
 ### Results
-So far, the results we obtained for the parameter counts are as follows:
+The results we obtained for the parameter counts are as follows:
 ![Results parameters](./assets/Results.png)
