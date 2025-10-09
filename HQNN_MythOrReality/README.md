@@ -10,6 +10,14 @@ Here, we reproduce the experiments presented in the following paper [Computation
 - `utils/`: shared helpers for data loading, training, and result persistence
 - `tests/`: lightweight sanity tests for the CLI and architecture enumeration
 - `scripts/`: auxiliary runners such as the classical baseline sweep
+- `requirements.txt`: pinned dependencies matching the `hqnn-venv` environment
+
+## Setup
+
+- Create an isolated environment (e.g. `python -m venv hqnn-venv && source hqnn-venv/bin/activate`)
+- Install the exact dependencies with `pip install -r requirements.txt` to mirror the `hqnn-venv` used for development
+
+Once dependencies are installed, the commands below can be executed from the repository root.
 
 ## Running the models
 
