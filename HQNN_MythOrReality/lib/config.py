@@ -2,10 +2,10 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 
-def load_config(path: Path) -> Dict[str, Any]:
+def load_config(path: Path) -> dict[str, Any]:
     """Load a JSON configuration file."""
     ext = path.suffix.lower()
     if ext != ".json":
@@ -13,7 +13,7 @@ def load_config(path: Path) -> Dict[str, Any]:
     return json.loads(path.read_text())
 
 
-def deep_update(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]:
+def deep_update(base: dict[str, Any], updates: dict[str, Any]) -> dict[str, Any]:
     """Recursively merge ``updates`` into ``base``."""
     for key, value in updates.items():
         if isinstance(value, dict) and isinstance(base.get(key), dict):
@@ -23,7 +23,7 @@ def deep_update(base: Dict[str, Any], updates: Dict[str, Any]) -> Dict[str, Any]
     return base
 
 
-def default_config() -> Dict[str, Any]:
+def default_config() -> dict[str, Any]:
     """Return the default configuration for HQNN spiral experiments."""
     return {
         "seed": 42,

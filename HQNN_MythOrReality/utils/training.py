@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import Iterable, Tuple
+from collections.abc import Iterable
 
 import torch
 from torch import nn
@@ -21,7 +21,7 @@ def train_model(
     num_epochs: int = 25,
     lr: float = 0.01,
     device: torch.device | str = "cpu",
-) -> Tuple[list[float], list[float], float, list[float], list[float]]:
+) -> tuple[list[float], list[float], float, list[float], list[float]]:
     """Train the provided model and track accuracy/loss curves."""
 
     criterion = nn.CrossEntropyLoss()
@@ -77,7 +77,9 @@ def train_model(
         val_acc = 100 * correct_val / max(total_val, 1)
         best_val_acc = max(best_val_acc, val_acc)
 
-        progress_bar.set_postfix({"val_loss": f"{avg_val_loss:.4f}", "val_acc": f"{val_acc:.2f}"})
+        progress_bar.set_postfix(
+            {"val_loss": f"{avg_val_loss:.4f}", "val_acc": f"{val_acc:.2f}"}
+        )
 
         train_losses.append(avg_train_loss)
         val_losses.append(avg_val_loss)

@@ -10,15 +10,14 @@ import logging
 import os
 import random
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any
 
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, TensorDataset
-
+from data.data import SpiralDatasetConfig, load_spiral_dataset
 from lib.config import deep_update, default_config, load_config
 from models.hqnn import ArchitectureSpec, build_hqnn_model, enumerate_architectures
-from utils.data import SpiralDatasetConfig, load_spiral_dataset
+from torch.utils.data import DataLoader, TensorDataset
 from utils.io import save_experiment_results
 from utils.training import count_parameters, train_model
 
@@ -60,12 +59,22 @@ def configure_logging(level: str = "info", log_file: Path | None = None) -> None
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="HQNN spiral reproduction experiments")
-    parser.add_argument("--config", type=str, default=None, help="Path to JSON config file")
+    parser.add_argument(
+        "--config", type=str, default=None, help="Path to JSON config file"
+    )
     parser.add_argument("--seed", type=int, default=None, help="Random seed")
-    parser.add_argument("--outdir", type=str, default=None, help="Base output directory")
-    parser.add_argument("--device", type=str, default=None, help="Device string (cpu|cuda|mps)")
-    parser.add_argument("--epochs", type=int, default=None, help="Training epochs override")
-    parser.add_argument("--batch-size", type=int, default=None, help="Batch size override")
+    parser.add_argument(
+        "--outdir", type=str, default=None, help="Base output directory"
+    )
+    parser.add_argument(
+        "--device", type=str, default=None, help="Device string (cpu|cuda|mps)"
+    )
+    parser.add_argument(
+        "--epochs", type=int, default=None, help="Training epochs override"
+    )
+    parser.add_argument(
+        "--batch-size", type=int, default=None, help="Batch size override"
+    )
     parser.add_argument("--lr", type=float, default=None, help="Learning rate override")
     parser.add_argument(
         "--feature-grid",
@@ -82,7 +91,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def resolve_config(args: argparse.Namespace) -> Dict[str, Any]:
+def resolve_config(args: argparse.Namespace) -> dict[str, Any]:
     cfg = default_config()
     if args.config:
         path = Path(args.config)
@@ -102,14 +111,18 @@ def resolve_config(args: argparse.Namespace) -> Dict[str, Any]:
     if args.lr is not None:
         cfg["training"]["lr"] = args.lr
     if args.feature_grid:
-        cfg["dataset"]["feature_grid"] = [int(x.strip()) for x in args.feature_grid.split(",") if x.strip()]
+        cfg["dataset"]["feature_grid"] = [
+            int(x.strip()) for x in args.feature_grid.split(",") if x.strip()
+        ]
     if args.accuracy_threshold is not None:
         cfg["model"]["accuracy_threshold"] = args.accuracy_threshold
 
     return cfg
 
 
-def _spiral_config(base_cfg: Dict[str, Any], feature_dim: int, seed: int) -> SpiralDatasetConfig:
+def _spiral_config(
+    base_cfg: dict[str, Any], feature_dim: int, seed: int
+) -> SpiralDatasetConfig:
     return SpiralDatasetConfig(
         num_instances=base_cfg["num_instances"],
         num_features=feature_dim,
@@ -146,7 +159,7 @@ def _format_results_filename(pattern: str, batch_size: int, lr: float) -> str:
         return pattern
 
 
-def train_and_evaluate(cfg: Dict[str, Any], run_dir: Path) -> None:
+def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
     logger = logging.getLogger(__name__)
 
     dataset_cfg = cfg["dataset"]
@@ -169,7 +182,7 @@ def train_and_evaluate(cfg: Dict[str, Any], run_dir: Path) -> None:
 
     for feature_dim in dataset_cfg["feature_grid"]:
         logger.info("Evaluating architectures for %s features", feature_dim)
-        architectures: List[ArchitectureSpec] = enumerate_architectures(
+        architectures: list[ArchitectureSpec] = enumerate_architectures(
             feature_dim,
             dataset_cfg["num_classes"],
         )
@@ -183,10 +196,10 @@ def train_and_evaluate(cfg: Dict[str, Any], run_dir: Path) -> None:
                 spec.param_count,
             )
 
-            all_accs: List[float] = []
-            last_curves: Dict[str, List[float]] | None = None
+            all_accs: list[float] = []
+            last_curves: dict[str, list[float]] | None = None
             last_model: torch.nn.Module | None = None
-            last_input_state: List[int] | None = None
+            last_input_state: list[int] | None = None
 
             for repetition in range(model_cfg["repetitions"]):
                 spiral_cfg = _spiral_config(
@@ -280,7 +293,7 @@ def train_and_evaluate(cfg: Dict[str, Any], run_dir: Path) -> None:
                 break
 
 
-def main(argv: List[str] | None = None) -> int:
+def main(argv: list[str] | None = None) -> int:
     configure_logging("info")
     script_dir = Path(__file__).resolve().parent
     if Path.cwd().resolve() != script_dir:

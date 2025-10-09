@@ -4,12 +4,17 @@
 from __future__ import annotations
 
 import argparse
+import sys
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
+
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
 
 from models.classical_baseline import (
-    BaselineConfig,
     MLP,
+    BaselineConfig,
     evaluate_architecture,
     generate_mlp_architectures,
 )
@@ -19,13 +24,24 @@ from utils.training import count_parameters
 
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="Classical MLP baseline runner")
-    parser.add_argument("--features", type=str, default=None, help="Comma separated feature counts")
-    parser.add_argument("--samples", type=int, default=1875, help="Number of dataset samples")
+    parser.add_argument(
+        "--features", type=str, default=None, help="Comma separated feature counts"
+    )
+    parser.add_argument(
+        "--samples", type=int, default=1875, help="Number of dataset samples"
+    )
     parser.add_argument("--classes", type=int, default=3, help="Number of classes")
-    parser.add_argument("--repetitions", type=int, default=5, help="Repetitions per architecture")
+    parser.add_argument(
+        "--repetitions", type=int, default=5, help="Repetitions per architecture"
+    )
     parser.add_argument("--lr", type=float, default=0.001, help="Learning rate")
     parser.add_argument("--batch-size", type=int, default=64, help="Batch size")
-    parser.add_argument("--threshold", type=float, default=90.0, help="Accuracy threshold for early stop")
+    parser.add_argument(
+        "--threshold",
+        type=float,
+        default=90.0,
+        help="Accuracy threshold for early stop",
+    )
     parser.add_argument(
         "--out",
         type=str,
@@ -86,7 +102,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             )
 
             if mean_acc >= args.threshold:
-                print(f"Threshold {args.threshold} reached, moving to next feature size.")
+                print(
+                    f"Threshold {args.threshold} reached, moving to next feature size."
+                )
                 break
 
     return 0

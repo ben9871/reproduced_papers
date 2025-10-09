@@ -1,6 +1,5 @@
 """Utility helpers for data loading, training loops, and experiment I/O."""
 
-from .data import load_spiral_dataset  # noqa: F401
 from .io import save_experiment_results  # noqa: F401
 from .quantum import create_quantum_circuit  # noqa: F401
 from .training import count_parameters, train_model  # noqa: F401

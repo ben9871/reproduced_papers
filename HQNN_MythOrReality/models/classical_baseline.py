@@ -2,24 +2,25 @@
 
 from __future__ import annotations
 
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
-from typing import Iterable, List, Sequence, Tuple
 
 import numpy as np
 import torch
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
-
-from utils.data import SpiralDatasetConfig, load_spiral_dataset
-from utils.training import count_parameters, train_model
+from data.data import SpiralDatasetConfig, load_spiral_dataset
+from utils.training import train_model
 
 
 class MLP(nn.Module):
     """Flexible MLP that supports a variable number of hidden dimensions."""
 
-    def __init__(self, input_dim: int, hidden_dims: Sequence[int], output_dim: int) -> None:
+    def __init__(
+        self, input_dim: int, hidden_dims: Sequence[int], output_dim: int
+    ) -> None:
         super().__init__()
-        layers: List[nn.Module] = []
+        layers: list[nn.Module] = []
         prev_dim = input_dim
 
         if not hidden_dims:
@@ -55,7 +56,7 @@ def generate_mlp_architectures(max_hidden_layers: int = 4) -> Iterable[Sequence[
     if max_hidden_layers < 1:
         return []
     base_dims = [4, 8, 16, 32, 64, 128]
-    yield tuple()
+    yield ()
     for depth in range(1, max_hidden_layers + 1):
         for base in base_dims:
             dims = [base // (2**i) for i in range(depth)]
@@ -63,10 +64,10 @@ def generate_mlp_architectures(max_hidden_layers: int = 4) -> Iterable[Sequence[
             yield tuple(dims)
 
 
-def evaluate_architecture(cfg: BaselineConfig) -> Tuple[float, float]:
+def evaluate_architecture(cfg: BaselineConfig) -> tuple[float, float]:
     """Train and evaluate the MLP baseline for the provided configuration."""
 
-    accuracies: List[float] = []
+    accuracies: list[float] = []
     for repetition in range(cfg.repetitions):
         dataset_cfg = SpiralDatasetConfig(
             num_instances=cfg.nb_samples,

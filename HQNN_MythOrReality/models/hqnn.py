@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import math
+from collections.abc import Sequence
 from dataclasses import dataclass
-from typing import Iterable, List, Sequence, Tuple
 
 import torch
 from merlin import OutputMappingStrategy, QuantumLayer
 from torch import nn
-
 from utils.quantum import create_quantum_circuit
 
 
@@ -45,9 +44,11 @@ def _candidate_modes() -> Sequence[int]:
     return tuple(range(2, 30, 2))
 
 
-def enumerate_architectures(num_features: int, num_classes: int) -> List[ArchitectureSpec]:
+def enumerate_architectures(
+    num_features: int, num_classes: int
+) -> list[ArchitectureSpec]:
     """Enumerate HQNN architectures sorted by parameter count."""
-    specs: List[ArchitectureSpec] = []
+    specs: list[ArchitectureSpec] = []
     for modes in _candidate_modes():
         max_photons = modes // 2
         for photons in range(1, max_photons + 1):
@@ -62,7 +63,9 @@ def enumerate_architectures(num_features: int, num_classes: int) -> List[Archite
                     1 for p in circuit.get_parameters() if not p.name.startswith("px")
                 )
 
-                param_count = num_features + trainable_parameters + output_size * num_classes
+                param_count = (
+                    num_features + trainable_parameters + output_size * num_classes
+                )
                 specs.append(
                     ArchitectureSpec(
                         modes=modes,
@@ -81,7 +84,7 @@ def build_hqnn_model(
     num_classes: int,
     architecture: ArchitectureSpec,
     device: torch.device | str,
-) -> Tuple[nn.Module, List[int], int]:
+) -> tuple[nn.Module, list[int], int]:
     """Instantiate the HQNN model for a given architecture."""
 
     input_state = [0] * architecture.modes
