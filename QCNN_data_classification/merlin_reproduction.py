@@ -137,7 +137,6 @@ def create_quantum_circuit(n_modes: int, n_features: int):
     for i in range(n_features):  # 4 input features
         px = pcvl.P(f"px{i + 1}")
         c_var.add(i, pcvl.PS(px))
-
     # 3. Right interferometer - trainable transformation
     wr = pcvl.GenericInterferometer(
         n_modes,
@@ -351,24 +350,19 @@ class QuantumPatchKernel(nn.Module):
             raise ValueError("QuantumLayer does not expose output_size attribute.")
         return self.q.output_size
 
-class qconv1d(nn.Module):
+class QConvModel(nn.Module):
     """
-    Lightweight 1D convolution on top of PCA components.
-
-    The layer treats each sample as a 1D signal whose length is the number of PCA
-    coefficients.  It slides `n_kernels` learnable kernels of length
-    `kernel_size` across the feature axis with the provided `stride` and
-    produces a tensor of shape ``(batch, n_kernels * n_windows)`` where
-    ``n_windows`` is the number of extracted patches.
+    Apply a set of quantum (or classical) kernels in a convolutional manner over PCA components,
+    then aggregate the flattened responses with a linear head.
     """
 
     def __init__(
         self,
+        input_dim: int,
         n_kernels: int,
         kernel_size: int,
         stride: int = 1,
         bias: bool = True,
-        flatten: bool = True,
         kernel_modules: list[nn.Module] | None = None,
     ):
         super().__init__()
@@ -379,11 +373,10 @@ class qconv1d(nn.Module):
         if stride <= 0:
             raise ValueError("stride must be a positive integer.")
 
+        self.input_dim = input_dim
         self.n_kernels = n_kernels
         self.kernel_size = kernel_size
         self.stride = stride
-        self.flatten = flatten
-        print(f"The conv1d is made of \n - {n_kernels} kernels of size {kernel_size} with a stride of {stride}")
         self.use_quantum = kernel_modules is not None
         if self.use_quantum:
             if kernel_modules is None or len(kernel_modules) != n_kernels:
@@ -398,21 +391,47 @@ class qconv1d(nn.Module):
             weight = torch.empty(n_kernels, kernel_size)
             nn.init.kaiming_uniform_(weight, a=math.sqrt(5))
             self.weight = nn.Parameter(weight)
-            self.kernel_modules = None
-            self.kernel_output_dim = 1
             if bias:
                 bound = 1 / math.sqrt(kernel_size)
                 self.bias = nn.Parameter(torch.empty(n_kernels).uniform_(-bound, bound))
             else:
                 self.register_parameter("bias", None)
+            self.kernel_modules = None
+            self.kernel_output_dim = 1
+
+        self.conv_output_dim = self.output_dim(input_dim)
+        self.head = nn.Linear(self.conv_output_dim, 2)
 
     def _compute_num_windows(self, input_len: int) -> int:
         if input_len < self.kernel_size:
             raise ValueError(
                 f"Input length {input_len} is smaller than kernel size {self.kernel_size}."
             )
-        # Mirrors torch.nn.Conv1d behaviour (floor division).
         return 1 + (input_len - self.kernel_size) // self.stride
+
+    def output_dim(self, input_len: int) -> int:
+        """Number of features produced for a given PCA dimension."""
+        num_windows = self._compute_num_windows(input_len)
+        return num_windows * self.n_kernels * self.kernel_output_dim
+
+    def _apply_classical_kernels(self, patches: torch.Tensor) -> torch.Tensor:
+        out = torch.einsum("bpk,nk->bpn", patches, self.weight)
+        if self.bias is not None:
+            out = out + self.bias.view(1, 1, -1)
+        out = out.permute(0, 2, 1).contiguous()
+        return out.view(out.size(0), -1)
+
+    def _apply_quantum_kernels(self, patches: torch.Tensor, num_windows: int, batch_size: int) -> torch.Tensor:
+        patches_flat = patches.contiguous().view(-1, patches.size(-1))
+        outputs = []
+        for kernel in self.kernel_modules:
+            y = kernel(patches_flat)
+            if y.dim() == 1:
+                y = y.unsqueeze(-1)
+            y = y.view(batch_size, num_windows, -1)
+            outputs.append(y)
+        out = torch.stack(outputs, dim=1)  # (batch, n_kernels, num_windows, out_dim)
+        return out.view(out.size(0), -1)
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         if x.dim() == 1:
@@ -421,60 +440,20 @@ class qconv1d(nn.Module):
             x = x.squeeze(1)
         if x.dim() != 2:
             raise ValueError(
-                "qconv1d expects inputs of shape (batch, n_components) "
+                "QConvModel expects inputs of shape (batch, n_components) "
                 "or (n_components,) optionally with a singleton channel dimension."
             )
 
         patches = x.unfold(dimension=-1, size=self.kernel_size, step=self.stride)
         num_windows = patches.size(1)
         if num_windows == 0:
-            raise ValueError(
-                "Unfold produced zero windows. Check kernel_size and stride values."
-            )
+            raise ValueError("Unfold produced zero windows. Check kernel_size and stride values.")
 
         if self.use_quantum:
-            patches_flat = patches.contiguous().view(-1, patches.size(-1))
-            outputs = []
-            for kernel in self.kernel_modules:
-                y = kernel(patches_flat)
-                if y.dim() == 1:
-                    y = y.unsqueeze(-1)
-                y = y.view(x.size(0), num_windows, -1)
-                outputs.append(y)
-            out = torch.stack(outputs, dim=1)  # (batch, n_kernels, num_windows, out_dim)
-            if self.flatten:
-                return out.view(out.size(0), -1)
-            return out
+            features = self._apply_quantum_kernels(patches, num_windows, x.size(0))
+        else:
+            features = self._apply_classical_kernels(patches)
 
-        out = torch.einsum("bpk,nk->bpn", patches, self.weight)
-        if self.bias is not None:
-            out = out + self.bias.view(1, 1, -1)
-        out = out.permute(0, 2, 1).contiguous()
-
-        if self.flatten:
-            return out.view(out.size(0), -1)
-        return out
-
-    def output_dim(self, input_len: int) -> int:
-        """Number of features produced for a given PCA dimension."""
-        num_windows = self._compute_num_windows(input_len)
-        return num_windows * self.n_kernels * self.kernel_output_dim
-
-
-class QConvModel(nn.Module):
-    """Apply quantum convolutional kernels over PCA components followed by a linear head."""
-
-    def __init__(self, conv_layer: qconv1d, input_dim: int):
-        super().__init__()
-        self.conv = conv_layer
-        self.input_dim = input_dim
-        self.conv_output_dim = self.conv.output_dim(input_dim)
-        if not getattr(self.conv, "flatten", True):
-            raise ValueError("qconv1d layer must output flattened features.")
-        self.head = nn.Linear(self.conv_output_dim, 2)
-
-    def forward(self, angles: torch.Tensor) -> torch.Tensor:
-        features = self.conv(angles)
         return self.head(features)
 
 
@@ -487,29 +466,9 @@ def train_once(Ztr, ytr, Zte, yte,
                n_photons: int, reservoir_mode: bool, state_pattern: str,
                required_inputs: int, adapter: str,
                seed: int,
-               model_type: str,
-               conv_params: dict | None = None) -> float:
+               model: nn.Module) -> float:
     set_seed(seed)
 
-    input_dim = Ztr.shape[-1]
-    if model_type == "single":
-        model = SingleGI(
-            n_modes=n_modes, n_features=n_features,
-            n_photons=n_photons, reservoir_mode=reservoir_mode, state_pattern=state_pattern,
-            required_inputs=required_inputs, adapter=adapter,
-            input_dim=input_dim,
-        )
-    elif model_type == "qconv":
-        if conv_params is None:
-            raise ValueError("conv_params must be provided for the qconv model.")
-        params = dict(conv_params)
-        factory = params.pop("kernel_modules_factory", None)
-        if factory is not None:
-            params["kernel_modules"] = factory()
-        conv_layer = qconv1d(**params)
-        model = QConvModel(conv_layer=conv_layer, input_dim=input_dim)
-    else:
-        raise ValueError(f"Unknown model type '{model_type}'. Expected 'single' or 'qconv'.")
     if opt_name == "adam":
         optim = torch.optim.Adam(model.parameters(), lr=lr)
     else:
@@ -572,6 +531,8 @@ def main():
                     help="stride for the pseudo-convolution")
     ap.add_argument("--qconv_classical", action="store_true",
                     help="use classical learnable kernels instead of QuantumLayer kernels")
+    ap.add_argument("--compare_classical", action="store_true",
+                    help="run both quantum and classical qconv variants with matching kernel counts")
     ap.add_argument("--qconv_adapter", choices=["auto","slice","zero_pad","repeat","linear"], default="auto",
                     help="adapter strategy from PCA patches to quantum kernel inputs")
     ap.add_argument("--qconv_kernel_modes", type=int, default=8,
@@ -587,9 +548,11 @@ def main():
     # Required K for parallel-columns
     K = required_input_params(args.n_modes, args.n_features)
 
-    conv_params = None
     conv_output_dim = None
     conv_mode_str = "disabled"
+    if args.compare_classical and args.qconv_classical:
+        raise ValueError("compare_classical cannot be combined with qconv_classical.")
+
     if args.model == "qconv":
         if args.qconv_kernel_size > args.pca_dim:
             raise ValueError("qconv kernel_size cannot exceed the PCA dimension.")
@@ -598,16 +561,18 @@ def main():
         num_windows = 1 + (args.pca_dim - args.qconv_kernel_size) // args.qconv_stride
         if num_windows <= 0:
             raise ValueError("qconv configuration results in zero sliding windows.")
-        use_quantum = not args.qconv_classical
-        conv_params = {
+        base_conv_params = {
             "n_kernels": args.qconv_kernels,
             "kernel_size": args.qconv_kernel_size,
             "stride": args.qconv_stride,
-            "bias": args.qconv_classical,
-            "flatten": True,
         }
-        conv_output_dim = num_windows * args.qconv_kernels
-        conv_mode_str = "classical"
+        classical_conv_params = {**base_conv_params, "bias": True}
+        classical_output_dim = num_windows * args.qconv_kernels
+        quantum_conv_params = None
+        quantum_output_dim = None
+        conv_mode_logs = []
+
+        use_quantum = not args.qconv_classical or args.compare_classical
         if use_quantum:
             kernel_modes = args.qconv_kernel_modes or args.qconv_kernel_size
             if kernel_modes <= 0:
@@ -615,24 +580,19 @@ def main():
             if args.qconv_kernel_features <= 0:
                 raise ValueError("qconv_kernel_features must be a positive integer.")
             kernel_required_inputs = required_input_params(kernel_modes, args.qconv_kernel_features)
-            print(f"Building a convolution with kernels on {kernel_modes} modes to catch {args.qconv_kernel_features} features")
+            print(f"Building quantum kernels on {kernel_modes} modes with {args.qconv_kernel_features} features | "
+                  f"{args.qconv_kernels} kernels, stride={args.qconv_stride}")
+
             def _make_kernel() -> QuantumPatchKernel:
-                """q_layer = build_single_gi_layer(
-                    n_modes=kernel_modes,
-                    n_features=args.qconv_kernel_features,
-                    n_photons=args.n_photons,
-                    reservoir_mode=args.reservoir_mode,
-                    state_pattern=args.state_pattern,
-                )"""
                 q_layer = ML.QuantumLayer(
-                        input_size=kernel_modes,
-                        output_size=2,
-                        circuit=create_quantum_circuit(kernel_modes, args.qconv_kernel_features),
-                        trainable_parameters=["theta"],
-                        input_parameters=["px"],
-                        input_state=[1,0,1,0,1,0,1,0],
-                        output_mapping_strategy=ML.OutputMappingStrategy.GROUPING,
-                    )
+                    input_size=kernel_modes,
+                    output_size=2,
+                    circuit=create_quantum_circuit(kernel_modes, args.qconv_kernel_features),
+                    trainable_parameters=["theta"],
+                    input_parameters=["px"],
+                    input_state=[1, 0, 1, 0, 1, 0, 1, 0],
+                    output_mapping_strategy=ML.OutputMappingStrategy.GROUPING,
+                )
                 return QuantumPatchKernel(
                     q_layer,
                     required_inputs=kernel_required_inputs,
@@ -647,45 +607,97 @@ def main():
             def _factory():
                 return [_make_kernel() for _ in range(args.qconv_kernels)]
 
-            conv_params["bias"] = False
-            conv_params["kernel_modules_factory"] = _factory
-            conv_output_dim = num_windows * args.qconv_kernels * sample_out_dim
-            conv_mode_str = f"quantum(out={sample_out_dim})"
+            quantum_conv_params = {
+                **base_conv_params,
+                "bias": False,
+                "kernel_modules_factory": _factory,
+            }
+            quantum_output_dim = num_windows * args.qconv_kernels * sample_out_dim
+            conv_mode_logs.append(f"quantum: {args.qconv_kernels} kernels → {quantum_output_dim} dims (out={sample_out_dim})")
+
+        if args.qconv_classical or args.compare_classical or not use_quantum:
+            conv_mode_logs.append(f"classical: {args.qconv_kernels} kernels → {classical_output_dim} dims")
 
     # Load PCA-8 (or user-override)
     (Ztr, ytr), (Zte, yte) = make_pca(args.pca_dim)
     print(f"PCA-{args.pca_dim} ready: train {Ztr.shape}, test {Zte.shape} | angle={args.angle_scale}")
-    if args.model == "qconv":
-        conv_str = (f"{conv_params['n_kernels']}x{conv_params['kernel_size']} stride={conv_params['stride']} "
-                    f"| mode={conv_mode_str} -> {conv_output_dim} dims")
+    if args.model == "qconv" and conv_mode_logs:
+        print(f"Model: qconv | circuit=parallel_columns | n_modes={args.n_modes} "
+              f"n_features={args.n_features} | required inputs K={K} | adapter={args.adapter} "
+              f"| reservoir={args.reservoir_mode}")
+        print("Convolution configurations (matching kernel count):")
+        for log_entry in conv_mode_logs:
+            print(f"  - {log_entry}")
     else:
-        conv_str = "n/a (single GI)"
-    print(f"Model: {args.model} | circuit=parallel_columns | n_modes={args.n_modes} n_features={args.n_features} "
-          f"| required inputs K={K} | adapter={args.adapter} | reservoir={args.reservoir_mode} | conv={conv_str}")
+        print(f"Model: {args.model} | circuit=parallel_columns | n_modes={args.n_modes} "
+              f"n_features={args.n_features} | required inputs K={K} | adapter={args.adapter} "
+              f"| reservoir={args.reservoir_mode}")
 
-    accs = []
-    for s in range(args.seeds):
-        print(f"[Seed {s+1}/{args.seeds}]")
-        acc = train_once(
-            Ztr, ytr, Zte, yte,
-            args.n_modes, args.n_features,
-            steps=args.steps, batch=args.batch,
-            opt_name=args.opt, lr=args.lr, momentum=args.momentum,
-            angle_factor=angle_factor,
-            n_photons=args.n_photons, reservoir_mode=args.reservoir_mode, state_pattern=args.state_pattern,
-            required_inputs=K, adapter=args.adapter,
-            seed=1235 + s,
-            model_type=args.model,
-            conv_params=conv_params
-        )
-        print(f"  Test accuracy: {acc*100:.2f}%")
-        accs.append(acc)
+    input_dim = Ztr.shape[-1]
+    model_variants = []
+    if args.model == "single":
+        def build_single() -> nn.Module:
+            return SingleGI(
+                n_modes=args.n_modes, n_features=args.n_features,
+                n_photons=args.n_photons, reservoir_mode=args.reservoir_mode,
+                state_pattern=args.state_pattern,
+                required_inputs=K, adapter=args.adapter,
+                input_dim=input_dim,
+            )
+        model_variants.append(("single", build_single))
+    elif args.model == "qconv":
+        if use_quantum and quantum_conv_params is not None:
+            def build_quantum() -> nn.Module:
+                params = dict(quantum_conv_params)
+                factory = params.pop("kernel_modules_factory", None)
+                if factory is not None:
+                    params["kernel_modules"] = factory()
+                return QConvModel(input_dim=input_dim, **params)
+            model_variants.append(("qconv_quantum", build_quantum))
 
-    mean = statistics.mean(accs)
-    std = statistics.stdev(accs) if len(accs) > 1 else 0.0
-    print("\n=== Summary ===")
-    print("Accuracies:", ", ".join(f"{a*100:.2f}%" for a in accs))
-    print(f"Mean ± Std: {mean*100:.2f}% ± {std*100:.2f}%")
+        if args.qconv_classical or args.compare_classical or not use_quantum:
+            def build_classical() -> nn.Module:
+                return QConvModel(input_dim=input_dim, **classical_conv_params)
+            label = "qconv_classical" if (args.compare_classical or use_quantum) else "qconv_classical_only"
+            model_variants.append((label, build_classical))
+    else:
+        raise ValueError(f"Unhandled model type: {args.model}")
+
+    comparison_results = []
+    for variant_name, builder in model_variants:
+        print(f"\n=== Evaluating {variant_name} ({args.seeds} seed{'s' if args.seeds > 1 else ''}) ===")
+        variant_accs = []
+        for s in range(args.seeds):
+            print(f"[Seed {s+1}/{args.seeds}]")
+            model = builder()
+            acc = train_once(
+                Ztr, ytr, Zte, yte,
+                args.n_modes, args.n_features,
+                steps=args.steps, batch=args.batch,
+                opt_name=args.opt, lr=args.lr, momentum=args.momentum,
+                angle_factor=angle_factor,
+                n_photons=args.n_photons, reservoir_mode=args.reservoir_mode, state_pattern=args.state_pattern,
+                required_inputs=K, adapter=args.adapter,
+                seed=1235 + s,
+                model=model
+            )
+            print(f"  Test accuracy: {acc*100:.2f}%")
+            variant_accs.append(acc)
+        mean = statistics.mean(variant_accs)
+        std = statistics.stdev(variant_accs) if len(variant_accs) > 1 else 0.0
+        print(f"→ Summary for {variant_name}: mean {mean*100:.2f}% ± {std*100:.2f}%")
+        comparison_results.append((variant_name, variant_accs, mean, std))
+
+    if len(comparison_results) > 1:
+        print("\n=== Overall Comparison ===")
+        for name, accs, mean, std in comparison_results:
+            acc_line = ", ".join(f"{a*100:.2f}%" for a in accs)
+            print(f"{name}: [{acc_line}] → mean {mean*100:.2f}% ± {std*100:.2f}%")
+    elif comparison_results:
+        name, accs, mean, std = comparison_results[0]
+        print("\n=== Summary ===")
+        print("Accuracies:", ", ".join(f"{a*100:.2f}%" for a in accs))
+        print(f"Mean ± Std: {mean*100:.2f}% ± {std*100:.2f}%")
 
 if __name__ == "__main__":
     main()
