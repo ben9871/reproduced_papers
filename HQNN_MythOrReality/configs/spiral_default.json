@@ -1,0 +1,25 @@
+{
+  "seed": 42,
+  "device": "cpu",
+  "dataset": {
+    "num_instances": 1875,
+    "num_classes": 3,
+    "feature_grid": [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
+    "test_size": 0.2,
+    "batch_size": 64
+  },
+  "training": {
+    "epochs": 25,
+    "lr": 0.05
+  },
+  "model": {
+    "accuracy_threshold": 90.0,
+    "repetitions": 5,
+    "binning": "linear",
+    "embedding": "learned",
+    "init": "none"
+  },
+  "results": {
+    "filename": "HQNN_MM_bs{batch_size}_lr{lr}.json"
+  }
+}
