@@ -77,6 +77,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Paper reproduction runner")
     p.add_argument("--config", type=str, help="Path to JSON config", default=None)
     p.add_argument("--outdir", type=str, help="Base output directory", default=None)
+    p.add_argument(
+        "--dataset-name",
+        type=str,
+        choices=[
+            "mnist",
+            "k-mnist",
+            "fashion-mnist",
+        ],
+        help="Dataset name: 'mnist', 'k-mnist', or 'fashion-mnist'",
+        default="mnist",
+    )
 
     # Specific parameters to qorc
     p.add_argument("--n-photons", type=int, default=None, help="Number of photons")
@@ -151,6 +162,8 @@ def resolve_config(args: argparse.Namespace):
     # Apply CLI overrides
     if args.outdir is not None:
         cfg["outdir"] = args.outdir
+    if args.dataset_name is not None:
+        cfg["dataset_name"] = args.dataset_name
 
     # Specific parameters to qorc
     if args.n_photons is not None:
@@ -289,6 +302,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                                 n_modes=current_n_modes,
                                 seed=current_seed,
                                 # Dataset parameters
+                                dataset_name=cfg["dataset_name"],
                                 fold_index=current_fold_index,
                                 n_fold=cfg["n_fold"],
                                 # Training parameters
@@ -314,6 +328,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                                 "n_modes": current_n_modes,
                                 "seed": current_seed,
                                 "fold_index": current_fold_index,
+                                "dataset_name": cfg["dataset_name"],
                                 "train_acc": train_acc,
                                 "val_acc": val_acc,
                                 "test_acc": test_acc,
@@ -340,6 +355,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                 n_modes=cfg["n_modes"],
                 seed=cfg["seed"],
                 # Dataset parameters
+                dataset_name=cfg["dataset_name"],
                 fold_index=cfg["fold_index"],
                 n_fold=cfg["n_fold"],
                 # Training parameters
@@ -416,6 +432,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                         b_optim_via_sgd=cfg["b_optim_via_sgd"],
                         max_iter_sgd=cfg["max_iter_sgd"],
                         # Dataset parameters
+                        dataset_name=cfg["dataset_name"],
                         run_dir=run_dir,
                         logger=logger,
                     )
@@ -424,6 +441,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                     output_fields = {
                         "n_rff_features": current_n_rff_features,
                         "seed": current_seed,
+                        "dataset_name": cfg["dataset_name"],
                         "train_acc": train_acc,
                         "test_acc": test_acc,
                         "duration_calcul_rff_features": duration_calcul_rff_features,
@@ -449,6 +467,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                 b_optim_via_sgd=cfg["b_optim_via_sgd"],
                 max_iter_sgd=cfg["max_iter_sgd"],
                 # Dataset parameters
+                dataset_name=cfg["dataset_name"],
                 run_dir=run_dir,
                 logger=logger,
             )

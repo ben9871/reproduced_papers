@@ -82,3 +82,38 @@ def split_fold_numpy(label, data, n_fold, fold_index, split_seed=-1):
         label[train_indices],
         data[train_indices],
     )
+
+
+def get_mnist_variant(dataset_name):
+    dataset_name = dataset_name.lower()
+
+    if dataset_name == "mnist":
+        from merlin.datasets.mnist_digits import (
+            get_data_train_original as get_mnist_train,
+            get_data_test_original as get_mnist_test,
+        )
+
+        X_train, y_train, _ = get_mnist_train()
+        X_test, y_test, _ = get_mnist_test()
+    elif dataset_name == "k-mnist" or dataset_name == "kmnist":
+        from merlin.datasets.k_mnist import (
+            get_data_train_huggingface as get_k_mnist_train,
+            get_data_test_huggingface as get_k_mnist_test,
+        )
+
+        X_train, y_train, _ = get_k_mnist_train()
+        X_test, y_test, _ = get_k_mnist_test()
+    elif dataset_name == "fashion-mnist" or dataset_name == "fashion_mnist":
+        from merlin.datasets.fashion_mnist import (
+            get_data_train_huggingface as get_fashion_mnist_train,
+            get_data_test_huggingface as get_fashion_mnist_test,
+        )
+
+        X_train, y_train, _ = get_fashion_mnist_train()
+        X_test, y_test, _ = get_fashion_mnist_test()
+    else:
+        raise ValueError(
+            f"Unknown dataset: {dataset_name}. Expected 'mnist', 'k-mnist', or 'fashion-mnist'."
+        )
+
+    return [X_train, y_train, X_test, y_test]

@@ -13,6 +13,7 @@
     "f_out_results_training_csv" : "f_out_results_training_qorc.csv",
     "device": "cpu",
 
+    "dataset_name" : "mnist",
     "n_fold": 5,
 
     "learning_rate": 0.05,

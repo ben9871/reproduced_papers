@@ -8,10 +8,10 @@
 
 ## Overview
 
-This repository provides a reproducible implementation of the **Quantum Optical Reservoir Computing (QORC) experiment** using the **MerLin quantum machine learning framework**. The code replicates the performance results of quantum feature-based classification on the **MNIST dataset**, demonstrating the proof-of-concept advantages of quantum reservoirs in machine learning tasks.
+This repository provides a reproducible implementation of the **Quantum Optical Reservoir Computing (QORC) experiment** using the **MerLin quantum machine learning framework**. The code replicates the performance results of quantum feature-based classification on the MNIST dataset and its two variants (K-MNIST and Fashion-MNIST), demonstrating the proof-of-concept advantages of quantum reservoirs in machine learning tasks.
 
 ### Key Components
-- **Dataset**: Classic MNIST (10-class image classification, 28x28 pixels, 60,000 training + 10,000 test images).
+- **Datasets**: Classic MNIST (10-class image classification, 28x28 pixels, 60,000 training + 10,000 test images), and two variants (K-MNIST and Fashion-MNIST).
 - **Models**:
   - **QORC (Quantum Optical Reservoir Computing)**:
     - **Nb photons and modes**: To be selected by the user.
@@ -76,6 +76,7 @@ python implementation.py --help
  |----------------------|-----------------------------------------------------------------------------|
  | `--config PATH`      | Load config from JSON (example files in `configs/`).                        |
  | `--outdir DIR`       | Base output directory. A timestamped run folder `run_YYYYMMDD-HHMMSS` is created inside. |
+ | `--dataset_name DS`  | Dataset for the experiment. Choices: 'mnist' (digits), 'k-mnist' (Kuzushiji), or 'fashion-mnist' (clothing). Default: 'mnist'. |
 
 ### Qorc Options
  | Option               | Description                                                                 |
@@ -164,13 +165,13 @@ Place configuration files in `configs/`.
 
 ## Results
 
-Main graph exposing quantum reservoir performances (test accuracy) on MNIST.
+Main graph exposing quantum reservoir performances (test accuracy) on the classic MNIST dataset.
 
 ![MNIST quantum reservoir performances](results/main_graph.png)
 
 In the precedent graph, bunching was manually disabled when the condition `n_photons * n_photons < n_modes` was met, to ensure more precise calculations. The results obtained are comparable to those reported in the reference paper.
 
-Graph comparing the quantum optical reservoir computing (QORC) method with the classical Random Fourier Features (RFF) method, a fast approximation of the Radial Basis Function (RBF) kernel. For the QORC, the number of photons is fixed at 3, as specified in the reference paper.
+Graph comparing the quantum optical reservoir computing (QORC) method with the classical Random Fourier Features (RFF) method, a fast approximation of the Radial Basis Function (RBF) kernel, on the classic MNIST dataset. For the QORC, the number of photons is fixed at 3, as specified in the reference paper.
 
 ![MNIST quantum reservoir versus RFF](results/graph_qorc_vs_rff.png)
 
@@ -178,7 +179,6 @@ Graph comparing the quantum optical reservoir computing (QORC) method with the c
 ## Extensions and Next Steps
 
 - **Circuit Depth Ablation**: Study how test accuracy evolves with deeper/shallower quantum circuits.
-- **Robustness**: Evaluate performance on **Fashion-MNIST** and **K-MNIST**.
 - **Photon/Mode Scaling**: Evaluate performance with higher photon counts and mode dimensions, leveraging HPC resources (e.g., GENCI/Jean Zay) for large-scale simulations.
 
 
