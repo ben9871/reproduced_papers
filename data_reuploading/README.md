@@ -199,6 +199,8 @@ Configuration files are stored in `configs/` directory:
 All the results are stored in `results/` directory and you can reproduce them easily by looking at the `How to Run` section of this README:
 - `figure_5_{dataset}.png` - Figure 5 reproduction on the {dataset} dataset
 
+Example with the circles dataset (figure_5_circles.png):
+
 ![Figure 5 cicles](results/figure_5_circles.png)
 
 - `architecture_grid_{n_layers}_{dataset}.png` - Mini benchmark of architecture design on the {dataset} dataset with {n_layers} reuploading layers
