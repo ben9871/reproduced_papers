@@ -7,6 +7,21 @@ import numpy as np
 import torch
 from torch.utils.data import Dataset
 
+from merlin.datasets.mnist_digits import (
+    get_data_train_original as get_mnist_train,
+    get_data_test_original as get_mnist_test,
+)
+
+from merlin.datasets.k_mnist import (
+    get_data_train_huggingface as get_k_mnist_train,
+    get_data_test_huggingface as get_k_mnist_test,
+)
+
+from merlin.datasets.fashion_mnist import (
+    get_data_train_huggingface as get_fashion_mnist_train,
+    get_data_test_huggingface as get_fashion_mnist_test,
+)
+
 
 class tensor_dataset(Dataset):
     def __init__(self, np_x, np_y, device, dtype, transform=None, n_side_pixels=None):
@@ -88,27 +103,12 @@ def get_mnist_variant(dataset_name):
     dataset_name = dataset_name.lower()
 
     if dataset_name == "mnist":
-        from merlin.datasets.mnist_digits import (
-            get_data_train_original as get_mnist_train,
-            get_data_test_original as get_mnist_test,
-        )
-
         X_train, y_train, _ = get_mnist_train()
         X_test, y_test, _ = get_mnist_test()
     elif dataset_name == "k-mnist" or dataset_name == "kmnist":
-        from merlin.datasets.k_mnist import (
-            get_data_train_huggingface as get_k_mnist_train,
-            get_data_test_huggingface as get_k_mnist_test,
-        )
-
         X_train, y_train, _ = get_k_mnist_train()
         X_test, y_test, _ = get_k_mnist_test()
     elif dataset_name == "fashion-mnist" or dataset_name == "fashion_mnist":
-        from merlin.datasets.fashion_mnist import (
-            get_data_train_huggingface as get_fashion_mnist_train,
-            get_data_test_huggingface as get_fashion_mnist_test,
-        )
-
         X_train, y_train, _ = get_fashion_mnist_train()
         X_test, y_test, _ = get_fashion_mnist_test()
     else:
