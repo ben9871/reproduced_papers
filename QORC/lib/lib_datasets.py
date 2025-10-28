@@ -13,13 +13,13 @@ from merlin.datasets.mnist_digits import (
 )
 
 from merlin.datasets.k_mnist import (
-    get_data_train_huggingface as get_k_mnist_train,
-    get_data_test_huggingface as get_k_mnist_test,
+    get_data_train as get_k_mnist_train,
+    get_data_test as get_k_mnist_test,
 )
 
 from merlin.datasets.fashion_mnist import (
-    get_data_train_huggingface as get_fashion_mnist_train,
-    get_data_test_huggingface as get_fashion_mnist_test,
+    get_data_train as get_fashion_mnist_train,
+    get_data_test as get_fashion_mnist_test,
 )
 
 
