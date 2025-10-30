@@ -129,7 +129,13 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Enable TensorBoard logging",
     )
     p.add_argument(
-        "--device", type=str, help="Device string (cpu, cuda:0, mps)", default=None
+        "--device", type=str, help="Device string (cpu, cuda:0, mps)", default="cpu"
+    )
+    p.add_argument(
+        "--qpu-device",
+        type=str,
+        help="QPU Device string (none, sim:slos:local, sim:slos, sim:ascella, sim:belenos, qpu:ascella, qpu:belenos)",
+        default="none",
     )
 
     # Specific parameters to rff
@@ -198,6 +204,8 @@ def resolve_config(args: argparse.Namespace):
         cfg["b_use_tensorboard"] = args.b_use_tensorboard
     if args.device is not None:
         cfg["device"] = args.device
+    if args.qpu_device is not None:
+        cfg["qpu_device"] = args.qpu_device
 
     # Specific parameters to rff
     if args.n_rff_features is not None:
@@ -318,6 +326,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                                 b_no_bunching=cfg["b_no_bunching"],
                                 b_use_tensorboard=cfg["b_use_tensorboard"],
                                 device_name=cfg["device"],
+                                qpu_device_name=cfg["qpu_device"],
                                 run_dir=run_dir,
                                 logger=logger,
                             )
@@ -371,6 +380,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                 b_no_bunching=cfg["b_no_bunching"],
                 b_use_tensorboard=cfg["b_use_tensorboard"],
                 device_name=cfg["device"],
+                qpu_device_name=cfg["qpu_device"],
                 run_dir=run_dir,
                 logger=logger,
             )
