@@ -99,6 +99,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument(
         "--n-fold", type=int, default=None, help="Split train/val number of folds"
     )
+    p.add_argument(
+        "--dataset-truncate",
+        type=int,
+        default=0,
+        help="Truncate train/val/test sets for testing purpose",
+    )
     p.add_argument("--epochs", type=int, default=None, help="Number of training epochs")
     p.add_argument("--batch-size", type=int, default=None, help="Batch size")
     p.add_argument("--learning-rate", type=float, default=None, help="Learning rate")
@@ -182,6 +188,8 @@ def resolve_config(args: argparse.Namespace):
         cfg["fold_index"] = args.fold_index
     if args.n_fold is not None:
         cfg["n_fold"] = args.n_fold
+    if args.dataset_truncate is not None:
+        cfg["dataset_truncate"] = args.dataset_truncate
     if args.epochs is not None:
         cfg["n_epochs"] = args.epochs
     if args.batch_size is not None:
@@ -313,6 +321,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                                 dataset_name=cfg["dataset_name"],
                                 fold_index=current_fold_index,
                                 n_fold=cfg["n_fold"],
+                                dataset_truncate=cfg["dataset_truncate"],
                                 # Training parameters
                                 n_epochs=cfg["n_epochs"],
                                 batch_size=cfg["batch_size"],
@@ -367,6 +376,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                 dataset_name=cfg["dataset_name"],
                 fold_index=cfg["fold_index"],
                 n_fold=cfg["n_fold"],
+                dataset_truncate=cfg["dataset_truncate"],
                 # Training parameters
                 n_epochs=cfg["n_epochs"],
                 batch_size=cfg["batch_size"],

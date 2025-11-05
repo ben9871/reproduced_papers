@@ -23,8 +23,6 @@ from lib.lib_datasets import (
 )
 from lib.lib_learning import get_device, model_eval, model_fit
 
-from lib.lib_remote_qorc import remote_qorc_quantum_layer
-
 
 def create_qorc_quantum_layer(
     n_photons,  # Nb photons
@@ -101,6 +99,7 @@ def qorc_encoding_and_linear_training(
     dataset_name,
     fold_index,
     n_fold,
+    dataset_truncate,
     # Training parameters
     n_epochs,
     batch_size,
@@ -154,17 +153,15 @@ def qorc_encoding_and_linear_training(
 
     test_data = test_data.reshape(test_data.shape[0], -1).astype(np.float32) / 255.0
 
-    # truncate_length = 0    # No truncature
-    truncate_length = 100  # 47s pour sim:slos et 9min+ pour sim:belenos
-    # truncate_length = 1000  # 60s pour sim:slos et 20min+ pour sim:belenos
-    if truncate_length > 0:
-        # Only use the first images of datasets (i.e. truncate datasets to length = truncate_length)
-        train_data = train_data[:truncate_length]
-        train_label = train_label[:truncate_length]
-        val_data = val_data[:truncate_length]
-        val_label = val_label[:truncate_length]
-        test_data = test_data[:truncate_length]
-        test_label = test_label[:truncate_length]
+    if dataset_truncate > 0:
+        # Only use the first images of datasets (i.e. truncate datasets to length = dataset_truncate)
+        # for testing purpose
+        train_data = train_data[:dataset_truncate]
+        train_label = train_label[:dataset_truncate]
+        val_data = val_data[:dataset_truncate]
+        val_label = val_label[:dataset_truncate]
+        test_data = test_data[:dataset_truncate]
+        test_label = test_label[:dataset_truncate]
 
     n_pixels = 28 * 28  # MNIST images size
     n_classes = 10  # 10 classes, one for each figure
@@ -232,6 +229,8 @@ def qorc_encoding_and_linear_training(
         val_data_qorc = qorc_quantum_layer(val_tensor)
         test_data_qorc = qorc_quantum_layer(test_tensor)
     else:
+        from lib.lib_remote_qorc import remote_qorc_quantum_layer
+
         train_data_qorc, val_data_qorc, test_data_qorc = remote_qorc_quantum_layer(
             train_tensor,
             val_tensor,

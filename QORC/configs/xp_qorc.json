@@ -12,17 +12,11 @@
     "batch_size": 100,
     "f_out_results_training_csv" : "f_out_results_training_qorc.csv",
     "device": "cpu",
-
-    "__qpu_device": "none",
-    "qpu_device": "sim:slos:local",
-    "__qpu_device": "sim:slos",
-    "__qpu_device": "sim:ascella",
-    "__qpu_device": "sim:belenos",
-    "__qpu_device": "qpu:ascella",
-    "__qpu_device": "qpu:belenos",
+    "qpu_device": "none",
 
     "dataset_name" : "mnist",
     "n_fold": 5,
+    "dataset_truncate": 0,
 
     "learning_rate": 0.05,
 

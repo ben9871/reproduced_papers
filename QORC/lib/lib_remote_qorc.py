@@ -7,6 +7,9 @@ import time
 import torch
 import perceval as pcvl
 
+from perceval.runtime import RemoteConfig
+from merlin.core.merlin_processor import MerlinProcessor
+
 
 def _spin_until_with_ctrlc(
     pred, timeout_s: float = 10.0, sleep_s: float = 0.02
@@ -86,12 +89,8 @@ def remote_qorc_quantum_layer(
     # Création du MerlinProcessor
     qorc_quantum_layer.eval()
     token = os.environ.get("QUANDELA_TOKEN", "").strip()
-    from perceval.runtime import RemoteConfig
-
     RemoteConfig.set_token(token)
     remote_processor = pcvl.RemoteProcessor(qpu_device_name)
-    from merlin.core.merlin_processor import MerlinProcessor
-
     proc = MerlinProcessor(
         remote_processor,
         chunk_concurrency=chunk_concurrency,
@@ -120,10 +119,103 @@ def remote_qorc_quantum_layer(
             duration = time.time() - time_cour
             logger.info("Durée (s): {}".format(duration))
 
-        case "sim:belenos":
+        case "sim:ascella" | "qpu:ascella":
             # Parralléliser les 3 jobs
-            logger.info("qpu_device_name=sim:belenos  - Calcule le train/val/test")
+            logger.info("qpu_device_name=sim:ascella  - Calcule le train/val/test")
             time_cour = time.time()
+
+            # Adapter le circuit à la puce QPU "ascella"
+            # remote_processor = pcvl.RemoteProcessor(qpu_device_name)
+            specs = remote_processor.specs
+            pcvl.pdisplay(specs["specific_circuit"])
+            print(type(specs["specific_circuit"]))
+            print(specs.keys())
+
+            print("Platform constraints:")
+            print(specs["constraints"])
+            print("\nPlatform supported parameters:")
+            print(specs["parameters"])
+            # print("\nDescription, documentation:")
+            # print(specs["description"])
+            # print(specs["documentation"])
+
+            def get_circuit_physical_depth(circuit: pcvl.Circuit):
+                t = type(circuit)
+                match t:
+                    case pcvl.components.BS:
+                        return 1, [1]
+                    case pcvl.components.PS:
+                        return 0, [0]
+                    case pcvl.components.Unitary:
+                        return 2 * circuit.m, [2, 2]
+                    case pcvl.components.Circuit:
+                        if circuit.is_composite():
+                            depths = [0] * circuit.m
+                            d_current = 0
+                            for modes, comp in circuit._components:  # type: ignore[attr-defined]
+                                # print(modes, comp)
+                                d_current = max(depths[m] for m in modes)
+                                add_depth = get_circuit_physical_depth(comp)
+                                for m in modes:
+                                    depths[m] = d_current + add_depth
+                            d_current = max(depths[m] for m in modes)
+                            return d_current, depths
+                        else:
+                            raise ValueError(
+                                "Erreur dans get_circuit_physical_depth: Le circuit n'est pas composite."
+                            )
+                    case _:
+                        raise ValueError(
+                            f"Erreur dans get_circuit_physical_depth: Type de circuit non géré: {t}"
+                        )
+                raise ValueError("Erreur dans get_circuit_physical_depth (interne).")
+
+            # TODO: Continuer ici, le code qui splitte le circuit en 2 parts
+            def split_circuit_physical_depth(
+                circuit: pcvl.Circuit, c_pre: pcvl.Circuit
+            ):
+                t = type(circuit)
+                match t:
+                    case pcvl.components.BS:
+                        return 1, [1]
+                    case pcvl.components.PS:
+                        return 0, [0]
+                    case pcvl.components.Unitary:
+                        return 2 * circuit.m, [2, 2]
+                    case pcvl.components.Circuit:
+                        if circuit.is_composite():
+                            depths = [0] * circuit.m
+                            d_current = 0
+                            for modes, comp in circuit._components:  # type: ignore[attr-defined]
+                                # print(modes, comp)
+                                d_current = max(depths[m] for m in modes)
+                                add_depth = get_circuit_physical_depth(comp)
+                                for m in modes:
+                                    depths[m] = d_current + add_depth
+                            d_current = max(depths[m] for m in modes)
+                            return d_current, depths
+                        else:
+                            raise ValueError(
+                                "Erreur dans get_circuit_physical_depth: Le circuit n'est pas composite."
+                            )
+                    case _:
+                        raise ValueError(
+                            f"Erreur dans get_circuit_physical_depth: Type de circuit non géré: {t}"
+                        )
+                raise ValueError("Erreur dans get_circuit_physical_depth (interne).")
+
+            spec_circuit = specs["specific_circuit"]
+            d_current, depths = get_circuit_physical_depth(spec_circuit)
+            print("circuit depths:", d_current, depths)
+
+            # Réussir à découper le circuit en 2, sur une colonne de phase shifters:
+            # 1) Parcourir le circuit (parcours de graphe) et calculer la profondeur de chaque mode
+            # 2) Avec le meme algorithme, découper le circuit en 2 sur la profondeur
+            #    et s'assurer que les 2 circuits combinés redonnent la meme unitaire que le circuit seul (avec un dict sur les phases des PS)
+            # 3) Adapter l'algorithme précédent pour avoir 3 circuits distincts (en séparant la colonne de PS)
+            # 4) Construire la QuantumLayer à partir de ces derniers circuits
+
+            exit()
 
             fut = proc.forward_async(
                 qorc_quantum_layer, data_tensor, nsample=qpu_device_nsample

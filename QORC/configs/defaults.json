@@ -16,6 +16,7 @@
 
     "dataset_name" : "mnist",
     "n_fold": 5,
+    "dataset_truncate": 0,
 
     "learning_rate": 0.05,
 
