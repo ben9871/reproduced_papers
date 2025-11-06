@@ -233,8 +233,9 @@ def main() -> None:
             print(f"  - {log_entry}")
 
     comparison_results = []
-    # store per-variant per-seed training curves for saving
+    # store per-variant metadata for saving
     variant_seed_details = {}
+    variant_param_counts = {}
 
     # Prepare results directories
     results_root = Path(__file__).resolve().parent / f"results-{args.dataset}"
@@ -249,12 +250,20 @@ def main() -> None:
         print(f"\n=== Evaluating {name} ({args.seeds} seed{'s' if args.seeds > 1 else ''}) ===")
         variant_accs = []
         seed_records = []
+        trainable_params = None
         for s in range(args.seeds):
             print(f"[Seed {s+1}/{args.seeds}]")
             model = builder()
-            print(
-                f"Number of trainable parameters = {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
-            )
+            current_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
+            if trainable_params is None:
+                trainable_params = current_params
+            else:
+                if current_params != trainable_params:
+                    print(
+                        "Warning: trainable parameter count changed between seeds "
+                        f"({trainable_params} → {current_params})."
+                    )
+            print(f"Number of trainable parameters = {current_params}")
             acc, loss_history = train_once(
                 Ztr, ytr, Zte, yte,
                 steps=args.steps,
@@ -299,12 +308,14 @@ def main() -> None:
             "std_accuracy": float(std),
             "seeds": seed_records,
             "summary_file": "summary.json",
+            "trainable_parameters": int(trainable_params) if trainable_params is not None else None,
         }
         with open(variant_dir / "summary.json", "w", encoding="utf-8") as fh:
             json.dump(summary, fh, indent=2)
 
         comparison_results.append((name, variant_accs, mean, std))
         variant_seed_details[name] = seed_records
+        variant_param_counts[name] = trainable_params
 
     # write run_summary.json at top-level of run_dir
     run_summary = {
@@ -322,6 +333,9 @@ def main() -> None:
             "std_accuracy": float(std),
             "seeds": variant_seed_details.get(name, []),
             "summary_file": f"{name}/summary.json",
+            "trainable_parameters": (
+                int(variant_param_counts[name]) if variant_param_counts.get(name) is not None else None
+            ),
         })
 
     with open(run_dir / "run_summary.json", "w", encoding="utf-8") as fh:
