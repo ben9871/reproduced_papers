@@ -25,12 +25,15 @@ class SingleGI(nn.Module):
         input_dim: int,
     ) -> None:
         super().__init__()
+        # Enforce that the upstream preprocessing matches the optical circuit width.
         if input_dim != required_inputs:
             raise ValueError(
                 f"Quantum layer expects {required_inputs} features but received {input_dim}. "
                 "Adjust preprocessing or circuit parameters so they match exactly."
             )
         self.K = required_inputs
+        # `build_single_gi_layer` returns a Merlin QuantumLayer configured for the
+        # requested interferometer topology (modes/features/photons/etc.).
         self.q_layer = build_single_gi_layer(
             n_modes=n_modes,
             n_features=n_features,
@@ -40,6 +43,7 @@ class SingleGI(nn.Module):
         )
 
     def forward(self, angles: torch.Tensor) -> torch.Tensor:
+        # Accept both single samples and batched inputs for convenience.
         if angles.dim() == 1:
             angles = angles.unsqueeze(0)
         if angles.shape[-1] != self.K:
@@ -61,6 +65,7 @@ class QuantumPatchKernel(nn.Module):
         self.patch_dim = patch_dim
 
     def forward(self, patch: torch.Tensor) -> torch.Tensor:
+        # Kernels are evaluated on flattened PCA patches, so enforce the width.
         if patch.dim() == 1:
             patch = patch.unsqueeze(0)
         if patch.shape[-1] != self.patch_dim:
@@ -97,6 +102,7 @@ class QConvModel(nn.Module):
         self.use_quantum = kernel_modules is not None
 
         if self.use_quantum:
+            # Quantum mode: we receive a pre-built list of QuantumPatchKernel modules.
             if kernel_modules is None or len(kernel_modules) != n_kernels:
                 raise ValueError("kernel_modules must contain one module per kernel.")
             self.kernel_modules = nn.ModuleList(kernel_modules)
@@ -107,6 +113,7 @@ class QConvModel(nn.Module):
             self.register_parameter("weight", None)
             self.register_parameter("bias", None)
         else:
+            # Classical fallback: learn dense kernels and optional bias per filter.
             weight = torch.empty(n_kernels, kernel_size)
             nn.init.kaiming_uniform_(weight, a=math.sqrt(5))
             self.weight = nn.Parameter(weight)
@@ -122,6 +129,7 @@ class QConvModel(nn.Module):
         self.head = nn.Linear(self.output_features, 2)
 
     def _compute_num_windows(self, input_len: int) -> int:
+        # Mirror torch.nn.Conv1d logic: number of sliding positions per feature vector.
         if input_len < self.kernel_size:
             raise ValueError(
                 f"Input length {input_len} is smaller than kernel size {self.kernel_size}."
@@ -133,6 +141,7 @@ class QConvModel(nn.Module):
         return num_windows * self.n_kernels * self.kernel_output_dim
 
     def _apply_classical(self, patches: torch.Tensor) -> torch.Tensor:
+        # Project each patch with the learned weights then concatenate feature maps.
         out = torch.einsum("bpk,nk->bpn", patches, self.weight)
         if self.bias is not None:
             out = out + self.bias.view(1, 1, -1)
@@ -140,6 +149,7 @@ class QConvModel(nn.Module):
         return out.view(out.size(0), -1)
 
     def _apply_quantum(self, patches: torch.Tensor, num_windows: int, batch_size: int) -> torch.Tensor:
+        # Evaluate every patch with each quantum kernel module and stack responses.
         patches_flat = patches.contiguous().view(-1, patches.size(-1))
         outputs = []
         for kernel in self.kernel_modules:
@@ -159,6 +169,7 @@ class QConvModel(nn.Module):
                 "QConvModel expects inputs of shape (batch, features) or a single feature vector."
             )
 
+        # `unfold` creates [batch, num_windows, kernel_size] sliding patches.
         patches = x.unfold(dimension=-1, size=self.kernel_size, step=self.stride)
         num_windows = patches.size(1)
         if num_windows == 0:
