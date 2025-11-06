@@ -143,6 +143,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="QPU Device string (none, sim:slos:local, sim:slos, sim:ascella, sim:belenos, qpu:ascella, qpu:belenos)",
         default="none",
     )
+    p.add_argument(
+        "--qpu-device-nsample",
+        type=int,
+        help="QPU Device number of samples",
+        default=None,
+    )
 
     # Specific parameters to rff
     p.add_argument(
@@ -214,6 +220,8 @@ def resolve_config(args: argparse.Namespace):
         cfg["device"] = args.device
     if args.qpu_device is not None:
         cfg["qpu_device"] = args.qpu_device
+    if args.qpu_device_nsample is not None:
+        cfg["qpu_device_nsample"] = args.qpu_device_nsample
 
     # Specific parameters to rff
     if args.n_rff_features is not None:
@@ -336,6 +344,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                                 b_use_tensorboard=cfg["b_use_tensorboard"],
                                 device_name=cfg["device"],
                                 qpu_device_name=cfg["qpu_device"],
+                                qpu_device_nsample=cfg["qpu_device_nsample"],
                                 run_dir=run_dir,
                                 logger=logger,
                             )
@@ -391,6 +400,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                 b_use_tensorboard=cfg["b_use_tensorboard"],
                 device_name=cfg["device"],
                 qpu_device_name=cfg["qpu_device"],
+                qpu_device_nsample=cfg["qpu_device_nsample"],
                 run_dir=run_dir,
                 logger=logger,
             )
