@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from typing import Tuple
+from typing import Tuple, List
 
 import torch
 import torch.nn as nn
@@ -40,7 +40,7 @@ def train_once(
     angle_factor: float,
     seed: int,
     model: nn.Module,
-) -> float:
+    ) -> Tuple[float, List[float]]:
     set_seed(seed)
 
     if opt_name == "adam":
@@ -54,6 +54,7 @@ def train_once(
 
     model.train()
     it = 0
+    loss_history: List[float] = []
     while it < steps:
         for xb, yb in train_loader:
             optim.zero_grad(set_to_none=True)
@@ -61,8 +62,10 @@ def train_once(
             loss = lossf(logits, yb)
             loss.backward()
             optim.step()
+            loss_history.append(float(loss.item()))
             it += 1
             if it >= steps:
                 break
 
-    return evaluate(model, test_loader, angle_factor)
+    acc = evaluate(model, test_loader, angle_factor)
+    return acc, loss_history
