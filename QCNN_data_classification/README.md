@@ -174,8 +174,8 @@ Per-configuration metrics grouped by `qconv_kernels` and `qconv_kernel_modes`
 | 4             | 18                 | 1    | 3     | 0.994         | 0.004        | 0.989        | 0.997        |
 
 - A follow-up MNIST sweep at **PCA = 16** explores wider feature spaces with the
-  same kernel counts. Across five configurations the mean accuracy sits at
-  `0.925 ± 0.080`, dominated by a volatile single-kernel run. Adding kernels
+  same kernel counts. Across six configurations the mean accuracy sits at
+  `0.929 ± 0.074`, dominated by a volatile single-kernel run. Adding kernels
   rapidly stabilises training, with the four-kernel circuit nearing perfect
   accuracy.
 
@@ -184,6 +184,7 @@ Per-configuration metrics grouped by `qconv_kernels` and `qconv_kernel_modes`
 | 1             | 16                 | 1    | 3     | 0.771         | 0.153        | 0.650        | 0.943        |
 | 1             | 18                 | 1    | 3     | 0.926         | 0.048        | 0.887        | 0.979        |
 | 2             | 16                 | 1    | 3     | 0.952         | 0.059        | 0.884        | 0.986        |
+| 2             | 18                 | 1    | 3     | 0.950         | 0.031        | 0.916        | 0.975        |
 | 3             | 16                 | 1    | 3     | 0.981         | 0.024        | 0.954        | 0.997        |
 | 4             | 16                 | 1    | 3     | 0.994         | 0.003        | 0.990        | 0.995        |
 
