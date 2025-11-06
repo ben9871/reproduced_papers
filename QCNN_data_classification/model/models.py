@@ -23,7 +23,6 @@ class SingleGI(nn.Module):
         state_pattern: str,
         required_inputs: int,
         input_dim: int,
-        shots: int,
     ) -> None:
         super().__init__()
         if input_dim != required_inputs:
@@ -35,7 +34,6 @@ class SingleGI(nn.Module):
         self.q_layer = build_single_gi_layer(
             n_modes=n_modes,
             n_features=n_features,
-            shots=shots,
             n_photons=n_photons,
             reservoir_mode=reservoir_mode,
             state_pattern=state_pattern,
