@@ -1,37 +1,186 @@
-# Reproduction of [Photonic Quantum Convolutional Neural Networks with Adaptive State Injection](https://arxiv.org/abs/2504.20989)
-By Léo Monbroussou, Beatrice Polacchi, Verena Yacoub, Eugenio Caruccio, Giovanni Rodari, Francesco Hoch, Gonzalo Carvacho, Nicolò Spagnolo, Taira Giordani, Mattia Bossi, Abhiram Rajan, Niki Di Giano, Riccardo Albiero, Francesco Ceccarelli, Roberto Osellame, Elham Kashefi, Fabio Sciarrino
+# Photonic QCNN with Adaptive State Injection
 
-Note that the implementation from the paper is available [here](https://github.com/ptitbroussou/Photonic_Subspace_QML_Toolkit) and we have taken some of their code directly to be able to run their version of the photonic QCNN. We have also modified some of their code for easier use or to enhance performance.
+## Reference and Attribution
 
-## Description
-This paper proposes an Photonic Quantum Convolutional Neural Network (PQCNN) architecture using state injection to preserve the number of photons on the circuit while reducing the circuit dimensionality. Their architecture can be divided in 5 sections:
+- Paper: Photonic Quantum Convolutional Neural Networks with Adaptive State Injection (arXiv, 2025)
+- Authors: Léo Monbroussou, Beatrice Polacchi, Verena Yacoub, Eugenio Caruccio, Giovanni Rodari, Francesco Hoch, Gonzalo Carvacho, Nicolò Spagnolo, Taira Giordani, Mattia Bossi, Abhiram Rajan, Niki Di Giano, Riccardo Albiero, Francesco Ceccarelli, Roberto Osellame, Elham Kashefi, Fabio Sciarrino
+- DOI/ArXiv: https://arxiv.org/abs/2504.20989
+- Original repository: https://github.com/ptitbroussou/Photonic_Subspace_QML_Toolkit
+- License and attribution notes: The original implementation is used verbatim (with light wrappers) under the authors' repository license for comparison runs. Please cite both the paper and the source repository when using this work.
+
+## Overview
+
+This reproduction implements the proposed photonic QCNN with adaptive state injection using two complementary stacks:
+
+- **MerLin + Perceval re-implementation** (`lib/src`, training loops in `lib/training/`) for flexible experimentation. The frameworks used for our reproduction were [Perceval](https://perceval.quandela.net) and [MerLin](https://merlinquantum.ai).
+
+Perceval is a Python API that provides all the tools for creating and manipulating circuits from linear optical components. That makes Perceval an ideal companion for developing photonic circuits, running simulations and even accessing quantum hardwares.
+
+MerLin is a framework which allows to define derivable quantum layers to use and optimize in the exact same manner as any classical layer with PyTorch. This integration of
+quantum components into machine learning is very intuitive and it was optimized for GPU simulations on the cuda level too.
+- **Paper code integration** (`lib/run_*_paper.py`) to reproduce the authors' exact setup.
+
+Scope and components:
+
+- Datasets: 4x4 Bars and Stripes (BAS), 4x4 Custom BAS (noise variants), and 8x8 MNIST 0 vs 1.
+- Architecture:
 1. Data loading on the circuit
 2. Convolutions
 3. Pooling
 4. Dense network
 5. Measurement
+- Metrics: train/test accuracy, detailed training curves, readout analysis figures (Figure 4 replication).
+- Hardware/Software: Python 3.10+, PyTorch, MerLin, Perceval; CPU by default, optional CUDA/MPS via `--device`.
 
-Then, three binary classification experiments are conducted on different datasets:
-1. Bars and Stripes (BAS): 4x4 images
-2. Custom Bars and Stripes (Custom BAS): 4x4 images
-3. Binary MNIST 0 vs 1: 8x8 images
+Key deviations/assumptions:
 
-The results from these classification tasks are presented in Table III (number of parameters, accuracies) and in Figure 12 (losses, accuracies) of the original paper.
+- This repository runs simulations only.
+- Configuration-driven CLI (`implementation.py`) with JSON configs under `configs/`.
+- All reusable code lives in `lib/` (per template).
+- Readout sweeps and visualizations reside in `lib/run_*readout.py` and `results/`.
 
-Additionally, they conduct experiments on the training of the readout layer (measurement layer) to analyze which strategy is the best. They consider two approaches for which the results are respectively presented in Figure 4 b) and c) of their paper.
+## How to Run
 
-The frameworks used for our reproduction were [Perceval](https://perceval.quandela.net) and [MerLin](https://merlinquantum.ai). 
+### Install dependencies
 
-Perceval is a Python API that provides all the tools for creating and manipulating circuits from linear
-optical components. That makes Perceval an ideal companion for developing photonic circuits, running
-simulations and even accessing quantum hardwares.
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-MerLin is a framework which allows to define derivable quantum layers to use and optimize in the exact
-same manner as any classical layer with PyTorch. This integration of
-quantum components into machine learning is very intuitive and it was optimized for GPU simulations
-on the cuda level too.
+### Command-line interface
 
-## Paper overview and results
+Main entry point: `implementation.py`
+
+```bash
+python implementation.py --help
+```
+
+Supported options (can also be set via JSON config):
+
+- `--merlin` / `--paper` choose implementation (defaults to config value, MerLin in `defaults.json`).
+- `--config PATH` load/merge JSON configuration (`configs/defaults.json` and `configs/example.json` available).
+- `--datasets BAS Custom BAS` limit runs to listed datasets.
+- `--seed INT` global RNG seed (propagated to dataset configs).
+- `--outdir DIR` base directory for new run folders (timestamped subfolders are created automatically).
+- `--device STR` `cpu`, `cuda:0`, `mps`, etc. MerLin runs move models/tensors accordingly.
+- `--n-runs INT`, `--batch-size INT`, `--epochs INT`, `--lr FLOAT`, `--weight-decay FLOAT`, `--gamma FLOAT` override per-dataset restarts, loaders, and training hyperparameters.
+
+Example runs:
+
+```bash
+# Default MerLin pipeline on all datasets
+python implementation.py --merlin
+
+# Paper implementation on BAS + MNIST only
+python implementation.py --paper --datasets BAS MNIST
+
+# Custom experiment from JSON, overriding epochs/lr inline
+python implementation.py --config configs/example.json --epochs 30 --lr 5e-2
+```
+
+Each MerLin call creates `<outdir>/<dataset>/run_YYYYMMDD/HH-MM-SS/` containing configs, metrics, plots, and summaries. Paper scripts continue to save under `results/*_paper/` following the authors' convention.
+
+### Output directory and generated files
+
+A typical MerLin run folder contains:
+
+```
+results/BAS/run_2025-05-13/14-32-10/
+├── args.txt                 # resolved dataset hyperparameters
+├── detailed_results.json    # per-run metrics & histories
+├── summary.json             # mean/std accuracy statistics
+└── BAS_training_plots.png   # loss/train/test curves
+```
+
+Override the base directory via `--outdir` or the `outdir` key in the config. Paper outputs land in `results/BAS_paper`, `results/custom_BAS_paper`, etc.
+
+### Figure 12 simulation plots
+
+Replicate the paper's Figure 12 (loss/accuracy trajectories per dataset) with:
+
+```bash
+python implementation.py --figure12
+```
+
+This launches fresh MerLin runs for every dataset in the default config and automatically renders the plots via `utils/simulation_visu.py`. Outputs are stored under `results/figure12/<timestamp>/`, with run artifacts in `runs/` and figures in `figures/`.
+
+Manual route: run your desired MerLin experiment, then call:
+
+```bash
+python utils/simulation_visu.py --detailed-results path/to/detailed_results.json
+```
+
+Generated files (one per dataset) follow the pattern:
+
+- `results/figure12/<timestamp>/figures/bas_simulation_results.png`
+- `results/figure12/<timestamp>/figures/custom_bas_simulation_results.png`
+- `results/figure12/<timestamp>/figures/mnist_simulation_results.png`
+
+### Readout strategy plots
+
+The full Figure 4 reproduction can be triggered with:
+
+```bash
+python implementation.py --figure4
+# optional: python implementation.py --figure4 --max_iter 25  # stop after 25 label assignments to shorten running time
+```
+
+This runs both readout sweeps (two-fold with k∈{7,8} and the modes-pair variant), then generates all visualizations via `utils/readout_visu.py`. Artifacts are collected under `results/figure4/<timestamp>/` by default (append `--outdir my_dir` to choose a different base directory).
+
+Manual route (still available): run `lib/run_two_fold_readout.py` for k=7 and k=8, `lib/run_modes_pair_readout.py`, then `utils/readout_visu.py`.
+
+> **Note:** `--max_iter` short-circuits the two-fold strategy to the requested number of label assignments and prints a warning that results are incomplete.
+
+Generated outputs include:
+
+- `results/figure4/<timestamp>/figures/first_readout_tain_vs_test_accs.png`
+- `results/figure4/<timestamp>/two_fold/k_7/first_readout_detailed_confusion_matrix_k_7.png`
+- `results/figure4/<timestamp>/figures/second_readout_accs_vs_modes.png`
+- `results/figure4/<timestamp>/modes_pair/second_readout_detailed_confusion_matrix.png`
+
+## Configuration
+
+All configs live in `configs/`:
+
+- `defaults.json` — global defaults merged into every run.
+- `example.json` — sample experiment (scratch BAS, 3 runs, tweaked optimizer, custom outdir).
+
+Config structure:
+
+```json
+{
+  "implementation": "merlin",
+  "datasets": ["BAS", "Custom BAS", "MNIST"],
+  "seed": 42,
+  "device": "cpu",
+  "outdir": "results",
+  "training": {
+    "lr": 0.1,
+    "weight_decay": 0.001,
+    "gamma": 0.9,
+    "epochs": 20
+  },
+  "runs": {
+    "BAS": { ... dataset-specific overrides ... }
+  }
+}
+```
+
+Keys under `runs.{DATASET}` feed the corresponding runner (`lib/run_BAS.py`, etc.) and accept:
+
+- `n_runs`, `random_states` – number of repetitions and RNG seeds (auto-extended if shorter than `n_runs`).
+- `data_source` – `paper` (original splits) or `scratch` (local generation).
+- `conv_circuit`, `dense_circuit`, `measure_subset`, `dense_added_modes` – circuit topology knobs.
+- `output_proba_type` (`state` / `mode`) and `output_formatting` (`Train_linear`, `Lex_grouping`, `Mod_grouping`).
+- `batch_size`, `results_subdir`, `outdir`, `device` – loader and filesystem overrides.
+
+Global CLI overrides (`--lr`, `--batch-size`, etc.) transparently update these entries at runtime.
+
+## Results and Analysis
+
+### Reported vs reproduced accuracies
 The paper discusses the great scaling of their proposed architectures regarding the required resources. It also reports 
 the number of parameters of their model on the three different datasets as well as their attained training and test 
 accuracies:
@@ -85,107 +234,6 @@ Second approach:
 
 ![second_approach_matrix](./results/second_readout_detailed_confusion_matrix.png)
 
-## Usage
-For general usage, refer to the following script from the photonic_QCNN directory.
-```bash
-# Run the paper implementation
-python3 main.py --paper
-
-# Run the MerLin implementation
-python3 main.py --merlin
-```
-
-For interactive example:
-```bash
-jupyter notebook photonic_QCNN.ipynb
-```
-
-For more specific usage and more customization, modify and run the following files:
-```bash
-# Run the paper implementation on BAS dataset
-python3 runs/run_BAS_paper.py
-
-# Run the MerLin implementation on BAS dataset
-python3 runs/run_BAS.py
-
-# Run the paper implementation on Custom BAS dataset
-python3 runs/run_custom_BAS_paper.py
-
-# Run the MerLin implementation on Custom BAS dataset
-python3 runs/run_custom_BAS.py
-
-# Run the paper implementation on MNIST dataset
-python3 runs/run_MNIST_paper.py
-
-# Run the MerLin implementation on MNIST dataset
-python3 runs/run_MNIST.py
-```
-
-To reproduce Figure 12 from the paper of reference, you first have to run the MerLin version of the PQCNN and then, run this:
-```bash
-python3 results/simulation_visu.py
-Enter the path to detailed_results.json:  # detailed_results.json file path from the MerLin version of the PQCNN for whichever dataset
-```
-
-Finally, you can also reproduce Figure 4. b) and c) which display the results from the readout training analysis.
-
-To reproduce Figure 4. b), the first readout training strategy:
-```bash
-# Run all configurations of two_fold readouts for k = 7
-python3 runs/run_two_fold_readout.py
-Enter the number of modes pairs to associate to label 0 (7 or 8):
-
-# Run all configurations of two_fold readouts for k = 8
-python3 runs/run_two_fold_readout.py
-Enter the number of modes pairs to associate to label 0 (7 or 8):
-
-# Visualize the results
-python3 results/readout_visu.py --first
-Enter the path to first_readout_detailed_results_k_7.json: 
-Enter the path to first_readout_detailed_results_k_8.json: 
-```
-
-To reproduce Figure 4. c), the second readout training strategy:
-```bash
-# Run all configurations of modes pair readout for 30 different reshuffling of the data each
-python3 runs/run_modes_pair_readout.py
-
-# Visualize the results
-python3 results/readout_visu.py --second
-Enter the path to second_readout_detailed_results.json: 
-```
-
-## Roadmap
-Future work on this topic would include a benchmarking of this architecture.
-Another avenue is to implement the model on hardware to see how it compares with its simulation version.
-This would align with Figure 3 from the reference paper which showcases the outcome versus the expected results for each stage of the PQCNN.
-Note that this current implementation cannot take multi-channel images but we have implemented a PQCNN which can handle these types of images (just not in this repository).
-
-## Dependencies
-
-This project requires the following dependencies:
-
-### Core Libraries
-- **PyTorch**: Deep learning framework for tensor operations and automatic differentiation
-- **NumPy**: Numerical computing library for array operations
-- **Matplotlib**: Plotting and visualization for training metrics
-- **tqdm**: Progress bars for training loops
-- **scikit-learn**: Machine learning utilities and datasets
-
-### Quantum Computing Frameworks
-
-#### For MerLin Implementation
-- **Perceval**: Python API for photonic quantum computing circuits and simulations
-- **MerLin**: Framework for hybrid quantum-classical machine learning with GPU optimization
-
-#### For Paper Implementation  
-- **PennyLane**: Quantum machine learning library for loading datasets
-- **qoptcraft**: Quantum optical circuit simulation and optimization
-
-### Data Handling
-- **H5py**: HDF5 file format support for datasets
-- **pickle**: Python object serialization for custom datasets
-
 ## Hyperparameters
 
 The model uses the following key hyperparameters across different experiments:
@@ -216,3 +264,27 @@ The model uses the following key hyperparameters across different experiments:
 ### Probability Output Types
 - **'state'**: Use full Fock state probability distributions
 - **'mode'**: Use marginalized per-mode occupation probabilities
+
+## Extensions and Next Steps
+
+1. Benchmark alternative circuit templates (different convolution/pooling primitives) under the same config-driven runner.
+2. Port the implementation to hardware backends to validate photonic noise assumptions (aligns with Figure 3 discussion in the paper).
+3. Add multi-channel input support (prototype exists internally) and extend datasets beyond binary BAS/MNIST.
+
+## Reproducibility Notes
+
+- Determinism: `implementation.py` exposes `--seed` (default 42) and propagates it to dataset loaders + PyTorch/MerLin layers.
+- Training determinism depends on backend support (set `torch.backends.cudnn.deterministic = True` externally if needed).
+- Captured environment: `results/requirements.txt` contains all the specific environment libraries.
+- Saved artifacts: use `models/` for checkpoints, `results/` for plots/metrics, `lib/` for reusable code per template guidelines.
+
+## Testing
+
+Run tests from the repository root:
+
+```bash
+cd photonic_QCNN
+pytest -q
+```
+
+Tests cover the QCNN building blocks (`tests/test_qcnn.py`). Add additional tests under `tests/` as new functionality lands.

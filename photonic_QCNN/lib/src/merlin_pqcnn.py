@@ -9,7 +9,7 @@ import merlin
 import torch
 import torch.nn as nn
 
-from photonic_QCNN.src.qcnn_paper import (
+from photonic_QCNN.lib.src.qcnn_paper import (
     Measure,
     OneHotEncoder,
     QConv2d,

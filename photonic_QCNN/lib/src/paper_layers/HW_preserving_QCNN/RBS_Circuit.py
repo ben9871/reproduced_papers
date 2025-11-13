@@ -8,7 +8,7 @@ import torch
 from scipy.special import binom
 from torch import nn
 
-from photonic_QCNN.src.paper_layers.HW_preserving_QCNN.toolbox import (
+from photonic_QCNN.lib.src.paper_layers.HW_preserving_QCNN.toolbox import (
     RBS_generalized,
     RBS_generalized_I2_2D,
     RBS_generalized_I2_3D_bottom_channel,

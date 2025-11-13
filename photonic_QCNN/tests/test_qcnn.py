@@ -1,9 +1,19 @@
+# ruff: noqa: E402
+import sys
+from pathlib import Path
+
 import pytest
 import torch
 from perceval import BasicState, BSDistribution
 from perceval.algorithm import Sampler
 
-from photonic_QCNN.src.qcnn import OneHotEncoder, QConv2d, QDense, QPooling
+TEST_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = TEST_ROOT.parent
+REPO_ROOT = PROJECT_ROOT.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from photonic_QCNN.lib.src.qcnn import OneHotEncoder, QConv2d, QDense, QPooling
 from photonic_QCNN.tests._processor_builder import ProcessorBuilder
 
 
