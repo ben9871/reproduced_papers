@@ -127,7 +127,16 @@ def create_quantum_layer_for_ascella(n_photons, logger):
 
     logger.info("MerLin QuantumLayer creation:")
     qorc_output_size = math.comb(n_photons + n_modes - 1, n_photons)
-    qorc_input_state = [1] * n_photons + [0] * (n_modes - n_photons)
+
+    assert n_photons <= n_modes, (
+        "Error with photons_input_mode: Bunching not possible for input state."
+    )
+    step = (n_modes - 1) / (n_photons - 1) if n_photons > 1 else 0
+    qorc_input_state = [0] * n_modes
+    for k in range(n_photons):
+        index = int(round(k * step))
+        qorc_input_state[index] = 1
+
     device_name = "cpu"
     qorc_quantum_layer = ML.QuantumLayer(
         input_size=n_modes
@@ -181,7 +190,7 @@ def create_qorc_quantum_layer(
     qorc_circuit = interferometer_1 // c_var // interferometer_2
 
     assert n_photons <= n_modes, (
-        "Error with photons_input_mode: Too many photons versus modes with 'distributed'."
+        "Error with photons_input_mode: Bunching not possible for input state."
     )
     step = (n_modes - 1) / (n_photons - 1) if n_photons > 1 else 0
     qorc_input_state = [0] * n_modes
@@ -209,6 +218,7 @@ def create_qorc_quantum_layer(
         no_bunching=b_no_bunching,
         device=torch.device(device_name),
     )
+    qorc_quantum_layer.eval()   # Put the layer in eval (do not compute gradiants)
 
     # Verify there are no trainable parameters
     params = qorc_quantum_layer.parameters()
