@@ -1,16 +1,9 @@
-import pathlib
-import sys
 import torch
-
-# Ensure this tests directory is on sys.path to import shared helper
-_TESTS_DIR = pathlib.Path(__file__).parent
-if str(_TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_TESTS_DIR))
-
-from common import _load_impl_module
-
-_ = _load_impl_module()  # injects QLSTM folder in sys.path
 from lib.classical_cell import ClassicalLSTMCell
+
+from .common import _load_impl_module
+
+_ = _load_impl_module()
 
 
 def test_classical_cell_forward_shapes():
@@ -31,6 +24,7 @@ def test_classical_cell_forward_shapes():
 def test_classical_sequence_step_matches_model():
     # quick check that wrapping in SequenceModel yields consistent time dimension
     from lib.model import SequenceModel
+
     input_size, hidden_size, output_size = 1, 4, 1
     cell = ClassicalLSTMCell(input_size, hidden_size, output_size).double()
     model = SequenceModel(cell, hidden_size).double()

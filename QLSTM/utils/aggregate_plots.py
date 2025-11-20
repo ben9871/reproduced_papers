@@ -11,12 +11,14 @@ We create one subplot per (run, epoch) pair, aligned so columns share the same
 epoch and rows share the same run. Every panel shows the ground truth together
 with the selected run's prediction at that epoch.
 """
+
 from __future__ import annotations
 
 import argparse
 from pathlib import Path
-import numpy as np
+
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def load_npz(run_dir: Path, epoch: int):
@@ -26,16 +28,41 @@ def load_npz(run_dir: Path, epoch: int):
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Aggregate QLSTM/LSTM snapshots into one plot")
-    ap.add_argument("--runs", nargs="+", help="List of RUN_DIR:LABEL (LABEL recommended for a readable legend)")
-    ap.add_argument(
-        "--epochs", type=str, required=True,
-        help="Comma-separated list of epochs (e.g., 30,60,100). Single epoch supported (e.g., 100)"
+    ap = argparse.ArgumentParser(
+        description="Aggregate QLSTM/LSTM snapshots into one plot"
     )
-    ap.add_argument("--out", type=str, required=True, help="Output image path (suffix defines format)")
-    ap.add_argument("--width", type=float, default=6.0, help="Width of each subplot in inches")
-    ap.add_argument("--height", type=float, default=None, help="Height of each subplot in inches (default: width * 0.6)")
-    ap.add_argument("--fmt", type=str, default=None, help="Force format (png|pdf). Default from suffix")
+    ap.add_argument(
+        "--runs",
+        nargs="+",
+        help="List of RUN_DIR:LABEL (LABEL recommended for a readable legend)",
+    )
+    ap.add_argument(
+        "--epochs",
+        type=str,
+        required=True,
+        help="Comma-separated list of epochs (e.g., 30,60,100). Single epoch supported (e.g., 100)",
+    )
+    ap.add_argument(
+        "--out",
+        type=str,
+        required=True,
+        help="Output image path (suffix defines format)",
+    )
+    ap.add_argument(
+        "--width", type=float, default=6.0, help="Width of each subplot in inches"
+    )
+    ap.add_argument(
+        "--height",
+        type=float,
+        default=None,
+        help="Height of each subplot in inches (default: width * 0.6)",
+    )
+    ap.add_argument(
+        "--fmt",
+        type=str,
+        default=None,
+        help="Force format (png|pdf). Default from suffix",
+    )
     args = ap.parse_args(argv)
 
     if not args.runs:
@@ -62,7 +89,14 @@ def main(argv: list[str] | None = None) -> int:
     subplot_height = args.height if args.height is not None else args.width * 0.6
     fig_width = args.width * n_epochs
     fig_height = subplot_height * n_runs
-    fig, axes = plt.subplots(n_runs, n_epochs, figsize=(fig_width, fig_height), sharex=False, sharey=True, squeeze=False)
+    fig, axes = plt.subplots(
+        n_runs,
+        n_epochs,
+        figsize=(fig_width, fig_height),
+        sharex=False,
+        sharey=True,
+        squeeze=False,
+    )
 
     vline_x = None
     gt = None
@@ -76,10 +110,20 @@ def main(argv: list[str] | None = None) -> int:
                 gt = y
                 vline_x = n_train
             elif not np.allclose(gt, y):
-                raise ValueError(f"Ground truth mismatch between runs for epoch {ep}: {run_path}")
+                raise ValueError(
+                    f"Ground truth mismatch between runs for epoch {ep}: {run_path}"
+                )
 
-            ax.plot(gt, "--", color="orange", linewidth=2, label="Ground Truth" if row_idx == 0 and col_idx == 0 else "")
-            ax.plot(y_pred, color=color, linewidth=2, label=label if col_idx == 0 else "")
+            ax.plot(
+                gt,
+                "--",
+                color="orange",
+                linewidth=2,
+                label="Ground Truth" if row_idx == 0 and col_idx == 0 else "",
+            )
+            ax.plot(
+                y_pred, color=color, linewidth=2, label=label if col_idx == 0 else ""
+            )
 
             if vline_x is not None:
                 ax.axvline(x=vline_x, c="r", linestyle="--")
@@ -96,10 +140,10 @@ def main(argv: list[str] | None = None) -> int:
                 handles, labels = ax.get_legend_handles_labels()
                 filtered = []
                 seen: set[str] = set()
-                for h, l in zip(handles, labels):
-                    if l and l not in seen:
-                        filtered.append((h, l))
-                        seen.add(l)
+                for h, label in zip(handles, labels):
+                    if label and label not in seen:
+                        filtered.append((h, label))
+                        seen.add(label)
                 if filtered:
                     ax.legend(*zip(*filtered), loc="lower left")
 

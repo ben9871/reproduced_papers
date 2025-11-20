@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import logging
+
+import merlin
+import perceval as pcvl
 import torch
 import torch.nn as nn
-import perceval as pcvl
-import merlin as ML
 
 
 def bs_layer_on_pairs(m: int) -> pcvl.Circuit:
@@ -41,7 +42,7 @@ class MerlinPhotonicGate(nn.Module):
 
     def __init__(
         self,
-        qlayer: ML.QuantumLayer,
+        qlayer: merlin.QuantumLayer,
         target_size: int,
         shots: int = 0,
         *,
@@ -50,16 +51,20 @@ class MerlinPhotonicGate(nn.Module):
         super().__init__()
         self.quantum_layer = qlayer
         self.shots = int(shots)
-        self._dtype = dtype if dtype is not None else torch.float64
+        # Par défaut on utilise float32 pour rester compatible avec MerLin
+        self._dtype = dtype if dtype is not None else torch.float32
         if qlayer.output_size != target_size:
             # Learned linear projection decouples features (LexGrouping keeps them on the simplex).
-            self.post = nn.Linear(qlayer.output_size, target_size, bias=True, dtype=self._dtype)
+            self.post = nn.Linear(
+                qlayer.output_size, target_size, bias=True, dtype=self._dtype
+            )
         else:
             self.post = nn.Identity()
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         shots = self.shots if self.shots > 0 else None
-        out = self.quantum_layer(x, shots=shots)
+        # Cast d'entrée vers le dtype interne pour éviter les mismatches (ex: double vs float)
+        out = self.quantum_layer(x.to(self._dtype), shots=shots)
         if isinstance(self.post, nn.Linear):
             out = self.post(out.to(self._dtype))
         else:
@@ -82,14 +87,14 @@ def make_photonic_vqc_2n_modes(
         // universal_interferometer(m, "U")
     )
 
-    qlayer = ML.QuantumLayer(
+    qlayer = merlin.QuantumLayer(
         input_size=n_inputs,
         circuit=circuit,
         trainable_parameters=["theta_"],
         input_parameters=["px"],
         input_state=[1, 0] * n_inputs,
-        computation_space=ML.ComputationSpace.UNBUNCHED,
-        measurement_strategy=ML.MeasurementStrategy.MODE_EXPECTATIONS,
+        computation_space=merlin.ComputationSpace.UNBUNCHED,
+        measurement_strategy=merlin.MeasurementStrategy.MODE_EXPECTATIONS,
         dtype=dtype,
     )
 
@@ -111,7 +116,8 @@ class PhotonicQLSTMCell(nn.Module):
         self.output_size = output_size
         self.use_photonic_head = use_photonic_head
 
-        self._dtype = dtype if dtype is not None else torch.float64
+        # Par défaut float32 pour cohérence avec couches MerLin
+        self._dtype = dtype if dtype is not None else torch.float32
 
         n_v = input_size + hidden_size  # concat [x, h]
 
@@ -150,7 +156,9 @@ class PhotonicQLSTMCell(nn.Module):
 
         def _params(module: nn.Module) -> int:
             return sum(
-                p.numel() for p in module.parameters() if getattr(p, "requires_grad", False)
+                p.numel()
+                for p in module.parameters()
+                if getattr(p, "requires_grad", False)
             )
 
         try:
@@ -165,7 +173,7 @@ class PhotonicQLSTMCell(nn.Module):
             "PhotonicQLSTMCell initialized:",
             f"  - dtype={self._dtype}",
             f"  - shots={shots}",
-            f"  - gates: 4 photonic VQC on 2n modes (n=input+hidden)",
+            "  - gates: 4 photonic VQC on 2n modes (n=input+hidden)",
             f"    · gate input n = {n_v} -> modes={gate_modes}, photons={gate_photons}",
             f"    · measurement={measurement} -> gate output dim={gate_out_dim}",
         ]

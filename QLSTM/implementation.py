@@ -6,6 +6,7 @@ Features:
 - Structured run directory under base outdir with config snapshot
 - Standard logging (console + run.log)
 """
+
 from __future__ import annotations
 
 import argparse
@@ -15,14 +16,13 @@ import logging
 import os
 from pathlib import Path
 
+import numpy as np
 import torch
 import torch.nn as nn
 from lib.config import deep_update, default_config, load_config
 from lib.dataset import data as data_factory
 from lib.model import build_model
 from lib.rendering import save_losses_plot, save_pickle, save_simulation_plot
-from pathlib import Path
-import numpy as np
 
 
 def configure_logging(level: str = "info", log_file: Path | None = None) -> None:
@@ -39,7 +39,9 @@ def configure_logging(level: str = "info", log_file: Path | None = None) -> None
     # reset
     for h in list(root.handlers):
         root.removeHandler(h)
-    fmt = logging.Formatter("%(asctime)s | %(levelname)s | %(name)s | %(message)s", "%Y-%m-%d %H:%M:%S")
+    fmt = logging.Formatter(
+        "%(asctime)s | %(levelname)s | %(name)s | %(message)s", "%Y-%m-%d %H:%M:%S"
+    )
     sh = logging.StreamHandler()
     sh.setFormatter(fmt)
     root.addHandler(sh)
@@ -58,25 +60,33 @@ def build_arg_parser() -> argparse.ArgumentParser:
 
     # model/exp overrides
     p.add_argument("--model", choices=["qlstm", "lstm", "qlstm_photonic"], default=None)
-    p.add_argument("--generator", default=None, help="sin|damped_shm|logsine|ma_noise|csv")
+    p.add_argument(
+        "--generator", default=None, help="sin|damped_shm|logsine|ma_noise|csv"
+    )
     p.add_argument("--csv-path", type=str, default=None)
     p.add_argument("--seq-length", type=int, default=None)
     p.add_argument("--hidden-size", type=int, default=None)
     p.add_argument("--vqc-depth", type=int, default=None)
-    p.add_argument("--use-preencoders", action="store_true", help="Enable 2 additional VQCs to pre-encode x and h (aligns with 6 VQC variant)")
+    p.add_argument(
+        "--use-preencoders",
+        action="store_true",
+        help="Enable 2 additional VQCs to pre-encode x and h (aligns with 6 VQC variant)",
+    )
     p.add_argument("--batch-size", type=int, default=None)
     p.add_argument("--epochs", type=int, default=None)
     p.add_argument("--lr", type=float, default=None)
     p.add_argument("--train-split", type=float, default=None)
     p.add_argument("--fmt", choices=["png", "pdf"], default=None)
     p.add_argument(
-        "--snapshot-epochs", "--snapshot_epochs",
+        "--snapshot-epochs",
+        "--snapshot_epochs",
         type=str,
         default=None,
         help="Comma-separated epochs to save intermediate simulation plots (e.g., '1,15,30,100')",
     )
     p.add_argument(
-        "--plot-width", "--plot_width",
+        "--plot-width",
+        "--plot_width",
         type=float,
         default=None,
         help="Width of simulation plots in inches (default from config)",
@@ -123,9 +133,13 @@ def resolve_config(args: argparse.Namespace) -> dict:
         cfg["experiment"]["plot_width"] = float(args.plot_width)
     if getattr(args, "snapshot_epochs", None):
         try:
-            epochs_list = [int(x) for x in str(args.snapshot_epochs).split(",") if str(x).strip()]
+            epochs_list = [
+                int(x) for x in str(args.snapshot_epochs).split(",") if str(x).strip()
+            ]
         except Exception as e:  # pragma: no cover - defensive
-            raise ValueError(f"Invalid --snapshot-epochs format: {args.snapshot_epochs!r}") from e
+            raise ValueError(
+                f"Invalid --snapshot-epochs format: {args.snapshot_epochs!r}"
+            ) from e
         cfg["experiment"]["snapshot_epochs"] = epochs_list
     return cfg
 
@@ -164,19 +178,29 @@ def train_and_evaluate(cfg: dict, run_dir: Path) -> None:
 
     x, y = gen.get_data(exp["seq_length"])  # type: ignore[call-arg]
     n_train = int(exp["train_split"] * len(x))
-    log.info("Dataset samples=%d (train=%d, test=%d)", len(x), n_train, len(x) - n_train)
+    log.info(
+        "Dataset samples=%d (train=%d, test=%d)", len(x), n_train, len(x) - n_train
+    )
     x_train, y_train = x[:n_train], y[:n_train]
     x_test, y_test = x[n_train:], y[n_train:]
     x_train_in = x_train.unsqueeze(2)
     x_test_in = x_test.unsqueeze(2)
 
     device = torch.device(cfg["device"])
-    model = build_model(
-        model_cfg["type"], 1, model_cfg["hidden_size"], model_cfg["vqc_depth"], 1,
-        use_preencoders=bool(model_cfg.get("use_preencoders", False)),
-        shots=int(model_cfg.get("shots", 0)),
-        use_photonic_head=bool(model_cfg.get("use_photonic_head", False)),
-    ).to(device).double()
+    model = (
+        build_model(
+            model_cfg["type"],
+            1,
+            model_cfg["hidden_size"],
+            model_cfg["vqc_depth"],
+            1,
+            use_preencoders=bool(model_cfg.get("use_preencoders", False)),
+            shots=int(model_cfg.get("shots", 0)),
+            use_photonic_head=bool(model_cfg.get("use_photonic_head", False)),
+        )
+        .to(device)
+        .double()
+    )
     opt = torch.optim.RMSprop(model.parameters(), lr=train_cfg["lr"])
     mse = nn.MSELoss()
 
@@ -232,7 +256,9 @@ def train_and_evaluate(cfg: dict, run_dir: Path) -> None:
             with torch.no_grad():
                 model.eval()
                 full_pred, _ = model(x.unsqueeze(2).to(device))
-                full_last = full_pred.transpose(0, 1)[-1].view(-1).detach().cpu().numpy()
+                full_last = (
+                    full_pred.transpose(0, 1)[-1].view(-1).detach().cpu().numpy()
+                )
                 save_simulation_plot(
                     y.detach().cpu().numpy(),
                     full_last,

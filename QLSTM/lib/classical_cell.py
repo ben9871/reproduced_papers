@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+
 import torch
 import torch.nn as nn
 
@@ -25,8 +26,12 @@ class ClassicalLSTMCell(nn.Module):
 
         # --- Logging: architecture summary ---
         logger = logging.getLogger(__name__)
+
         def _params(m: nn.Module) -> int:
-            return sum(p.numel() for p in m.parameters() if getattr(p, 'requires_grad', False))
+            return sum(
+                p.numel() for p in m.parameters() if getattr(p, "requires_grad", False)
+            )
+
         total_params = _params(self)
         parts = [
             "ClassicalLSTMCell initialized:",

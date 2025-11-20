@@ -1,16 +1,10 @@
-import pathlib
-import sys
 import torch
-
-_TESTS_DIR = pathlib.Path(__file__).parent
-if str(_TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_TESTS_DIR))
-
-from common import _load_impl_module
-
-_ = _load_impl_module()
 from lib.gatebased_quantum_cell import GateBasedQuantumLSTMCell
 from lib.model import SequenceModel
+
+from .common import _load_impl_module
+
+_ = _load_impl_module()
 
 
 def test_gatebased_quantum_cell_with_preencoders_shapes():

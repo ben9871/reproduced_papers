@@ -1,4 +1,5 @@
 """Model assembly for QLSTM reproduction."""
+
 from __future__ import annotations
 
 import torch
@@ -33,23 +34,30 @@ def build_model(
     vqc_depth: int,
     output_size: int = 1,
     shots: int = 0,
-    device_name: str = 'default.qubit', # gate-based QLSTM only
-    use_preencoders: bool = False, # gate-based QLSTM only
-    use_photonic_head: bool = False, # photonic QLSTM only
+    device_name: str = "default.qubit",  # gate-based QLSTM only
+    use_preencoders: bool = False,  # gate-based QLSTM only
+    use_photonic_head: bool = False,  # photonic QLSTM only
 ):
-    if model_type == 'lstm':
+    if model_type == "lstm":
         cell = ClassicalLSTMCell(input_size, hidden_size, output_size)
-    elif model_type == 'qlstm':
+    elif model_type == "qlstm":
         cell = GateBasedQuantumLSTMCell(
-            input_size, hidden_size, output_size, vqc_depth, device_name,
+            input_size,
+            hidden_size,
+            output_size,
+            vqc_depth,
+            device_name,
             use_preencoders=use_preencoders,
             shots=shots,
         )
-    elif model_type == 'qlstm_photonic':
+    elif model_type == "qlstm_photonic":
         # Provide sensible defaults; vqc_depth is unused here
         cell = PhotonicQuantumLSTMCell(
-            input_size, hidden_size, output_size,
-            shots=shots, use_photonic_head=use_photonic_head,
+            input_size,
+            hidden_size,
+            output_size,
+            shots=shots,
+            use_photonic_head=use_photonic_head,
         )
     else:
         raise ValueError(f"Unknown model_type {model_type}")

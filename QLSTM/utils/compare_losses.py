@@ -12,12 +12,13 @@ Each run directory must contain a ``losses.csv`` file as written by the
 training script. The ``--metric`` flag controls whether we plot the train or
 test loss (default: test).
 """
+
 from __future__ import annotations
 
 import argparse
 import csv
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Sequence
 
 import matplotlib
 
@@ -50,9 +51,13 @@ def parse_run_specs(specs: Sequence[str]) -> list[tuple[Path, str]]:
 
 
 def main(argv: list[str] | None = None) -> int:
-    ap = argparse.ArgumentParser(description="Compare train/test loss curves across runs")
+    ap = argparse.ArgumentParser(
+        description="Compare train/test loss curves across runs"
+    )
     ap.add_argument("--runs", nargs="+", required=True, help="List of RUN_DIR[:LABEL]")
-    ap.add_argument("--metric", choices=["train", "test"], default="test", help="Loss curve to plot")
+    ap.add_argument(
+        "--metric", choices=["train", "test"], default="test", help="Loss curve to plot"
+    )
     ap.add_argument("--out", required=True, help="Output image path")
     ap.add_argument("--width", type=float, default=6.0, help="Figure width in inches")
     ap.add_argument("--height", type=float, default=3.5, help="Figure height in inches")
