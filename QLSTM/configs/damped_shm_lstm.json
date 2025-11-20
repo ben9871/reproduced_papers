@@ -1,4 +1,5 @@
 {
+  "description": "Damped simple harmonic motion LSTM baseline.",
   "seed": 0,
   "device": "cpu",
   "outdir": "outdir",

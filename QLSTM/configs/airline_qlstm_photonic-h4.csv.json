@@ -1,4 +1,5 @@
 {
+  "description": "Airline passengers photonic QLSTM (hidden_size=4).",
   "seed": 0,
   "device": "cpu",
   "outdir": "outdir",

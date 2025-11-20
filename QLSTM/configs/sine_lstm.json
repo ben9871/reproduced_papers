@@ -1,4 +1,5 @@
 {
+  "description": "Sine dataset LSTM baseline configuration.",
   "seed": 0,
   "device": "cpu",
   "outdir": "outdir",

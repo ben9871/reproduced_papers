@@ -1,4 +1,5 @@
 {
+  "description": "Sine dataset photonic QLSTM configuration.",
   "seed": 0,
   "device": "cpu",
   "outdir": "outdir",

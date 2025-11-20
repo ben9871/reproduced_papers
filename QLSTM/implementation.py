@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
-"""QLSTM reproduction CLI aligned with repository template.
+"""QLSTM reproduction CLI following generic template structure.
 
-Features:
-- JSON config via --config + CLI overrides
-- Structured run directory under base outdir with config snapshot
-- Standard logging (console + run.log)
+Template features retained:
+- Load defaults from `configs/defaults.json` via --config layering.
+- CLI overrides for common hyperparameters.
+- Logging setup (console + run.log) and config snapshot.
+
+Extended QLSTM logic is implemented inside `train_and_evaluate`.
 """
 
 from __future__ import annotations
@@ -14,18 +16,20 @@ import datetime as dt
 import json
 import logging
 import os
+import random
 from pathlib import Path
 
 import numpy as np
 import torch
 import torch.nn as nn
-from lib.config import deep_update, default_config, load_config
+from lib.config import deep_update, load_config
 from lib.dataset import data as data_factory
 from lib.model import build_model
 from lib.rendering import save_losses_plot, save_pickle, save_simulation_plot
 
 
 def configure_logging(level: str = "info", log_file: Path | None = None) -> None:
+    """Configure root logger similarly to template version."""
     level_map = {
         "debug": logging.DEBUG,
         "info": logging.INFO,
@@ -33,11 +37,10 @@ def configure_logging(level: str = "info", log_file: Path | None = None) -> None
         "error": logging.ERROR,
         "critical": logging.CRITICAL,
     }
-    log_level = level_map.get(level.lower(), logging.INFO)
+    log_level = level_map.get(str(level).lower(), logging.INFO)
     root = logging.getLogger()
     root.setLevel(log_level)
-    # reset
-    for h in list(root.handlers):
+    for h in list(root.handlers):  # reset
         root.removeHandler(h)
     fmt = logging.Formatter(
         "%(asctime)s | %(levelname)s | %(name)s | %(message)s", "%Y-%m-%d %H:%M:%S"
@@ -52,13 +55,18 @@ def configure_logging(level: str = "info", log_file: Path | None = None) -> None
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
-    p = argparse.ArgumentParser(description="QLSTM vs LSTM trainer")
-    p.add_argument("--config", type=str, default=None, help="Path to JSON config")
-    p.add_argument("--seed", type=int, default=None)
-    p.add_argument("--outdir", type=str, default=None)
-    p.add_argument("--device", type=str, default=None)
-
-    # model/exp overrides
+    p = argparse.ArgumentParser(description="QLSTM reproduction runner")
+    # Template common flags
+    p.add_argument("--config", type=str, help="Path to JSON config", default=None)
+    p.add_argument("--seed", type=int, help="Random seed", default=None)
+    p.add_argument("--outdir", type=str, help="Base output directory", default=None)
+    p.add_argument(
+        "--device", type=str, help="Device string (cpu, cuda:0, mps)", default=None
+    )
+    p.add_argument("--epochs", type=int, default=None)
+    p.add_argument("--batch-size", type=int, default=None)
+    p.add_argument("--lr", type=float, default=None)
+    # Extended QLSTM overrides
     p.add_argument("--model", choices=["qlstm", "lstm", "qlstm_photonic"], default=None)
     p.add_argument(
         "--generator", default=None, help="sin|damped_shm|logsine|ma_noise|csv"
@@ -67,44 +75,41 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p.add_argument("--seq-length", type=int, default=None)
     p.add_argument("--hidden-size", type=int, default=None)
     p.add_argument("--vqc-depth", type=int, default=None)
-    p.add_argument(
-        "--use-preencoders",
-        action="store_true",
-        help="Enable 2 additional VQCs to pre-encode x and h (aligns with 6 VQC variant)",
-    )
-    p.add_argument("--batch-size", type=int, default=None)
-    p.add_argument("--epochs", type=int, default=None)
-    p.add_argument("--lr", type=float, default=None)
+    p.add_argument("--use-preencoders", action="store_true")
     p.add_argument("--train-split", type=float, default=None)
     p.add_argument("--fmt", choices=["png", "pdf"], default=None)
     p.add_argument(
         "--snapshot-epochs",
-        "--snapshot_epochs",
         type=str,
         default=None,
-        help="Comma-separated epochs to save intermediate simulation plots (e.g., '1,15,30,100')",
+        help="Comma-separated epochs for intermediate simulation plots",
     )
-    p.add_argument(
-        "--plot-width",
-        "--plot_width",
-        type=float,
-        default=None,
-        help="Width of simulation plots in inches (default from config)",
-    )
+    p.add_argument("--plot-width", type=float, default=None)
     return p
 
 
-def resolve_config(args: argparse.Namespace) -> dict:
-    cfg = default_config()
+def resolve_config(args: argparse.Namespace):
+    # Start from defaults.json (template style)
+    defaults_path = Path("./configs/defaults.json")
+    cfg = load_config(defaults_path)
+    # Merge optional user config
     if args.config:
-        cfg = deep_update(cfg, load_config(Path(args.config)))
-    # overrides
+        user_cfg = load_config(Path(args.config))
+        cfg = deep_update(cfg, user_cfg)
+    # Common overrides
     if args.seed is not None:
         cfg["seed"] = args.seed
     if args.outdir is not None:
         cfg["outdir"] = args.outdir
     if args.device is not None:
         cfg["device"] = args.device
+    if args.epochs is not None:
+        cfg["training"]["epochs"] = args.epochs
+    if args.batch_size is not None:
+        cfg["training"]["batch_size"] = args.batch_size
+    if args.lr is not None:
+        cfg["training"]["lr"] = args.lr
+    # Extended overrides
     if args.model is not None:
         cfg["model"]["type"] = args.model
     if args.generator is not None:
@@ -119,40 +124,36 @@ def resolve_config(args: argparse.Namespace) -> dict:
         cfg["model"]["vqc_depth"] = args.vqc_depth
     if args.use_preencoders:
         cfg["model"]["use_preencoders"] = True
-    if args.batch_size is not None:
-        cfg["training"]["batch_size"] = args.batch_size
-    if args.epochs is not None:
-        cfg["training"]["epochs"] = args.epochs
-    if args.lr is not None:
-        cfg["training"]["lr"] = args.lr
     if args.train_split is not None:
         cfg["experiment"]["train_split"] = args.train_split
     if args.fmt is not None:
         cfg["experiment"]["fmt"] = args.fmt
-    if getattr(args, "plot_width", None) is not None:
+    if args.plot_width is not None:
         cfg["experiment"]["plot_width"] = float(args.plot_width)
-    if getattr(args, "snapshot_epochs", None):
+    if args.snapshot_epochs:
         try:
-            epochs_list = [
-                int(x) for x in str(args.snapshot_epochs).split(",") if str(x).strip()
+            cfg["experiment"]["snapshot_epochs"] = [
+                int(x) for x in args.snapshot_epochs.split(",") if x.strip()
             ]
-        except Exception as e:  # pragma: no cover - defensive
+        except Exception as e:
             raise ValueError(
                 f"Invalid --snapshot-epochs format: {args.snapshot_epochs!r}"
             ) from e
-        cfg["experiment"]["snapshot_epochs"] = epochs_list
     return cfg
 
 
-def set_seed(seed: int) -> None:
+def setup_seed(seed: int) -> None:
+    random.seed(seed)
     torch.manual_seed(seed)
-    if torch.cuda.is_available():  # pragma: no cover - depends on env
+    if torch.cuda.is_available():  # pragma: no cover
         torch.cuda.manual_seed_all(seed)
 
 
-def train_and_evaluate(cfg: dict, run_dir: Path) -> None:
-    log = logging.getLogger("train")
-    set_seed(cfg["seed"])
+def train_and_evaluate(cfg, run_dir: Path) -> None:
+    log = logging.getLogger(__name__)
+    log.info("Starting training")
+    log.debug("Resolved config: %s", json.dumps(cfg, indent=2))
+    setup_seed(cfg["seed"])
 
     exp = cfg["experiment"]
     model_cfg = cfg["model"]
@@ -307,27 +308,22 @@ def train_and_evaluate(cfg: dict, run_dir: Path) -> None:
 
 
 def main(argv: list[str] | None = None) -> int:
-    # ensure we operate from QLSTM dir
+    configure_logging("info")  # initial console logging
     script_dir = Path(__file__).resolve().parent
     if Path.cwd().resolve() != script_dir:
+        logging.info("Switching working directory to %s", script_dir)
         os.chdir(script_dir)
 
-    configure_logging("info")
     parser = build_arg_parser()
     args = parser.parse_args(argv)
-
     cfg = resolve_config(args)
+
+    setup_seed(cfg["seed"])
     timestamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     base_out = Path(cfg["outdir"]) / f"run_{timestamp}"
     base_out.mkdir(parents=True, exist_ok=True)
-
-    # reconfigure logs with file handler in run dir
     configure_logging(cfg.get("logging", {}).get("level", "info"), base_out / "run.log")
-    logging.getLogger("main").info("Run directory: %s (id=%s)", base_out, base_out.name)
-
-    # config snapshot
     (base_out / "config_snapshot.json").write_text(json.dumps(cfg, indent=2))
-
     train_and_evaluate(cfg, base_out)
     logging.info("Finished. Artifacts in: %s", base_out)
     return 0
