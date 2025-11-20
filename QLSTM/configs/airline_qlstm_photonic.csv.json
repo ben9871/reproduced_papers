@@ -1,0 +1,26 @@
+{
+  "seed": 0,
+  "device": "cpu",
+  "outdir": "outdir",
+  "logging": { "level": "info" },
+  "experiment": {
+    "generator": "csv",
+  "csv_path": "data/airline-passengers.csv",
+    "seq_length": 12,
+    "train_split": 0.67,
+    "fmt": "png",
+    "plot_width": 6,
+    "snapshot_epochs": [1, 25, 50, 100]
+  },
+  "model": {
+    "type": "qlstm_photonic",
+    "hidden_size": 3,
+    "shots": 0,
+    "use_photonic_head": false
+  },
+  "training": {
+    "epochs": 100,
+    "batch_size": 16,
+    "lr": 0.005
+  }
+}
