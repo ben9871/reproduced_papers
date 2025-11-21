@@ -1,0 +1,29 @@
+{
+  "description": "Default QLSTM experiment baseline.",
+  "seed": 0,
+  "device": "cpu",
+  "outdir": "outdir",
+  "logging": {"level": "info"},
+  "experiment": {
+    "generator": "damped_shm",
+    "csv_path": null,
+    "seq_length": 4,
+    "train_split": 0.67,
+    "fmt": "png",
+    "snapshot_epochs": [],
+    "plot_width": 6.0
+  },
+  "model": {
+    "type": "qlstm",
+    "hidden_size": 5,
+    "vqc_depth": 4,
+    "use_preencoders": false,
+    "shots": 0,
+    "use_photonic_head": false
+  },
+  "training": {
+    "epochs": 50,
+    "batch_size": 10,
+    "lr": 0.01
+  }
+}
