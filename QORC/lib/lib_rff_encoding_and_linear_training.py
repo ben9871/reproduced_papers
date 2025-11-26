@@ -11,7 +11,7 @@ from sklearn.svm import LinearSVC
 from sklearn.linear_model import SGDClassifier
 from sklearn.metrics import accuracy_score
 
-from merlin.datasets.mnist_digits import get_data_train_original, get_data_test_original
+from lib.lib_datasets import get_mnist_variant
 
 
 def rff_encoding_and_linear_training(
@@ -23,6 +23,7 @@ def rff_encoding_and_linear_training(
     b_optim_via_sgd,
     max_iter_sgd,
     # Dataset parameters
+    dataset_name,
     run_dir,
     logger,
 ):
@@ -39,11 +40,9 @@ def rff_encoding_and_linear_training(
     )
     time_t1 = time.time()
 
-    logger.info("Loading MNIST data...")
-    train_data, train_label, _ = get_data_train_original()
+    logger.info("Loading MNIST-variant data ({})".format(dataset_name))
+    train_data, train_label, test_data, test_label = get_mnist_variant(dataset_name)
     train_data = train_data.reshape(train_data.shape[0], -1).astype(np.float32) / 255.0
-
-    test_data, test_label, _ = get_data_test_original()
     test_data = test_data.reshape(test_data.shape[0], -1).astype(np.float32) / 255.0
 
     logger.info("Datasets sizes:")

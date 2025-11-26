@@ -11,6 +11,8 @@
     "b_optim_via_sgd" : true,
     "max_iter_sgd" : 1000,
 
+    "dataset_name" : "mnist",
+
     "f_out_results_training_csv" : "f_out_results_training_rff.csv",
     "outdir" : "outdir"
 }

@@ -13,14 +13,154 @@ import torch.nn as nn
 
 import perceval as pcvl
 import merlin as ML
-from merlin.datasets.mnist_digits import get_data_train_original, get_data_test_original
+
+from perceval.runtime import RemoteConfig
 
 from lib.lib_datasets import (
     tensor_dataset,
     get_dataloader,
     split_fold_numpy,
+    get_mnist_variant,
 )
 from lib.lib_learning import get_device, model_eval, model_fit
+
+
+def get_circuit_physical_depth(circuit: pcvl.Circuit):
+    t = type(circuit)
+    match t:
+        case pcvl.components.BS:
+            return 1, [1]
+        case pcvl.components.PS:
+            return 0, [0]
+        case pcvl.components.Unitary:
+            return 2 * circuit.m, [2, 2]
+        case pcvl.components.Circuit:
+            if circuit.is_composite():
+                depths = [0] * circuit.m
+                d_current = 0
+                for modes, comp in circuit._components:  # type: ignore[attr-defined]
+                    # print(modes, comp)
+                    d_current = max(depths[m] for m in modes)
+                    add_depth, _ = get_circuit_physical_depth(comp)
+                    for m in modes:
+                        depths[m] = d_current + add_depth
+                d_current = max(depths[m] for m in modes)
+                return d_current, depths
+            else:
+                raise ValueError(
+                    "Erreur dans get_circuit_physical_depth: Le circuit n'est pas composite."
+                )
+        case _:
+            raise ValueError(
+                f"Erreur dans get_circuit_physical_depth: Type de circuit non géré: {t}"
+            )
+    raise ValueError("Erreur dans get_circuit_physical_depth (interne).")
+
+
+def get_PS_name_for_mode_and_depth(circuit: pcvl.Circuit, mode: int, depth: int):
+    if not circuit.is_composite():
+        raise ValueError("Erreur: Circuit pas composite")
+
+    depths = [0] * circuit.m
+    for modes, comp in circuit._components:  # type: ignore[attr-defined]
+        # print(modes, comp)
+        d_current = max(depths[m] for m in modes)
+
+        add_depth = None
+        if isinstance(comp, pcvl.components.BS):
+            add_depth = 1
+        if isinstance(comp, pcvl.components.PS):
+            add_depth = 0
+        if add_depth is None:
+            raise ValueError("Erreur: Composant non reconnu")
+
+        for m in modes:
+            depths[m] = d_current + add_depth
+
+        if isinstance(comp, pcvl.components.PS):
+            if mode in modes:
+                if depths[mode] >= depth:
+                    ps_name = comp.get_variables()["phi"]
+                    return ps_name, depths[mode]
+
+    # Pas de Phaseshifter trouvé avec une profondeur en BS suffisante (la depth demandée est trop élevée pour le circuit)
+    return None, None
+
+
+def create_quantum_layer_for_ascella(n_photons, logger):
+    run_seed = 24
+    n_modes = 12
+
+    token = os.environ.get("QUANDELA_TOKEN", "").strip()
+    RemoteConfig.set_token(token)
+    remote_processor = pcvl.RemoteProcessor("sim:ascella")
+
+    specs = remote_processor.specs
+    spec_circuit = specs["specific_circuit"]
+    d_current, depths = get_circuit_physical_depth(spec_circuit)
+    print("circuit depths:", d_current, depths)
+
+    # Ascella: On cherche les PS du milieu, pour les 11 derniers modes, car le premier mode n'a pas de PhaseShifter
+    input_param_names = []
+    for mode_cour in range(1, 12):
+        depth_target = depths[mode_cour] // 2
+        ps_name, depth_cour = get_PS_name_for_mode_and_depth(
+            spec_circuit, mode_cour, depth_target
+        )
+        print(mode_cour, depth_target, depth_cour, ps_name)
+        input_param_names.append(ps_name)
+    print("Liste des paramètres d'input:", input_param_names)
+
+    # On construit un circuit identique, avec des phases fixes pour les non-input
+    qorc_circuit = pcvl.Circuit(n_modes)
+    np.random.seed(run_seed)
+    for modes, comp in spec_circuit._components:  # type: ignore[attr-defined]
+        if isinstance(comp, pcvl.components.BS):
+            qorc_circuit.add(modes, comp)
+        if isinstance(comp, pcvl.components.PS):
+            ps_name = comp.get_variables()["phi"]
+            if ps_name in input_param_names:
+                qorc_circuit.add(modes, comp)
+            if ps_name not in input_param_names:
+                phase = np.random.uniform(0, 2 * np.pi)
+                qorc_circuit.add(modes, pcvl.components.PS(phase))
+
+    logger.info("MerLin QuantumLayer creation:")
+    qorc_output_size = math.comb(n_photons + n_modes - 1, n_photons)
+
+    assert n_photons <= n_modes, (
+        "Error with photons_input_mode: Bunching not possible for input state."
+    )
+    step = (n_modes - 1) / (n_photons - 1) if n_photons > 1 else 0
+    qorc_input_state = [0] * n_modes
+    for k in range(n_photons):
+        index = int(round(k * step))
+        qorc_input_state[index] = 1
+
+    device_name = "cpu"
+    qorc_quantum_layer = ML.QuantumLayer(
+        input_size=n_modes
+        - 1,  # Nb input features = 11 pour ascella (le premier mode n'a pas de PS)
+        output_size=qorc_output_size,  # Nb output classes = nb modes
+        circuit=qorc_circuit,  # QORC quantum circuit
+        trainable_parameters=[],  # Circuit is not trainable
+        input_parameters=input_param_names,  # Input encoding parameters
+        input_state=qorc_input_state,  # Initial photon state
+        output_mapping_strategy=ML.OutputMappingStrategy.NONE,  # Output: Get all Fock states probas
+        # See: https://merlinquantum.ai/user_guide/output_mappings.html
+        no_bunching=False,
+        device=torch.device(device_name),
+    )
+
+    # Verify there are no trainable parameters
+    params = qorc_quantum_layer.parameters()
+    count = sum(1 for _ in params)
+    assert count == 0, f"quantum_layer does not have 0 parameters: {count}"
+
+    logger.info("Created QuantumLayer:")
+    logger.info(str(qorc_quantum_layer))
+
+    return qorc_quantum_layer, qorc_output_size
 
 
 def create_qorc_quantum_layer(
@@ -50,7 +190,7 @@ def create_qorc_quantum_layer(
     qorc_circuit = interferometer_1 // c_var // interferometer_2
 
     assert n_photons <= n_modes, (
-        "Error with photons_input_mode: Too many photons versus modes with 'distributed'."
+        "Error with photons_input_mode: Bunching not possible for input state."
     )
     step = (n_modes - 1) / (n_photons - 1) if n_photons > 1 else 0
     qorc_input_state = [0] * n_modes
@@ -78,6 +218,7 @@ def create_qorc_quantum_layer(
         no_bunching=b_no_bunching,
         device=torch.device(device_name),
     )
+    qorc_quantum_layer.eval()   # Put the layer in eval (do not compute gradiants)
 
     # Verify there are no trainable parameters
     params = qorc_quantum_layer.parameters()
@@ -95,8 +236,10 @@ def qorc_encoding_and_linear_training(
     n_modes,
     seed,
     # Dataset parameters
+    dataset_name,
     fold_index,
     n_fold,
+    dataset_truncate,
     # Training parameters
     n_epochs,
     batch_size,
@@ -110,11 +253,27 @@ def qorc_encoding_and_linear_training(
     b_no_bunching,
     b_use_tensorboard,
     device_name,
+    qpu_device_name,
+    qpu_device_nsample,
     run_dir,
     logger,
 ):
     storage_device = torch.device("cpu")
     compute_device = get_device(device_name)
+
+    n_components = n_modes
+    if "ascella" in qpu_device_name:
+        n_modes = 12
+        n_components = 11  # Ascella first mode does not contain any phaseShifter -> 11 inputs instead of 12
+        logger.info(
+            "Warning: ascella architecture detectd in qpu_device_name. Forcing n_modes=12 and n_components=11."
+        )
+    if "belenos" in qpu_device_name:
+        n_modes = 24
+        n_components = 24
+        logger.info(
+            "Warning: ascella architecture detectd in qpu_device_name. Forcing n_modes=24 and n_components=24."
+        )
 
     run_seed = seed
     if run_seed >= 0:
@@ -129,14 +288,16 @@ def qorc_encoding_and_linear_training(
     torch.use_deterministic_algorithms(mode=False)
 
     logger.info(
-        "Call to qorc_encoding_and_linear_training: n_photons={}, n_modes={}, run_seed={}, fold_index={}".format(
-            n_photons, n_modes, run_seed, fold_index
+        "Call to qorc_encoding_and_linear_training: n_photons={}, n_modes={}, n_components={}, run_seed={}, fold_index={}".format(
+            n_photons, n_modes, n_components, run_seed, fold_index
         )
     )
     time_t1 = time.time()
 
-    logger.info("Loading MNIST data...")
-    val_train_data, val_train_label, _ = get_data_train_original()
+    logger.info("Loading MNIST-variant data ({})".format(dataset_name))
+    val_train_data, val_train_label, test_data, test_label = get_mnist_variant(
+        dataset_name
+    )
     val_train_data = (
         val_train_data.reshape(val_train_data.shape[0], -1).astype(np.float32) / 255.0
     )
@@ -145,8 +306,18 @@ def qorc_encoding_and_linear_training(
         val_train_label, val_train_data, n_fold, fold_index, split_seed=run_seed
     )
 
-    test_data, test_label, _ = get_data_test_original()
     test_data = test_data.reshape(test_data.shape[0], -1).astype(np.float32) / 255.0
+
+    if dataset_truncate > 0:
+        # Only use the first images of datasets (i.e. truncate datasets to length = dataset_truncate)
+        # for testing purpose
+        train_data = train_data[:dataset_truncate]
+        train_label = train_label[:dataset_truncate]
+        val_data = val_data[:dataset_truncate]
+        val_label = val_label[:dataset_truncate]
+        test_data = test_data[:dataset_truncate]
+        test_label = test_label[:dataset_truncate]
+
     n_pixels = 28 * 28  # MNIST images size
     n_classes = 10  # 10 classes, one for each figure
 
@@ -163,7 +334,7 @@ def qorc_encoding_and_linear_training(
     logger.info("Creation of the encoder of the quantum reservoir...")
 
     # 1) PCA Components computation
-    pca = PCA(n_components=n_modes)
+    pca = PCA(n_components=n_components)
     train_data_pca = pca.fit_transform(train_data)
     val_data_pca = pca.transform(val_data)
     test_data_pca = pca.transform(test_data)
@@ -187,27 +358,52 @@ def qorc_encoding_and_linear_training(
     )
 
     # 3) Qorc quantum layer creation
-    [qorc_quantum_layer, qorc_output_size] = create_qorc_quantum_layer(
-        n_photons,  # Nb photons
-        n_modes,  # Nb modes
-        b_no_bunching,
-        device_name,
-        logger,
-    )
+    if "ascella" in qpu_device_name:
+        [qorc_quantum_layer, qorc_output_size] = create_quantum_layer_for_ascella(
+            n_photons, logger
+        )
+    else:
+        [qorc_quantum_layer, qorc_output_size] = create_qorc_quantum_layer(
+            n_photons,  # Nb photons
+            n_modes,  # Nb modes
+            b_no_bunching,
+            device_name,
+            logger,
+        )
 
     logger.info("Quantum features size: {}".format(qorc_output_size))
-    logger.info("Encoding of the PCA comps to quantum features...")
+    logger.info("Computation of the quantum features...")
     time_t2 = time.time()
-    train_data_qorc = qorc_quantum_layer(
-        torch.tensor(train_data_pca_norm, dtype=torch.float32, device=compute_device)
+    train_tensor = torch.tensor(
+        train_data_pca_norm, dtype=torch.float32, device=compute_device
     )
-    val_data_qorc = qorc_quantum_layer(
-        torch.tensor(val_data_pca_norm, dtype=torch.float32, device=compute_device)
+    val_tensor = torch.tensor(
+        val_data_pca_norm, dtype=torch.float32, device=compute_device
     )
-    test_data_qorc = qorc_quantum_layer(
-        torch.tensor(test_data_pca_norm, dtype=torch.float32, device=compute_device)
+    test_tensor = torch.tensor(
+        test_data_pca_norm, dtype=torch.float32, device=compute_device
     )
-    logger.info("Encoding over.")
+
+    if qpu_device_name == "none" or qpu_device_name == "":
+        train_data_qorc = qorc_quantum_layer(train_tensor)
+        val_data_qorc = qorc_quantum_layer(val_tensor)
+        test_data_qorc = qorc_quantum_layer(test_tensor)
+    else:
+        from lib.lib_remote_qorc import forward_remote_qorc_quantum_layer
+
+        train_data_qorc, val_data_qorc, test_data_qorc = (
+            forward_remote_qorc_quantum_layer(
+                train_tensor,
+                val_tensor,
+                test_tensor,
+                qorc_quantum_layer,
+                qpu_device_name,
+                qpu_device_nsample,
+                logger,
+            )
+        )
+
+    logger.info("Computation over.")
     time_t3 = time.time()
 
     # 4) Quantum features normalization (standard_scaler)

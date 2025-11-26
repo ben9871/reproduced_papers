@@ -77,6 +77,17 @@ def build_arg_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description="Paper reproduction runner")
     p.add_argument("--config", type=str, help="Path to JSON config", default=None)
     p.add_argument("--outdir", type=str, help="Base output directory", default=None)
+    p.add_argument(
+        "--dataset-name",
+        type=str,
+        choices=[
+            "mnist",
+            "k-mnist",
+            "fashion-mnist",
+        ],
+        help="Dataset name: 'mnist', 'k-mnist', or 'fashion-mnist'",
+        default="mnist",
+    )
 
     # Specific parameters to qorc
     p.add_argument("--n-photons", type=int, default=None, help="Number of photons")
@@ -87,6 +98,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
     )
     p.add_argument(
         "--n-fold", type=int, default=None, help="Split train/val number of folds"
+    )
+    p.add_argument(
+        "--dataset-truncate",
+        type=int,
+        default=0,
+        help="Truncate train/val/test sets for testing purpose",
     )
     p.add_argument("--epochs", type=int, default=None, help="Number of training epochs")
     p.add_argument("--batch-size", type=int, default=None, help="Batch size")
@@ -118,7 +135,19 @@ def build_arg_parser() -> argparse.ArgumentParser:
         help="Enable TensorBoard logging",
     )
     p.add_argument(
-        "--device", type=str, help="Device string (cpu, cuda:0, mps)", default=None
+        "--device", type=str, help="Device string (cpu, cuda:0, mps)", default="cpu"
+    )
+    p.add_argument(
+        "--qpu-device",
+        type=str,
+        help="QPU Device string (none, sim:slos:local, sim:slos, sim:ascella, sim:belenos, qpu:ascella, qpu:belenos)",
+        default="none",
+    )
+    p.add_argument(
+        "--qpu-device-nsample",
+        type=int,
+        help="QPU Device number of samples",
+        default=None,
     )
 
     # Specific parameters to rff
@@ -151,6 +180,8 @@ def resolve_config(args: argparse.Namespace):
     # Apply CLI overrides
     if args.outdir is not None:
         cfg["outdir"] = args.outdir
+    if args.dataset_name is not None:
+        cfg["dataset_name"] = args.dataset_name
 
     # Specific parameters to qorc
     if args.n_photons is not None:
@@ -163,6 +194,8 @@ def resolve_config(args: argparse.Namespace):
         cfg["fold_index"] = args.fold_index
     if args.n_fold is not None:
         cfg["n_fold"] = args.n_fold
+    if args.dataset_truncate is not None:
+        cfg["dataset_truncate"] = args.dataset_truncate
     if args.epochs is not None:
         cfg["n_epochs"] = args.epochs
     if args.batch_size is not None:
@@ -185,6 +218,10 @@ def resolve_config(args: argparse.Namespace):
         cfg["b_use_tensorboard"] = args.b_use_tensorboard
     if args.device is not None:
         cfg["device"] = args.device
+    if args.qpu_device is not None:
+        cfg["qpu_device"] = args.qpu_device
+    if args.qpu_device_nsample is not None:
+        cfg["qpu_device_nsample"] = args.qpu_device_nsample
 
     # Specific parameters to rff
     if args.n_rff_features is not None:
@@ -289,8 +326,10 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                                 n_modes=current_n_modes,
                                 seed=current_seed,
                                 # Dataset parameters
+                                dataset_name=cfg["dataset_name"],
                                 fold_index=current_fold_index,
                                 n_fold=cfg["n_fold"],
+                                dataset_truncate=cfg["dataset_truncate"],
                                 # Training parameters
                                 n_epochs=cfg["n_epochs"],
                                 batch_size=cfg["batch_size"],
@@ -304,6 +343,8 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                                 b_no_bunching=cfg["b_no_bunching"],
                                 b_use_tensorboard=cfg["b_use_tensorboard"],
                                 device_name=cfg["device"],
+                                qpu_device_name=cfg["qpu_device"],
+                                qpu_device_nsample=cfg["qpu_device_nsample"],
                                 run_dir=run_dir,
                                 logger=logger,
                             )
@@ -314,6 +355,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                                 "n_modes": current_n_modes,
                                 "seed": current_seed,
                                 "fold_index": current_fold_index,
+                                "dataset_name": cfg["dataset_name"],
                                 "train_acc": train_acc,
                                 "val_acc": val_acc,
                                 "test_acc": test_acc,
@@ -340,8 +382,10 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                 n_modes=cfg["n_modes"],
                 seed=cfg["seed"],
                 # Dataset parameters
+                dataset_name=cfg["dataset_name"],
                 fold_index=cfg["fold_index"],
                 n_fold=cfg["n_fold"],
+                dataset_truncate=cfg["dataset_truncate"],
                 # Training parameters
                 n_epochs=cfg["n_epochs"],
                 batch_size=cfg["batch_size"],
@@ -355,6 +399,8 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                 b_no_bunching=cfg["b_no_bunching"],
                 b_use_tensorboard=cfg["b_use_tensorboard"],
                 device_name=cfg["device"],
+                qpu_device_name=cfg["qpu_device"],
+                qpu_device_nsample=cfg["qpu_device_nsample"],
                 run_dir=run_dir,
                 logger=logger,
             )
@@ -416,6 +462,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                         b_optim_via_sgd=cfg["b_optim_via_sgd"],
                         max_iter_sgd=cfg["max_iter_sgd"],
                         # Dataset parameters
+                        dataset_name=cfg["dataset_name"],
                         run_dir=run_dir,
                         logger=logger,
                     )
@@ -424,6 +471,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                     output_fields = {
                         "n_rff_features": current_n_rff_features,
                         "seed": current_seed,
+                        "dataset_name": cfg["dataset_name"],
                         "train_acc": train_acc,
                         "test_acc": test_acc,
                         "duration_calcul_rff_features": duration_calcul_rff_features,
@@ -449,6 +497,7 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
                 b_optim_via_sgd=cfg["b_optim_via_sgd"],
                 max_iter_sgd=cfg["max_iter_sgd"],
                 # Dataset parameters
+                dataset_name=cfg["dataset_name"],
                 run_dir=run_dir,
                 logger=logger,
             )
