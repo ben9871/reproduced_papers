@@ -1,0 +1,497 @@
+#!/usr/bin/env python3
+"""Unified CLI entrypoint for reproducing the Photonic QCNN paper."""
+
+from __future__ import annotations
+
+import argparse
+import copy
+import json
+import os
+import random
+import runpy
+import sys
+import time
+from datetime import datetime
+from pathlib import Path
+from typing import Any
+
+import numpy as np
+import torch
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+REPO_ROOT = PROJECT_ROOT.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+PROJECT_ROOT = Path(__file__).resolve().parent
+CONFIG_DIR = PROJECT_ROOT / "configs"
+DEFAULT_CONFIG_PATH = CONFIG_DIR / "defaults.json"
+DATASET_CHOICES = ("BAS", "Custom BAS", "MNIST")
+PAPER_SCRIPT_MAP = {
+    "BAS": "run_BAS_paper.py",
+    "Custom BAS": "run_custom_BAS_paper.py",
+    "MNIST": "run_MNIST_paper.py",
+}
+
+
+def read_json(path: Path) -> dict[str, Any]:
+    with open(path, encoding="utf-8") as handle:
+        return json.load(handle)
+
+
+def deep_update(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, Any]:
+    for key, value in overrides.items():
+        if isinstance(value, dict) and key in base and isinstance(base[key], dict):
+            deep_update(base[key], value)
+        else:
+            base[key] = value
+    return base
+
+
+def load_config(config_path: Path | None) -> dict[str, Any]:
+    config = read_json(DEFAULT_CONFIG_PATH)
+    if config_path:
+        if not config_path.exists():
+            raise FileNotFoundError(f"Config file '{config_path}' does not exist.")
+        user_cfg = read_json(config_path)
+        config = deep_update(config, user_cfg)
+    return config
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Run Photonic QCNN experiments using either MerLin or the original paper implementation.",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  python implementation.py --merlin --config configs/example.json
+  python implementation.py --paper --datasets BAS MNIST
+  python implementation.py --config configs/example.json --epochs 50 --lr 1e-3
+""",
+    )
+
+    parser.add_argument(
+        "--config",
+        type=Path,
+        help="Path to a JSON configuration file (merged on top of defaults).",
+    )
+    parser.add_argument(
+        "--datasets",
+        nargs="+",
+        choices=DATASET_CHOICES,
+        help="Subset of datasets to run. Defaults to all datasets in the config.",
+    )
+    parser.add_argument("--seed", type=int, help="Global random seed override.")
+    parser.add_argument("--outdir", type=str, help="Base output directory override.")
+    parser.add_argument(
+        "--device", type=str, help="Device string (cpu, cuda:0, mps, ...)."
+    )
+    parser.add_argument(
+        "--epochs", type=int, help="Number of training epochs override."
+    )
+    parser.add_argument(
+        "--batch-size", type=int, dest="batch_size", help="Batch size override."
+    )
+    parser.add_argument("--lr", type=float, help="Learning rate override.")
+    parser.add_argument(
+        "--weight-decay", type=float, dest="weight_decay", help="Weight decay override."
+    )
+    parser.add_argument("--gamma", type=float, help="LR scheduler gamma override.")
+    parser.add_argument(
+        "--n-runs",
+        type=int,
+        dest="n_runs",
+        help="Number of random restarts per dataset.",
+    )
+    parser.add_argument(
+        "--figure4",
+        "--readout",
+        dest="figure4",
+        action="store_true",
+        help="Generate the Figure 4 readout analysis (runs specialized scripts and exits).",
+    )
+    parser.add_argument(
+        "--max-iter",
+        "--max_iter",
+        dest="max_iter",
+        type=int,
+        help="(Figure 4) Limit the number of two-fold readout experiments (incomplete results).",
+    )
+    parser.add_argument(
+        "--figure12",
+        action="store_true",
+        help="Generate the Figure 12 simulation plots (runs MerLin experiments and visualizations).",
+    )
+
+    impl_group = parser.add_mutually_exclusive_group()
+    impl_group.add_argument(
+        "--paper",
+        action="store_true",
+        help="Run the authors' original implementation.",
+    )
+    impl_group.add_argument(
+        "--merlin",
+        action="store_true",
+        help="Run the MerLin-based implementation.",
+    )
+
+    return parser.parse_args()
+
+
+def apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> None:
+    runs_cfg = config.setdefault("runs", {})
+    if args.datasets:
+        config["datasets"] = args.datasets
+    if args.seed is not None:
+        config["seed"] = args.seed
+    if args.outdir:
+        config["outdir"] = args.outdir
+    if args.device:
+        config["device"] = args.device
+    if args.batch_size is not None:
+        for dataset in DATASET_CHOICES:
+            runs_cfg.setdefault(dataset, {})["batch_size"] = args.batch_size
+    if args.n_runs is not None:
+        for dataset in DATASET_CHOICES:
+            runs_cfg.setdefault(dataset, {})["n_runs"] = args.n_runs
+
+    training_cfg = config.setdefault("training", {})
+    for key, value in (
+        ("epochs", args.epochs),
+        ("lr", args.lr),
+        ("weight_decay", args.weight_decay),
+        ("gamma", args.gamma),
+    ):
+        if value is not None:
+            training_cfg[key] = value
+
+
+def set_global_seeds(seed: int) -> None:
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
+
+
+def _resolve_outdir(config: dict[str, Any]) -> str:
+    outdir = config.get("outdir", "results")
+    if not os.path.isabs(outdir):
+        return str(PROJECT_ROOT / outdir)
+    return outdir
+
+
+def _prepare_dataset_config(
+    base_config: dict[str, Any], dataset: str, overrides: dict[str, Any]
+) -> dict[str, Any]:
+    cfg = copy.deepcopy(overrides)
+    cfg.setdefault("outdir", _resolve_outdir(base_config))
+    cfg.setdefault("seed", base_config.get("seed", 42))
+    cfg.setdefault("device", base_config.get("device", "cpu"))
+    return cfg
+
+
+def _get_merlin_runners():
+    from photonic_QCNN.lib.run_BAS import run_bas_experiments
+    from photonic_QCNN.lib.run_custom_BAS import run_custom_bas_experiments
+    from photonic_QCNN.lib.run_MNIST import run_mnist_experiments
+
+    return {
+        "BAS": run_bas_experiments,
+        "Custom BAS": run_custom_bas_experiments,
+        "MNIST": run_mnist_experiments,
+    }
+
+
+def run_merlin_pipeline(config: dict[str, Any]) -> dict[str, Any]:
+    runners = _get_merlin_runners()
+    datasets = config.get("datasets", list(DATASET_CHOICES))
+    results = {}
+    training_params = config.get("training") or None
+    runs_cfg = config.get("runs", {})
+
+    for dataset in datasets:
+        if dataset not in runners:
+            raise ValueError(f"Unknown dataset '{dataset}' for MerLin pipeline")
+        runner = runners[dataset]
+        dataset_overrides = runs_cfg.get(dataset, {})
+        cfg = _prepare_dataset_config(config, dataset, dataset_overrides)
+        print("=" * 60)
+        print(f"Running {dataset} with MerLin implementation")
+        print("=" * 60)
+        try:
+            results[dataset] = runner(cfg, training_params)
+        except Exception as exc:  # pragma: no cover - surface failure info
+            results[dataset] = {"status": "failed", "error": str(exc)}
+            print(f"MerLin run for {dataset} failed: {exc}")
+    return results
+
+
+def run_paper_pipeline(datasets: list[str]) -> dict[str, Any]:
+    results: dict[str, Any] = {}
+    lib_dir = PROJECT_ROOT / "lib"
+
+    for dataset in datasets:
+        script_name = PAPER_SCRIPT_MAP[dataset]
+        script_path = lib_dir / script_name
+        print("=" * 60)
+        print(f"Running {dataset} with the paper implementation")
+        print("=" * 60)
+        try:
+            runpy.run_path(str(script_path), run_name="__main__")
+            results[dataset] = {"status": "success", "script": str(script_path)}
+        except Exception as exc:  # pragma: no cover - bubble up info
+            results[dataset] = {"status": "failed", "error": str(exc)}
+            print(f"Paper run for {dataset} failed: {exc}")
+    return results
+
+
+def _prepare_figure4_dir(outdir: str | None) -> Path:
+    base = Path(outdir) if outdir else PROJECT_ROOT / "results" / "figure4"
+    if not base.is_absolute():
+        base = PROJECT_ROOT / base
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    target = base / timestamp
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def _prepare_figure12_dir(outdir: str | None) -> Path:
+    base = Path(outdir) if outdir else PROJECT_ROOT / "results" / "figure12"
+    if not base.is_absolute():
+        base = PROJECT_ROOT / base
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+    target = base / timestamp
+    target.mkdir(parents=True, exist_ok=True)
+    return target
+
+
+def run_readout_pipeline(
+    outdir: str | None = None, *, max_iter: int | None = None
+) -> dict[str, Any]:
+    """Run the Figure 4 readout analysis end-to-end."""
+    from photonic_QCNN.lib.run_modes_pair_readout import run_modes_pair_readout
+    from photonic_QCNN.lib.run_two_fold_readout import run_two_fold_readout
+    from photonic_QCNN.utils import readout_visu
+
+    base_dir = _prepare_figure4_dir(outdir)
+    print("=" * 60)
+    print("Running Figure 4 readout analysis")
+    print(f"Artifacts root: {base_dir}")
+    if max_iter is not None:
+        print(
+            f"Two-fold readout will be truncated after {max_iter} iterations "
+            "(results may be incomplete)."
+        )
+    print("=" * 60)
+    time.sleep(2)
+
+    two_fold_dir = base_dir / "two_fold"
+    two_fold_results = {}
+    for k in (7, 8):
+        print(f"[Figure4] Launching two-fold readout strategy for k={k}")
+        time.sleep(2)
+        result = run_two_fold_readout(k, two_fold_dir / f"k_{k}", max_iter=max_iter)
+        if result.get("incomplete"):
+            print(
+                f"[Figure4] WARNING: Two-fold readout for k={k} completed only "
+                f"{result.get('experiments_run', 'N/A')} / {result.get('total_label_sets', 'N/A')} experiments."
+            )
+        two_fold_results[k] = result
+
+    modes_dir = base_dir / "modes_pair"
+    print("\n[Figure4] Launching modes-pair readout strategy")
+    time.sleep(2)
+    modes_result = run_modes_pair_readout(modes_dir)
+
+    figures_dir = base_dir / "figures"
+    first_fig_paths = readout_visu.readout_visu_first(
+        two_fold_results[7]["results_json"],
+        two_fold_results[8]["results_json"],
+        figures_dir,
+    )
+    second_fig_path = readout_visu.readout_visu_second(
+        modes_result["results_json"],
+        figures_dir,
+    )
+
+    summary = {
+        "base_dir": base_dir,
+        "k7": two_fold_results[7],
+        "k8": two_fold_results[8],
+        "modes_pair": modes_result,
+        "figures": {
+            "first": [str(path) for path in first_fig_paths],
+            "second": str(second_fig_path),
+        },
+    }
+    print("Figure 4 analysis complete. Outputs stored in:", base_dir)
+    return summary
+
+
+def run_simulation_pipeline(outdir: str | None = None) -> dict[str, Any]:
+    """Run MerLin experiments and generate Figure 12-style simulation plots."""
+    from photonic_QCNN.utils import simulation_visu
+
+    base_dir = _prepare_figure12_dir(outdir)
+    runs_dir = base_dir / "runs"
+    figures_dir = base_dir / "figures"
+    runs_dir.mkdir(parents=True, exist_ok=True)
+    figures_dir.mkdir(parents=True, exist_ok=True)
+
+    config = load_config(None)
+    config["implementation"] = "merlin"
+    config["outdir"] = str(runs_dir)
+    datasets = config.get("datasets", list(DATASET_CHOICES))
+    config["datasets"] = datasets
+
+    print("=" * 60)
+    print("Running Figure 12 simulation pipeline")
+    print(f"Artifacts root: {base_dir}")
+    print("=" * 60)
+
+    merlin_results = run_merlin_pipeline(config)
+
+    figure_paths: dict[str, str] = {}
+    for dataset in datasets:
+        info = merlin_results.get(dataset)
+        output_dir = Path(info.get("output_dir", "")) if info else None
+        if not output_dir or not output_dir.exists():
+            print(f"[Figure12] WARNING: Missing output directory for {dataset}.")
+            continue
+        detailed_path = output_dir / "detailed_results.json"
+        if not detailed_path.exists():
+            print(
+                f"[Figure12] WARNING: detailed_results.json not found for {dataset} at {detailed_path}."
+            )
+            continue
+        slug = dataset.lower().replace(" ", "_")
+        target_path = figures_dir / f"{slug}_simulation_results.png"
+        try:
+            figure_path = simulation_visu.generate_simulation_plot(
+                detailed_path, target_path
+            )
+            figure_paths[dataset] = str(figure_path)
+        except Exception as exc:  # pragma: no cover - surface failure info
+            print(f"[Figure12] Failed to plot {dataset}: {exc}")
+
+    print("Figure 12 simulation pipeline complete. Outputs stored in:", base_dir)
+    return {
+        "base_dir": base_dir,
+        "runs_dir": runs_dir,
+        "figures": figure_paths,
+        "results": merlin_results,
+    }
+
+
+def format_merlin_summary(dataset: str, info: dict[str, Any]) -> str:
+    if info.get("status") == "failed":
+        return f"X {dataset}: FAILED ({info.get('error', 'see logs')})"
+
+    summary = info.get("summary", {})
+    test_mean = summary.get("test_acc_mean")
+    test_std = summary.get("test_acc_std")
+    if test_mean is None:
+        return f"✓ {dataset}: SUCCESS"
+    return (
+        f"✓ {dataset}: SUCCESS - Test Accuracy {test_mean:.4f}"
+        + (f" ± {test_std:.4f}" if test_std is not None else "")
+        + f" (outputs in {info.get('output_dir')})"
+    )
+
+
+def format_paper_summary(dataset: str, info: dict[str, Any]) -> str:
+    status = info.get("status")
+    if status == "success":
+        return f"✓ {dataset}: SUCCESS (script {info.get('script')})"
+    return f"X {dataset}: FAILED ({info.get('error', 'see logs')})"
+
+
+def print_summary(results: dict[str, Any], implementation: str) -> None:
+    print("\n" + "=" * 60)
+    print(f"EXPERIMENT SUMMARY - {implementation.upper()} IMPLEMENTATION")
+    print("=" * 60)
+
+    for dataset in results:
+        info = results[dataset]
+        if info is None:
+            print(f"X {dataset}: FAILED")
+        elif implementation == "merlin":
+            print(format_merlin_summary(dataset, info))
+        else:
+            print(format_paper_summary(dataset, info))
+
+    success_count = sum(
+        1
+        for info in results.values()
+        if info and info.get("status", "success") == "success"
+    )
+    total_count = len(results)
+    print(
+        f"\nOverall: {success_count}/{total_count} experiments completed successfully"
+    )
+
+
+def main() -> None:
+    args = parse_args()
+    if args.figure4 and args.figure12:
+        print(
+            "Error: --figure4/--readout and --figure12 cannot be combined. Please run them separately."
+        )
+        return
+    if args.max_iter is not None and not args.figure4:
+        print(
+            "Warning: --max-iter is only respected when --figure4/--readout is used. Ignoring."
+        )
+    if args.figure12:
+        run_simulation_pipeline(args.outdir)
+        return
+    if args.figure4:
+        run_readout_pipeline(args.outdir, max_iter=args.max_iter)
+        return
+
+    config_path = args.config.resolve() if args.config else None
+    config = load_config(config_path)
+    apply_cli_overrides(config, args)
+
+    implementation = "merlin"
+    if args.paper:
+        implementation = "paper"
+    elif args.merlin:
+        implementation = "merlin"
+    else:
+        implementation = config.get("implementation", "merlin")
+    config["implementation"] = implementation
+
+    config.setdefault("datasets", list(DATASET_CHOICES))
+    config.setdefault("outdir", "results")
+    config.setdefault("device", "cpu")
+    config.setdefault("seed", 42)
+
+    header = (
+        "Photonic Quantum Convolutional Neural Network Experiments\n"
+        "Paper: Photonic Quantum Convolutional Neural Networks with Adaptive State Injection"
+    )
+    print(header)
+    print("Started at:", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+
+    set_global_seeds(config["seed"])
+
+    if implementation == "merlin":
+        results = run_merlin_pipeline(config)
+    else:
+        print(
+            "!!!\nWarning: All hyperparameter overrides (e.g., --epochs, --lr, --outdir, "
+            "--batch-size) are ignored when running the paper implementation.\n!!!"
+        )
+        results = run_paper_pipeline(config.get("datasets", list(DATASET_CHOICES)))
+
+    print_summary(results, implementation)
+    print(
+        f"\nAll experiments finished at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    )
+    print("Check the results/ directory for detailed outputs.")
+
+
+if __name__ == "__main__":
+    main()
