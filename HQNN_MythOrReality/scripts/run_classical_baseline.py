@@ -8,6 +8,10 @@ import sys
 from collections.abc import Sequence
 from pathlib import Path
 
+_PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(_PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(_PROJECT_ROOT))
+
 from models.classical_baseline import (
     MLP,
     BaselineConfig,
@@ -16,10 +20,6 @@ from models.classical_baseline import (
 )
 from utils.io import save_experiment_results
 from utils.training import count_parameters
-
-_PROJECT_ROOT = Path(__file__).resolve().parents[1]
-if str(_PROJECT_ROOT) not in sys.path:
-    sys.path.insert(0, str(_PROJECT_ROOT))
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
