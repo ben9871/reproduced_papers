@@ -32,7 +32,6 @@ def _parse_configured_args() -> argparse.Namespace:
     parser.add_argument("--opt", choices=["adam", "sgd"], default="adam")
     parser.add_argument("--lr", type=float, default=1e-3)
     parser.add_argument("--momentum", type=float, default=0.9)
-    parser.add_argument("--shots", type=int, default=20000, help="measurement shots for the GI")
     parser.add_argument(
         "--angle_scale",
         choices=["none", "pi", "2pi"],
@@ -108,7 +107,6 @@ def _build_quantum_kernel_modules(
                 kernel_modes=args.qconv_kernel_modes or args.qconv_kernel_size,
                 kernel_features=args.qconv_kernel_features,
                 kernel_size=args.qconv_kernel_size,
-                shots=args.shots,
                 n_photons=args.n_photons,
                 state_pattern=args.state_pattern,
                 reservoir_mode=args.reservoir_mode,
@@ -137,7 +135,6 @@ def _prepare_models(
                 state_pattern=args.state_pattern,
                 required_inputs=required_inputs,
                 input_dim=input_dim,
-                shots=args.shots,
             )
 
         builders.append(("single", build_single))
@@ -225,7 +222,7 @@ def main() -> None:
         "kmnist": "KMNIST",
     }[args.dataset]
     print(
-        f"{dataset_pretty} PCA-{args.pca_dim} ready: train {Ztr.shape}, test {Zte.shape} | shots={args.shots}, angle={args.angle_scale}"
+        f"{dataset_pretty} PCA-{args.pca_dim} ready: train {Ztr.shape}, test {Zte.shape} | angle={args.angle_scale}"
     )
     if conv_logs:
         print("Convolution configurations:")
@@ -233,9 +230,8 @@ def main() -> None:
             print(f"  - {log_entry}")
 
     comparison_results = []
-    # store per-variant metadata for saving
+    # store per-variant per-seed training curves for saving
     variant_seed_details = {}
-    variant_param_counts = {}
 
     # Prepare results directories
     results_root = Path(__file__).resolve().parent / f"results-{args.dataset}"
@@ -250,20 +246,12 @@ def main() -> None:
         print(f"\n=== Evaluating {name} ({args.seeds} seed{'s' if args.seeds > 1 else ''}) ===")
         variant_accs = []
         seed_records = []
-        trainable_params = None
         for s in range(args.seeds):
             print(f"[Seed {s+1}/{args.seeds}]")
             model = builder()
-            current_params = sum(p.numel() for p in model.parameters() if p.requires_grad)
-            if trainable_params is None:
-                trainable_params = current_params
-            else:
-                if current_params != trainable_params:
-                    print(
-                        "Warning: trainable parameter count changed between seeds "
-                        f"({trainable_params} → {current_params})."
-                    )
-            print(f"Number of trainable parameters = {current_params}")
+            print(
+                f"Number of trainable parameters = {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
+            )
             acc, loss_history = train_once(
                 Ztr, ytr, Zte, yte,
                 steps=args.steps,
@@ -308,14 +296,12 @@ def main() -> None:
             "std_accuracy": float(std),
             "seeds": seed_records,
             "summary_file": "summary.json",
-            "trainable_parameters": int(trainable_params) if trainable_params is not None else None,
         }
         with open(variant_dir / "summary.json", "w", encoding="utf-8") as fh:
             json.dump(summary, fh, indent=2)
 
         comparison_results.append((name, variant_accs, mean, std))
         variant_seed_details[name] = seed_records
-        variant_param_counts[name] = trainable_params
 
     # write run_summary.json at top-level of run_dir
     run_summary = {
@@ -333,9 +319,6 @@ def main() -> None:
             "std_accuracy": float(std),
             "seeds": variant_seed_details.get(name, []),
             "summary_file": f"{name}/summary.json",
-            "trainable_parameters": (
-                int(variant_param_counts[name]) if variant_param_counts.get(name) is not None else None
-            ),
         })
 
     with open(run_dir / "run_summary.json", "w", encoding="utf-8") as fh:
