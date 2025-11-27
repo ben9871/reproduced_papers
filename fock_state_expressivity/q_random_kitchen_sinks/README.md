@@ -1,17 +1,19 @@
-# Algorithm 3: Quantum-enhanced random kitchen sinks
+# Quantum Random Kitchen Sinks
 
-This experiment implements quantum-enhanced random kitchen sinks for approximating Gaussian kernels, combining classical random Fourier features with quantum photonic circuits to achieve kernel approximations.
+Template-aligned reproduction of Algorithm 3 (“Quantum-enhanced random kitchen sinks”) from *Fock state-enhanced expressivity of quantum machine learning models* (2022) by Gan, Leykam, and Angelakis.
+
+## Reference and Attribution
+- Paper: *Fock state-enhanced expressivity of quantum machine learning models* (2022)
+- Authors: Beng Yee Gan, Daniel Leykam, Dimitris G. Angelakis
+- DOI/ArXiv: https://arxiv.org/abs/2107.05224
+- Original repository: not released; reproduction built from the manuscript
+- License & attribution: cite the paper and this repo when reusing assets
 
 ## Overview
-
-The implementation explores quantum kernel approximation by:
-- **Classical baseline**: Standard random kitchen sinks using cosine random features
-- **Quantum enhancement**: Using photonic circuits to compute quantum random features
-- **Circuit architectures**: MZI and general interferometer configurations
-- **Performance comparison**: Quantum vs classical random features for kernel approximation
-- **Photon number analysis**: Testing different photon numbers to study quantum behavior
-
-## Key Results
+- Benchmarks classical random kitchen sinks (RKS) and their photonic quantum counterpart on the moons dataset.
+- Uses Perceval+MerLin to build photonic random feature maps and compares against cosine random Fourier features for several `R` (feature dimensionality) and `γ` (kernel bandwidth) values.
+- Produces dataset visualizations, kernel heatmaps, accuracy heatmaps, and decision boundaries for both classical and quantum methods. This reproduces the Figure 6 from the reference paper.
+- Everything is orchestrated through `implementation.py` with JSON-configured sweeps.
 
 The experiments demonstrate the behavior of quantum-enhanced random kitchen sinks:
 - **Parameter-dependent performance**: The quantum method tends to outperform the classical method when using low gamma values (high standard deviation for Gaussian kernels) while the opposite happens with high gamma values
@@ -19,55 +21,73 @@ The experiments demonstrate the behavior of quantum-enhanced random kitchen sink
 - **Architecture sensitivity**: Different quantum circuits show varying performance characteristics
 - **Parameter optimization**: Proper hyperparameter tuning is crucial for optimal performance
 
-## Files Structure
+## How to Run
 
-- `approx_kernel.py` - Core implementation of quantum and classical random kitchen sinks
-- `data.py` - Dataset generation and preprocessing utilities
-- `training.py` - Training loops and optimization algorithms
-- `hyperparameters.py` - Configuration management for experiments
-- `run.py` - Main execution script for experiments
-- `utils.py` - Utility functions for data processing and visualization
-- `q_random_kitchen_sinks.ipynb` - Interactive notebook with detailed analysis
-
-## Usage
-You should edit the following python files according to your usage:
-- run_rks.py
-### Quick Start
-
-Run the main experiment:
+### CLI entrypoint
 ```bash
-python run_rks.py
+python implementation.py --help
 ```
 
-### Interactive Analysis
+Key options:
+- `--config PATH` JSON config (default `configs/defaults.json`).
+- `--seed INT` override RNG seed (controls dataset split + random features).
+- `--outdir DIR` choose run directory root (default `results/`).
 
-Open the Jupyter notebook for detailed exploration:
+Example sweep (default r∈{1,10,100}, γ∈{1…5}):
 ```bash
-jupyter notebook q_random_kitchen_sinks.ipynb
+python implementation.py
 ```
 
-## Results
+Each run produces `results/run_YYYYMMDD-HHMMSS/` (or `<outdir>/...` if overridden) with:
+```
+summary.txt                 # Accuracy table per (method, R, γ)
+metrics.json                # Scalar accuracy entries for every repeat
+config_snapshot.json        # Resolved config after CLI overrides
+figures/
+  moons_dataset.png
+  accuracy_quantum.png
+  accuracy_classical.png
+  combined_decisions_quantum.png
+  combined_decisions_classical.png
+  kernel_quantum.png       # only when the sweep contains a single (R, γ)
+  kernel_classical.png     # only when the sweep contains a single (R, γ)
+```
 
+## Configuration
+Configs live under `configs/` (the default config trains the hybrid MerLin layer on the cosine target before fitting the SVM):
+- `defaults.json` — hybrid training ON, photonic layer fits gaussian kernel function (`hybrid_model_data="Default"`).
+- `no_hybrid_training.json` — disables the hybrid optimization phase to reproduce the “frozen layer” ablation.
+- `hybrid_generated.json` — hybrid training ON using synthetic inputs (`hybrid_model_data="Generated"`) for a denser fitting set.
+- `single_combo_heatmap.json` — fixes the sweep to a single `(R, γ)` pair so the quantum/classical kernel heatmaps are emitted.
+
+Common config blocks:
+- `data`: moons dataset generation, scaling, split.
+- `model`: photonic circuit choices (MZI/general), photon count, output mapping strategy.
+- `training`: optimizer, epochs, hybrid-model toggles (`train_hybrid_model`, `pre_encoding_scaling`, `z_q_matrix_scaling`, `hybrid_model_data`).
+- `classifier`: downstream SVM hyperparameters (`C`).
+- `sweep`: lists of `r_values`, `gamma_values`, and number of repeats per combination.
+
+Adjust or duplicate `configs/defaults.json` to experiment with custom sweeps or training regimes.
+
+## Results and Analysis
 The experiment generates comprehensive analysis outputs:
 - **Kernel approximation plots**: Visual comparison of quantum vs classical kernel approximations
 - **Performance metrics**: Accuracy comparison across different configurations
 - **Parameter sweeps**: Analysis of hyperparameter effects on performance
 - **Circuit diagrams**: Visual representation of quantum architectures used
 
+The paper's obtained decision boundaries are the following:
+
+![q_gauss_kernel_to_reproduce](./results/Classification-RKS.png)
+
+Ours:
+
+![q_gauss_kernel_reproduced](./results/q_rand_kitchen_sinks_overall_example.png)
+
 Key findings include:
 - Quantum circuits can approximate Gaussian kernels with competitive or superior accuracy
 - The quantum method tends to outperform the classical method with low gamma values while classical methods excel with high gamma values
 - Different photon numbers and circuit architectures provide trade-offs between expressivity and optimization difficulty
-
-## Dependencies
-
-- Python 3.8+
-- PyTorch
-- Perceval (quantum photonic simulation)
-- MerLin (quantum machine learning framework)
-- scikit-learn (classical ML baselines and kernel methods)
-- matplotlib (visualization)
-- wandb (experiment tracking)
 
 ## Hyperparameters
 
@@ -108,6 +128,17 @@ Key findings include:
   - "Generated": Uses synthetically generated data for fitting
   - "Default": Uses data from the moon dataset for fitting
 
-## Configuration
+## Reproducibility Notes
+- Seeds affect dataset generation and the random Fourier parameters `(w,b)` to ensure fair classical-vs-quantum comparisons.
+- All artifacts (figures/kernels) are deterministic per `(seed, config)` pair.
+- Hybrid quantum-layer training is optional; disable it in `training.train_hybrid_model` to reproduce the “inference-only” regime from the manuscript.
 
-Key parameters can be adjusted in `run_rks.py`. The script includes functions to run experiments with single parameter combinations or sweep across multiple `r` and `gamma` values for comprehensive analysis.
+## Testing
+```bash
+pytest -q
+```
+Current tests cover dataset preparation; extend with regression tests (e.g., accuracy thresholds) as needed.
+
+## Additional Material
+- `notebook.ipynb` keeps an interactive exploratory workflow.
+- `results/` stores the curated figures reproduced from the paper for documentation.

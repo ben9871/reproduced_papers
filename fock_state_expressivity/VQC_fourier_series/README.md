@@ -1,66 +1,91 @@
-# Theory validation experiment: Expressivity of a VQC on a Fourier series fitting task
+# VQC Fourier Series — Expressivity Reproduction
 
-This experiment validates the theoretical claim that increasing the number of photons in a variational quantum circuit (VQC) increases its expressivity, demonstrated through Fourier series fitting tasks.
+Template-aligned reproduction of the Fourier-series fitting experiment from *Fock state-enhanced expressivity of quantum machine learning models* (2022) by Gan, Leykam and Angelakis.
+
+## Reference and Attribution
+- Paper: *Fock state-enhanced expressivity of quantum machine learning models* (2022)
+- Authors: Beng Yee Gan, Daniel Leykam, Dimitris G. Angelakis
+- DOI/ArXiv: [10.1103/PRXQuantum.3.030341](https://arxiv.org/abs/2107.05224)
+- Original repository: not released; experiment reconstructed from the manuscript
+- License & attribution: research reproduction for educational purposes. Cite both the paper and this repo when reusing the code.
 
 ## Overview
+- Recreates the Fourier-series regression task used to validate that adding photons to a photonic VQC increases expressivity.
+- Implements the circuit with Perceval + MerLin so that it can be called as a PyTorch module.
+- Sweeps three initial Fock states `[[1,0,0],[1,1,0],[1,1,1]]` with multiple random restarts to gather statistics.
+- Produces plots (loss envelopes + learned functions) and summary tables per run directory.
 
-The implementation demonstrates:
-- **VQC expressivity analysis**: Testing circuits with different photon numbers ([1,0,0], [1,1,0], [1,1,1])
-- **Fourier series fitting**: Using degree-3 Fourier series as target functions to assess learning capability
-- **Multiple training runs**: Statistical validation through repeated experiments
-- **Performance comparison**: Direct comparison of expressivity across photon configurations
+## How to Run
 
-## Key Results
-
-The experiments validate the paper's main theoretical claim:
-- **Increased expressivity**: Circuits with more photons demonstrate higher expressivity
-- **Parameter scaling**: Higher photon numbers lead to more trainable parameters (16 → 19 → 23)
-- **Fitting performance**: The 3-photon VQC ([1,1,1]) achieves near-perfect fitting (MSE ≈ 0), while single photon shows limited expressivity
-- **Consistent behavior**: Results are reproducible across multiple training runs
-
-## Files Structure
-
-- `VQC_fourier_series.ipynb` - Complete interactive analysis with model definitions, training, and visualization
-- `results/` - Generated plots comparing target vs learned functions
-
-## Usage
-
-### Interactive Analysis
-
-Open the Jupyter notebook for complete exploration:
+### Command-line interface
+Main entry point: `implementation.py`
 ```bash
-jupyter notebook VQC_fourier_series.ipynb
+python implementation.py --help
 ```
 
-The notebook provides:
-- Step-by-step implementation of VQC architectures
-- Training loops with progress visualization  
-- Comparative analysis of different photon configurations
-- Statistical summary of results across multiple runs
+Key options:
+- `--config PATH` JSON config (defaults to `configs/defaults.json`).
+- `--seed INT` Override RNG seed.
+- `--outdir DIR` Base folder for timestamped runs (default: `results/`).
+- `--device STR` Torch device string (default `cpu` — GPU support depends on Perceval/MerLin build).
+- `--show-plots` Also display generated matplotlib figures.
 
-## Results
+Example runs:
+```bash
+# Default reproduction (3 runs per photon configuration)
+python implementation.py
 
-The experiment generates visualization outputs:
-- **Target function**: Degree-3 Fourier series visualization
-- **Training curves**: Loss progression for different photon configurations
-- **Learned functions**: Comparison of fitted vs target functions
-- **Statistical summary**: Performance metrics across multiple training runs
+# Custom seed and output directory
+python implementation.py --seed 2024 --outdir results/vqc_fourier
+```
 
-Key findings confirm that VQCs with more photons can fit more complex functions, validating the theoretical expressivity claims.
-
-## Dependencies
-
-- Python 3.8+
-- PyTorch
-- Perceval (quantum photonic simulation)
-- MerLin (quantum machine learning framework)
-- matplotlib (visualization)
-- numpy, scikit-learn (numerical computation and metrics)
+Each run creates `results/run_YYYYMMDD-HHMMSS/` (or `<outdir>/...` if overridden) containing:
+```
+summary.txt                 # Textual statistics per photon config
+metrics.json                # JSON dump of all recorded losses/MSEs
+config_snapshot.json        # Resolved config (after CLI overrides)
+figures/training_curves.png # Loss envelopes
+figures/learned_vs_target.png # Learned functions vs target Fourier series
+```
 
 ## Configuration
+Place JSON configs inside `configs/`.
 
-The experiment uses fixed configurations optimized for demonstration:
-- **Photon configurations**: [1,0,0], [1,1,0], [1,1,1] across 3 modes
-- **Training parameters**: 120 epochs, batch size 32, Adam optimizer
-- **Target function**: Degree-3 Fourier series with fixed coefficients
-- **Multiple runs**: 3 runs per configuration for statistical validation
+- `defaults.json` reproduces the paper setup: degree-3 Fourier series coefficients, 120 epochs, batch size 32, Adam lr 0.02, and the three photon settings.
+- Override individual fields via CLI or by creating new config files (e.g., to change the domain sampling, optimizer, or list of photon states).
+
+Relevant keys:
+- `data`: domain bounds, sampling step, Fourier coefficients (positive orders, negatives inferred via conjugation).
+- `model`: number of modes, scale layer type, Perceval/MerLin layer options.
+- `training`: optimizer hyperparameters, number of restarts, progress bar toggle.
+- `plotting`: color palette per photon configuration.
+
+## Results and Analysis
+- Increasing the photon number increases the expressivity of the photonic circuit which monotonically lowers the training MSE, matching Fig. 3 of the paper:
+
+Paper:
+
+![VQC_fourier_series_to_reproduce](./results/Fitting_example_and_DOF.png)
+
+Ours:
+
+![VQC_fourier_series_reproduced](./results/expressive_power_of_the_VQC.png)
+
+- The `summary.txt` file reports average/min/max final MSE over the independent restarts for each photon configuration.
+- Reproduced figures are stored both in `results/` (for archival plots) and inside each run directory for provenance.
+
+## Reproducibility Notes
+- RNG seed controls `random`, `numpy`, and `torch` generators; set via config or `--seed`.
+- Perceval/MerLin layers currently operate on CPU; GPU acceleration requires their CUDA builds.
+- Determinism beyond same-seed reproducibility is not guaranteed because MerLin layers rely on differentiable photonic simulations.
+
+## Testing
+From this folder:
+```bash
+pytest -q
+```
+Current tests cover Fourier data generation sanity checks; extend with circuit-level or regression tests as needed.
+
+## Additional Material
+- `notebook.ipynb` retains the exploratory notebook used before the scripted refactor (kept for visualization/experimentation).
+- `results/` stores static figures reproduced for comparison with the paper.

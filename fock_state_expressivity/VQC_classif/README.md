@@ -1,113 +1,109 @@
-# Algorithm 1: Linear quantum photonic circuits as variational quantum classifiers
+# VQC Classification
 
-This experiment demonstrates the use of linear quantum photonic circuits for binary classification tasks, comparing performance across different photon numbers and circuit architectures.
+Structured reproduction of Algorithm 1 (“Linear quantum photonic circuits as variational quantum classifiers”) from *Fock state-enhanced expressivity of quantum machine learning models* (2022) by Gan, Leykam, and Angelakis.
+
+## Reference and Attribution
+- Paper: *Fock state-enhanced expressivity of quantum machine learning models* (2022)
+- Authors: Beng Yee Gan, Daniel Leykam, Dimitris G. Angelakis
+- DOI/ArXiv: https://arxiv.org/abs/2107.05224
+- Original repository: not released; reproduction based on the manuscript and Quandela demos
+- License & attribution: cite both the paper and this repository when using the code or figures
 
 ## Overview
-
 The implementation includes:
 - **Multiple VQC architectures**: beam splitter meshes, general interferometers, basic and spiral circuits
 - **Three synthetic datasets**: linearly separable, circular, and moon-shaped data
 - **Performance comparison**: VQC vs classical methods (MLP, SVM)
-- **Decision boundary visualization**: Visual analysis of learned decision boundaries
-- **Hyperparameter optimization**: Random search
+- **Decision boundary visualization**: Visual analysis of learned decision boundaries (reproduction of Figure 4 from the reference paper)
 
-## Key Results
+Key result:
+- The experiments validate that **increasing the number of photons increases circuit expressivity**, though higher expressivity can lead to both better and worse results depending on the dataset complexity and training conditions.
 
-The experiments validate that **increasing the number of photons increases circuit expressivity**, though higher expressivity can lead to both better and worse results depending on the dataset complexity and training conditions.
+## How to Run
 
-## Files Structure
-
-- `VQC.py` - Core VQC implementations and circuit architectures
-- `data.py` - Dataset generation and visualization utilities  
-- `training.py` - Training loops, evaluation, and visualization functions
-- `classical_models.py` - Classical baseline models for comparison
-- `run_vqc.py` - Main execution script for experiments
-- `run_vqc_hp_search.py` - Hyperparameter search script
-- `VQC_classification.ipynb` - Interactive notebook with detailed analysis
-
-## Usage
-You should edit the following python files according to your usage:
-- run_vqc.py
-- run_vqc_hp_search.py
-### Quick Start
-
-Run the main experiment:
+### CLI entry point
 ```bash
-python run_vqc.py
+python implementation.py --help
 ```
 
-### Hyperparameter Search
+Key options:
+- `--config PATH` JSON config (default `configs/defaults.json`).
+- `--model-type {vqc,vqc_100,vqc_111,mlp_wide,mlp_deep,svm_lin,svm_rbf}` switches between photonic and classical baselines, with `vqc_100`/`vqc_111` selecting the input Fock state `[1,0,0]` or `[1,1,1]`.
+- `--seed INT`, `--outdir DIR`, `--device STR` override reproducibility knobs and output location (default outdir `results/`).
+- `--visualize-data` force dataset scatter plots; `--skip-boundaries` skips per-dataset decision boundaries.
+- `--log-wandb` enables Weights & Biases logging (requires `wandb login`).
 
-Random search for hyperparameter optimization:
+Examples:
 ```bash
-python run_vqc_hp_search.py
+# Default photonic VQC reproduction
+python implementation.py
+
+# Explicit photonic states
+python implementation.py --model-type vqc_100   # prepares |1,0,0>
+python implementation.py --model-type vqc_111   # prepares |1,1,1>
+
+# Classical baseline on GPU with custom outdir
+python implementation.py --model-type mlp_wide --device cuda:0 --outdir results/vqc_classif
 ```
 
-### Interactive Analysis
-
-Open the Jupyter notebook for detailed exploration:
-```bash
-jupyter notebook VQC_classification.ipynb
+Each run creates `results/run_YYYYMMDD-HHMMSS/` (or `<outdir>/...` if overridden):
+```
+summary.txt                 # Hyperparameters + dataset-wise stats
+metrics.json                # Serialized accuracy traces
+config_snapshot.json        # Resolved config (after CLI overrides)
+figures/
+  training_metrics.png
+  datasets/<dataset>_scatter.png      # optional
+  decision_boundaries/<dataset>_<model>.png
+  circuits/circuit_<type>.png         # first VQC run visual
 ```
 
-## Results
+## Configuration
+Files live in `configs/`. `defaults.json` reproduces the paper (3 modes, `[1,1,1]` photons, bs_mesh circuit, 10 runs × 150 epochs, lr 0.02). Ready-made variants include:
+- `vqc_100.json` / `vqc_111.json` — identical to the default except for the preset model type and initial Fock state.
+- `mlp_wide.json`, `mlp_deep.json`, `svm_lin.json`, `svm_rbf.json` — baseline configs with the appropriate `experiment.model_type`.
 
+Use `--config configs/<name>.json` to run these presets, or create additional JSON files to explore other settings.
+
+Important blocks:
+- `model`: photonic circuit hyperparameters (modes, activation, scale layer, regularization target).
+- `training`: optimizer settings, number of repeated runs, Adam betas, weight decay (`alpha`), logging toggles.
+- `data`: dataset generation specs (samples, noise/class separation, subsampling ratio, cache dir).
+- `outputs`: enable/disable training curves and decision-boundary plots.
+- `experiment.model_type`: default model family (can be overridden with `--model-type`).
+
+## Results and Analysis
 The experiment generates several visualization outputs:
 - **Decision boundaries**: Comparison of VQC and classical model boundaries
 - **Performance metrics**: Accuracy comparison across methods and datasets
 - **Circuit diagrams**: Visual representation of quantum circuits used
+
+The main figure that was reproduced is Figure 4.
+
+From the paper:
+
+![VQC_classif_to_reproduce](./results/variational_classification.png)
+
+Ours:
+
+![VQC_classif_reproduced](./results/combined_decision_boundaries.png)
 
 Key findings show that VQCs with more photons have increased expressivity, which can lead to:
 - Better performance on some datasets but more challenging optimization on others
 - More flexible decision boundaries
 - Variable performance compared to classical methods, as increased expressivity complexifies the optimization space
 
-## Dependencies
+## Reproducibility Notes
+- The seed controls `random`, `numpy`, `torch`, and dataset generation; cached `.pt` files under `data/cache/` allow repeatable reruns.
+- MerLin/Perceval layers currently run on CPU in this setup; CUDA builds are required for GPU backends.
+- WandB logging is optional and only used when `log_wandb` is true (either in config or via `--log-wandb`).
 
-- Python 3.8+
-- PyTorch
-- Perceval (quantum photonic simulation)
-- MerLin (quantum machine learning framework)
-- scikit-learn (classical ML baselines)
-- matplotlib (visualization)
-- wandb (experiment tracking)
+## Testing
+```bash
+pytest -q
+```
+Current tests sanity-check dataset preparation; extend with regression tests (e.g., target accuracy thresholds) as needed.
 
-## Hyperparameters
-
-### Core Model Parameters
-- **`m`** (3): Number of quantum modes in the system. Set to 3 to reproduce results from the reference paper.
-- **`input_size`** (2): Dimension of input data features
-- **`initial_state`**: Starting quantum state configuration. Use [1,0,0] (1 photon in first mode) to reproduce reference paper results.
-
-### Training Parameters
-- **`num_runs`** (10 or 3): Number of experimental repetitions for statistical reliability
-- **`n_epochs`** (150, range: 75-125): Number of complete passes through the training data
-- **`batch_size`** (30, range: 15-60): Number of samples processed together in each training step
-- **`lr`** (0.02, range: 0.002-0.1): Learning rate - controls optimization step size
-
-### Optimizer Settings
-- **`alpha`** (0.0002-0.2): Regularization strength to prevent overfitting
-- **`betas`** ((0.8, 0.999)): Adam optimizer momentum parameters for gradient smoothing
-  - First value: exponential decay rate for first moment estimates
-  - Second value: exponential decay rate for second moment estimates
-
-### Quantum Circuit Configuration
-- **`circuit`** ("bs_mesh", "general", "bs_basic", "spiral"): Type of quantum circuit architecture
-  - "bs_mesh": Beam splitter mesh interferometer
-  - "general": General linear optical circuit
-  - "bs_basic": Basic beam splitter configuration
-  - "spiral": Spiral circuit architecture
-- **`activation`** ("none", "sigmoid", "softmax"): Activation function applied to circuit outputs
-- **`scale_type`** ("/pi", "learned", "2pi", "pi", "1", "/2pi", "0.1", "0.5"): Parameter scaling method
-  - "learned": Parameters learned during training
-  - "/pi", "/2pi": Fixed scaling by π divisions
-  - Numerical values: Fixed scaling factors
-- **`regu_on`** ("linear", "all"): Which circuit parameters to apply regularization to
-- **`no_bunching`** (False): Whether to prevent multiple photons in the same mode
-
-### Logging
-- **`log_wandb`** (True): Whether to log experiments to Weights & Biases
-
-## Configuration
-
-The main parameters can be adjusted in the execution scripts (`run_vqc.py`, `run_vqc_hp_search.py`). The hyperparameter search script performs random search across the parameter ranges listed above.
+## Additional Material
+- `notebook.ipynb` allows for a more interactive and user-friendly exploration of the presented algorithms.
+- `results/` stores curated reproduction figures (kept static for documentation).
