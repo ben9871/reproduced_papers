@@ -2,14 +2,10 @@ from __future__ import annotations
 
 import json
 import logging
-import os
-import random
 from collections.abc import Sequence
 from pathlib import Path
 
-import numpy as np
 import pandas as pd
-import torch
 
 from lib.lib_qorc_encoding_and_linear_training import qorc_encoding_and_linear_training
 from lib.lib_rff_encoding_and_linear_training import rff_encoding_and_linear_training
@@ -41,7 +37,10 @@ def _run_qorc(cfg, run_dir: Path, logger: logging.Logger) -> None:
     seeds = cfg["seed"]
     fold_index = cfg["fold_index"]
 
-    if any(isinstance(val, Sequence) and not isinstance(val, (str, bytes)) for val in (n_photons, n_modes, seeds, fold_index)):
+    if any(
+        isinstance(val, Sequence) and not isinstance(val, (str, bytes))
+        for val in (n_photons, n_modes, seeds, fold_index)
+    ):
         logger.info("Entering sweep over photons/modes/folds/seeds")
         out_csv = cfg.get("f_out_results_training_csv")
         if not out_csv:
@@ -103,22 +102,24 @@ def _run_qorc(cfg, run_dir: Path, logger: logging.Logger) -> None:
                             run_dir=run_dir,
                             logger=logger,
                         )
-                        df_line = pd.DataFrame([
-                            {
-                                "n_photons": photons,
-                                "n_modes": modes,
-                                "seed": seed,
-                                "fold_index": fold,
-                                "train_acc": train_acc,
-                                "val_acc": val_acc,
-                                "test_acc": test_acc,
-                                "qorc_output_size": qorc_output_size,
-                                "n_train_epochs": n_train_epochs,
-                                "duration_qfeatures": duration_qfeatures,
-                                "duration_train": duration_train,
-                                "best_val_epoch": best_val_epoch,
-                            }
-                        ])
+                        df_line = pd.DataFrame(
+                            [
+                                {
+                                    "n_photons": photons,
+                                    "n_modes": modes,
+                                    "seed": seed,
+                                    "fold_index": fold,
+                                    "train_acc": train_acc,
+                                    "val_acc": val_acc,
+                                    "test_acc": test_acc,
+                                    "qorc_output_size": qorc_output_size,
+                                    "n_train_epochs": n_train_epochs,
+                                    "duration_qfeatures": duration_qfeatures,
+                                    "duration_train": duration_train,
+                                    "best_val_epoch": best_val_epoch,
+                                }
+                            ]
+                        )
                         df = pd.concat([df, df_line], ignore_index=True)
                         df.to_csv(csv_path, index=False)
                         logger.info("Written file: %s", csv_path)
@@ -152,7 +153,10 @@ def _run_rff(cfg, run_dir: Path, logger: logging.Logger) -> None:
     n_rff_features = cfg["n_rff_features"]
     seeds = cfg["seed"]
 
-    if any(isinstance(val, Sequence) and not isinstance(val, (str, bytes)) for val in (n_rff_features, seeds)):
+    if any(
+        isinstance(val, Sequence) and not isinstance(val, (str, bytes))
+        for val in (n_rff_features, seeds)
+    ):
         logger.info("Entering sweep over n_rff_features/seed")
         out_csv = cfg.get("f_out_results_training_csv")
         if not out_csv:
@@ -186,16 +190,18 @@ def _run_rff(cfg, run_dir: Path, logger: logging.Logger) -> None:
                     run_dir=run_dir,
                     logger=logger,
                 )
-                df_line = pd.DataFrame([
-                    {
-                        "n_rff_features": features,
-                        "seed": seed,
-                        "train_acc": train_acc,
-                        "test_acc": test_acc,
-                        "duration_calcul_rff_features": duration_calcul_rff_features,
-                        "duration_train": duration_train,
-                    }
-                ])
+                df_line = pd.DataFrame(
+                    [
+                        {
+                            "n_rff_features": features,
+                            "seed": seed,
+                            "train_acc": train_acc,
+                            "test_acc": test_acc,
+                            "duration_calcul_rff_features": duration_calcul_rff_features,
+                            "duration_train": duration_train,
+                        }
+                    ]
+                )
                 df = pd.concat([df, df_line], ignore_index=True)
                 df.to_csv(csv_path, index=False)
                 logger.info("Written file: %s", csv_path)

@@ -10,7 +10,6 @@ import sys
 from pathlib import Path
 from typing import Any, Callable
 
-
 TYPE_FACTORIES: dict[str, Callable[[Any], Any]] = {}
 
 
@@ -139,7 +138,9 @@ def _json_safe(value: Any) -> Any:
     return value
 
 
-def build_cli_parser(cli_schema: dict[str, Any]) -> tuple[argparse.ArgumentParser, list[dict[str, Any]]]:
+def build_cli_parser(
+    cli_schema: dict[str, Any],
+) -> tuple[argparse.ArgumentParser, list[dict[str, Any]]]:
     parser = argparse.ArgumentParser(
         description=cli_schema.get("description", "Paper reproduction runner"),
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
@@ -256,8 +257,8 @@ def run_from_project(project_dir: Path, argv: list[str] | None = None) -> Path:
     args = parser.parse_args(argv)
 
     config_module = importlib.import_module("lib.config")
-    load_config = getattr(config_module, "load_config")
-    deep_update = getattr(config_module, "deep_update")
+    load_config = config_module.load_config
+    deep_update = config_module.deep_update
 
     defaults_path = project_dir / meta["defaults_path"]
     cfg = load_config(defaults_path)
@@ -286,7 +287,11 @@ def run_from_project(project_dir: Path, argv: list[str] | None = None) -> Path:
     run_dir = base_out / run_name
     run_dir.mkdir(parents=True, exist_ok=True)
 
-    log_level = cfg.get("logging", {}).get("level", "info") if isinstance(cfg.get("logging"), dict) else "info"
+    log_level = (
+        cfg.get("logging", {}).get("level", "info")
+        if isinstance(cfg.get("logging"), dict)
+        else "info"
+    )
     configure_logging(log_level, run_dir / "run.log")
 
     snapshot_path = run_dir / "config_snapshot.json"
