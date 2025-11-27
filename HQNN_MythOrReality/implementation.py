@@ -61,7 +61,10 @@ def configure_logging(level: str = "info", log_file: Path | None = None) -> None
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="HQNN spiral reproduction experiments")
     parser.add_argument(
-        "--config", type=str, default=".configs/spiral_default.json", help="Path to JSON config file"
+        "--config",
+        type=str,
+        default=".configs/spiral_default.json",
+        help="Path to JSON config file",
     )
     parser.add_argument("--seed", type=int, default=None, help="Random seed")
     parser.add_argument(
@@ -328,13 +331,20 @@ def plot_threshold_params(
 
     plt.style.use("seaborn-v0_8-darkgrid")
     fig, ax1 = plt.subplots(figsize=(7, 4))
-    ax1.plot(features, params, marker="o", color="#1f77b4", label = "Parameter count")
+    ax1.plot(features, params, marker="o", color="#1f77b4", label="Parameter count")
     ax1.set_xlabel("Number of features")
     ax1.set_ylabel("Parameter count")
     ax1.set_title("Parameter count vs. feature size (threshold-achieving HQNNs)")
-    
+
     ax2 = ax1.twinx()
-    ax2.plot(features, mean_accs, marker="s", linestyle="--", color="#ff7f0e", label = "Mean accuracy")
+    ax2.plot(
+        features,
+        mean_accs,
+        marker="s",
+        linestyle="--",
+        color="#ff7f0e",
+        label="Mean accuracy",
+    )
     ax2.set_ylabel("Mean validation accuracy (%)")
 
     lines1, labels1 = ax1.get_legend_handles_labels()

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 """Reproduce the classical MLP baseline for the HQNN study."""
+# ruff:  noqa: E402
 
 from __future__ import annotations
 
@@ -12,14 +13,15 @@ _PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(_PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(_PROJECT_ROOT))
 
+
 from models.classical_baseline import (
     MLP,
     BaselineConfig,
     evaluate_architecture,
     generate_mlp_architectures,
-)
-from utils.io import save_experiment_results
-from utils.training import count_parameters
+)  # noqa: E402
+from utils.io import save_experiment_results  # noqa: E402
+from utils.training import count_parameters  # noqa: E402
 
 
 def build_arg_parser() -> argparse.ArgumentParser:
