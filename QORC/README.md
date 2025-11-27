@@ -65,10 +65,14 @@ pip install -r requirements.txt
 
 ### Command-line interface
 
-Main entry point: `implementation.py`
+All runs go through the repository root runner so the CLI definition in `configs/cli.json` stays in sync with other projects.
 
 ```bash
-python implementation.py --help
+# From the repo root
+python implementation.py --project QORC --config QORC/configs/xp_qorc.json --help
+
+# From inside this folder
+python ../implementation.py --project QORC --config configs/xp_qorc.json --help
 ```
 
 ### General Options
@@ -111,13 +115,13 @@ Example runs:
 
 ```bash
 # To run the default qorc experiment
-python implementation.py --config configs/xp_qorc.json
+python implementation.py --project QORC --config QORC/configs/xp_qorc.json
 
 # To run the default RFF experiment
-python implementation.py --config configs/xp_rff.json
+python implementation.py --project QORC --config QORC/configs/xp_rff.json
 
 # Override some parameters inline
-python implementation.py --config configs/xp_qorc.json --epochs 50 --lr 1e-3
+python implementation.py --project QORC --config QORC/configs/xp_qorc.json --epochs 50 --lr 1e-3
 ```
 
 
