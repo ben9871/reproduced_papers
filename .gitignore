@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # IDE and editor artifacts
 .idea/
 .vscode/
@@ -30,8 +29,3 @@ __pycache__/
 # Local env & sandbox helpers
 .venv
 .home/
-=======
-.idea/
-*__pycache__*
-*.vscode
->>>>>>> upstream/release-0.2
