@@ -31,7 +31,7 @@ The original paper mentions the following dataset: _"We generate a spiral datase
 Here is the dataset that we generated
 ![First 2 features of the Spiral dataset](./assets/blobs_dataset.png)
 And we can observe that the complexity increases with the number of features as the performance of fixed classical neural networks (NN) and Hybrid Quantum NN (HQNN) decrease:
-![Performance with respect to feature size](./assets/features_plot.png)
+![Performance with respect to feature size](./assets/acc_param_wrt_features.png)
 
 ### The classical Neural Networks
 The original paper mentions the following classical models: _"We restrict the classical models to have a maximum of n = 3 layers, with the number of neurons in each layer chosen from the set m = {2, 4, 6, 8, 10} resulting in a search space of total 155 model combinations for classical models for each complexity level."_
