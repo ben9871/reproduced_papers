@@ -14,14 +14,22 @@ class ClassicalLSTMCell(nn.Module):
     Output: (batch, output_size)
     """
 
-    def __init__(self, input_size: int, hidden_size: int, output_size: int):
+    def __init__(
+        self,
+        input_size: int,
+        hidden_size: int,
+        output_size: int,
+        *,
+        dtype: torch.dtype | None = None,
+    ):
         super().__init__()
         in_h = input_size + hidden_size
-        self.input_gate = nn.Linear(in_h, hidden_size)
-        self.forget_gate = nn.Linear(in_h, hidden_size)
-        self.cell_gate = nn.Linear(in_h, hidden_size)
-        self.output_gate = nn.Linear(in_h, hidden_size)
-        self.output_proj = nn.Linear(hidden_size, output_size)
+        lin_kwargs = {"dtype": dtype} if dtype is not None else {}
+        self.input_gate = nn.Linear(in_h, hidden_size, **lin_kwargs)
+        self.forget_gate = nn.Linear(in_h, hidden_size, **lin_kwargs)
+        self.cell_gate = nn.Linear(in_h, hidden_size, **lin_kwargs)
+        self.output_gate = nn.Linear(in_h, hidden_size, **lin_kwargs)
+        self.output_proj = nn.Linear(hidden_size, output_size, **lin_kwargs)
         self.hidden_size = hidden_size
 
         # --- Logging: architecture summary ---

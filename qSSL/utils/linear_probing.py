@@ -6,14 +6,20 @@ import argparse
 import json
 import os
 import re
+import sys
 from pathlib import Path
 
 import torch
 import torch.nn as nn
+from torchsummary import summary
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
+if str(PROJECT_ROOT) not in sys.path:
+    sys.path.insert(0, str(PROJECT_ROOT))
+
 from lib.data_utils import load_finetuning_data
 from lib.model import QSSL
 from lib.training_utils import linear_evaluation
-from torchsummary import summary
 
 # Command-line argument parser for configuring the experiment
 parser = argparse.ArgumentParser(description="PyTorch Quantum self-sup training")
@@ -26,7 +32,7 @@ parser.add_argument(
     "-p",
     "--pretrained",
     type=str,
-    default="./results/qiskit/20250819_182304",
+    default="./outdir/run_example",
     help="path to folder with trained models",
 )
 # ========== Training Configuration ==========

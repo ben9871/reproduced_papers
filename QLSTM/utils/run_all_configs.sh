@@ -4,6 +4,8 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}" )" && pwd)"
 ROOT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+REPO_ROOT="$(cd "${ROOT_DIR}/.." && pwd)"
+ENTRYPOINT="${REPO_ROOT}/implementation.py"
 RESULTS_DIR="${ROOT_DIR}/results"
 PYTHON_BIN="${PYTHON:-python}"
 
@@ -59,7 +61,7 @@ for dataset in "${datasets[@]}"; do
 
     echo "--- Running ${cfg_path}"
     log_file="$(mktemp)"
-    if ! "${PYTHON_BIN}" implementation.py --config "${cfg_path}" | tee "${log_file}"; then
+    if ! "${PYTHON_BIN}" "${ENTRYPOINT}" --project QLSTM --config "${cfg_path}" | tee "${log_file}"; then
       echo "Training failed for ${cfg_path}" >&2
       cat "${log_file}" >&2
       rm -f "${log_file}"

@@ -12,6 +12,28 @@ and complements the online documentation available at:
 
 Each paper reproduction is designed to be accessible, well-documented, and easy to extend. Contributions are welcome!
 
+## Running existing reproductions
+
+- Browse the up-to-date catalogue at [https://merlinquantum.ai/reproduced_papers/index.html](https://merlinquantum.ai/reproduced_papers/index.html) to pick the paper you want to execute. The `<NAME>` you pass to the CLI is simply the folder name under the repo root (e.g., `QLSTM/`, `QORC/`, `reproduction_template/`).
+- `cd` into the chosen folder and install its dependencies: `pip install -r requirements.txt` (each reproduction keeps its own list).
+- Launch training/eval runs through the shared CLI from the repo root:
+
+	```bash
+	python implementation.py --project <NAME> --config <NAME>/configs/<config>.json
+	```
+
+- If you prefer running from inside the project directory, reference the parent runner instead: `python ../implementation.py --project <NAME> --config configs/<config>.json`.
+
+All logs, checkpoints, and figures land in `<NAME>/outdir/run_YYYYMMDD-HHMMSS/` unless the configs specify a different base path.
+
+Need a quick tour of a project’s knobs? Run `python implementation.py --project <NAME> --help` to print the runtime-generated CLI for that reproduction (dataset switches, figure toggles, etc.) before launching a full experiment.
+
+### Precision control (`dtype`)
+
+- Every reproduction accepts an optional top-level `"dtype"` entry in its configs, just like `"seed"`. When present, the shared runner casts input tensors and initializes models in that dtype.
+- Individual models can still override via `model.dtype`; if omitted, each reproduction picks a sensible default (e.g., `float64` for photonic MerLin layers).
+- Use this to downgrade to `float32` for speed, experiment with `bfloat16`, or enforce `float64` reproducibility across classical/quantum variants.
+
 ## How to contribute a reproduced paper
 
 We encourage contributions of new quantum ML paper reproductions. Please follow the guidelines below:
@@ -21,13 +43,12 @@ We encourage contributions of new quantum ML paper reproductions. Please follow 
 ```
 NAME/                     # Non-ambiguous acronym or fullname of the reproduced paper
 ├── .gitignore            # specific .gitignore rules for clean repository
-├── implementation.py     # Main engine to train a model - the cli can accept parameters or config file
 ├── notebook.ipynb        # Interactive exploration of key concepts
 ├── README.md             # Paper overview and results overview
 ├── requirements.txt      # additional requirements for the scripts
-├── configs/              # predefined configurations to train models
+├── configs/              # defaults + CLI/runtime descriptors consumed by the repo root runner
 ├── data/                 # Datasets and preprocessing if any
-├── lib/                  # code used by implementation.py and notebook.ipynb - as a integrated library
+├── lib/                  # code used by the shared runner and notebooks - as an integrated library
 ├── models/               # Trained models 
 ├── results/              # Selected generated figures, tables, or outputs from trained models
 ├── tests/                # Validation tests
@@ -50,21 +71,34 @@ cd NAME
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+# Optional shared deps can go in the repo root, but each project keeps its own requirements.txt.
 
-# 3) Run with the example config (JSON-only)
-python implementation.py --config configs/example.json
+# 3) Run with the example config (JSON-only) via the repo-level runner
+python ../implementation.py --project NAME --config configs/example.json
 
-# 4) See outputs (default base outdir is `outdir/`)
+# 4) See outputs (default base outdir is `outdir/` inside NAME/)
 ls outdir
 
 # 5) Run tests (from inside NAME/)
 pytest -q
 ```
 
+You can also run from the repository root:
+
+```bash
+python implementation.py --project NAME --config NAME/configs/example.json
+```
+
+`--project` (or `--project-dir`) is mandatory so the shared runner knows which reproduction folder to load.
+
 Then edit the placeholders in:
 - `README.md` — paper reference/authors, reproduction details, CLI options, results analysis
 - `configs/example.json` — dataset/model/training defaults (extend or add more configs)
-- `implementation.py` and `lib/` — actual dataset/model/training logic
+- `configs/cli.json` + `configs/runtime.json` — CLI definitions plus metadata telling the shared runner which callable to import (set `runner_callable`, `defaults_path`, and optionally `seed_callable` pointing to your seeding helper)
+- `lib/runner.py` and supporting modules inside `lib/` — dataset/model/training logic invoked by the shared runner
+- `runtime_lib.config.load_config` / `.deep_update` handle JSON loading and overrides globally; the template already wires `lib.config` to these helpers so you must not add a custom `lib/config.py` (JSON is the only supported format).
+
+> **Note:** Every reproduction has its own `requirements.txt`. Install the relevant file before running `implementation.py --project ...` to ensure dependencies are available.
 
 Notes:
 - Configs are JSON-only in the template.

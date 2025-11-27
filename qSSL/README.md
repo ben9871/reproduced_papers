@@ -31,16 +31,16 @@ Legend:
 Overall, we reproduced the results highlighted in the paper and we have a photonic implementantion of it, using MerLin, that is faster and more accurate (but has more trainable parameters).
 
 ## Project structure
-- `implementation.py` — main entry point (replaces the old `main.py`)
+- `lib/runtime_entry.py` — runtime entry point consumed by the repo-level runner
 - `lib/` — core library modules used by scripts
   - `data_utils.py` — datasets, transforms (SSL and linear eval)
   - `model.py` — backbone, representation networks (MerLin/Qiskit/Classical), projection head
   - `training_utils.py` — InfoNCE, training loops, metrics and results I/O
-  - `config.py` — JSON config loading and defaults
-- `configs/` — example JSON configs (default uses MerLin)
-  - `qssl_default.json`
+  - `defaults.py` — helper to expose `configs/defaults.json` to notebooks/tests
+- `configs/` — runtime descriptors + default config consumed by the shared runner
+  - `defaults.json`, `cli.json`, `runtime.json`
 - Other
-  - `linear_probing.py` — evaluate frozen features with a linear head. Pretrained models can be found in `results/`
+  - `utils/linear_probing.py` — evaluate frozen features with a linear head. Pretrained models live under `outdir/`
   - `requirements.txt` — Python dependencies
   - `utils/`, `tests/` — placeholders following the template
 
@@ -52,24 +52,31 @@ pip install -r requirements.txt
 ```
 
 ## Quick start
-- Run with default MerLin settings (from JSON config):
+- Run with the default MerLin settings from the repository root:
 ```bash
-python implementation.py --config configs/qssl_default.json
+python implementation.py --project qSSL --config qSSL/configs/defaults.json
 ```
-- CLI alternatives (override or skip configs):
+- Or from inside the project directory:
+```bash
+cd qSSL
+python ../implementation.py --project qSSL --config configs/defaults.json
+```
+- CLI overrides (mix and match as needed):
 ```bash
 # MerLin (photonic)
-python implementation.py --merlin --classes 5 --modes 10 --epochs 2 --batch_size 256 --ckpt-step 1
+python implementation.py --project qSSL --merlin --classes 5 --modes 10 --epochs 2 --batch_size 256 --ckpt-step 1
 
 # Qiskit (gate-model)
-python implementation.py --qiskit --classes 5 --epochs 2 --batch_size 256 --ckpt-step 1
+python implementation.py --project qSSL --qiskit --classes 5 --epochs 2 --batch_size 256 --ckpt-step 1
 
 # Classical baseline
-python implementation.py --classes 5 --epochs 2 --batch_size 256 --ckpt-step 1
+python implementation.py --project qSSL --classical --classes 5 --epochs 2 --batch_size 256 --ckpt-step 1
 ```
 
+Need to see every toggle first? Run `python implementation.py --project qSSL --help` for the auto-generated CLI, including dataset paths, backend switches, and visualization flags.
+
 ## Configuration (JSON)
-See `configs/qssl_default.json`. Key fields:
+See `configs/defaults.json` (overrides are described in `configs/cli.json`). Key fields:
 - `dataset`: `root`, `classes`, `batch_size`
 - `model`: `backend` (`merlin` | `qiskit` | `classical`), `width`, `loss_dim`, `batch_norm`, `temperature`
 - Qiskit-specific: `layers`, `encoding`, `q_ansatz`, `q_sweeps`, `activation`, `shots`, `q_backend`
@@ -113,8 +120,10 @@ You can combine `--config` with CLI overrides. The runner resolves the final con
   - Simple MLP with `args.layers` repetitions of Linear(width, width) + LeakyReLU.
 
 ## Outputs and checkpoints
-Results are saved under `results/<backend>/<timestamp>/`:
-- `args.json` — resolved arguments used for the run
+Each invocation writes to `<outdir>/run_YYYYMMDD-HHMMSS/` (default base `outdir/` inside `qSSL/`):
+- `config_snapshot.json` — final config after merging defaults, CLI, and extra overrides
+- `args.json` — lightweight namespace serialized for backward-compatible tools (e.g., `utils/linear_probing.py`)
+- `run.log` — streaming logs from the shared runtime
 - `training_metrics.json` — SSL and linear-eval losses/accuracies over epochs
 - `experiment_summary.json` — consolidated summary with final and best val accuracy
 - `model-cl-<classes>-epoch-<n>.pth` — checkpoints saved every `ckpt_step` epochs
@@ -122,11 +131,11 @@ Results are saved under `results/<backend>/<timestamp>/`:
 ## Linear probing only
 Evaluate pretrained encoders with a frozen representation and train a linear head:
 ```bash
-# Single checkpoint file
-python linear_probing.py --pretrained ./results/merlin/<timestamp>/model-cl-5-epoch-5.pth
+# Single checkpoint file (run from repo root)
+python qSSL/utils/linear_probing.py --pretrained ./outdir/run_<timestamp>/model-cl-5-epoch-5.pth
 
-# Or point to a results directory (the code will evaluate all .pth files in the folder)
-python linear_probing.py --pretrained ./results/merlin/<timestamp>/
+# Or point to a run directory (evaluates every checkpoint)
+python qSSL/utils/linear_probing.py --pretrained ./outdir/run_<timestamp>/
 ```
 
 ## Acknowledgments

@@ -1,3 +1,31 @@
+# IDE and editor artifacts
 .idea/
+.vscode/
+*.vscode%
+
+# QLSTM artifacts & data (garder les dossiers vides via .gitkeep)
+data/
+!data/.gitkeep
+models/
+!models/.gitkeep
+outdir/
+!outdir/.gitkeep
+
+# Temporary files
+tmp_*/
+
+# Common OS/editor noise
+.DS_Store
+*.swp
+*.swo
 *__pycache__*
-*.vscode
+
+# Python ignores
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ipynb_checkpoints/
+
+# Local env & sandbox helpers
+.venv
+.home/

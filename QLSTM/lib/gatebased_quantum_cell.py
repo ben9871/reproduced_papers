@@ -48,21 +48,24 @@ class VQC(nn.Module):
         n_class: int,
         device_name: str = "default.qubit",
         shots: int | None = None,
+        dtype: torch.dtype | None = None,
     ):
         super().__init__()
-        self.weights = nn.Parameter(0.01 * torch.randn(depth, n_qubits))
+        param_dtype = dtype if dtype is not None else torch.get_default_dtype()
+        self.weights = nn.Parameter(0.01 * torch.randn(depth, n_qubits, dtype=param_dtype))
         # shots=None -> analytic expectation; shots>0 -> finite-shot sampling
         _shots = None if (shots is None or int(shots) <= 0) else int(shots)
         self.dev = qml.device(device_name, wires=n_qubits, shots=_shots)
         self.n_class = n_class
         self.qnode = qml.QNode(_q_node, self.dev, interface="torch")
+        self._dtype = param_dtype
 
     def forward(self, x: torch.Tensor):
         outs = []
         for sample in x:
             res = self.qnode(sample, self.weights, self.n_class)
             outs.append(torch.stack(res))
-        return torch.stack(outs)
+        return torch.stack(outs).to(self._dtype)
 
 
 class GateBasedQuantumLSTMCell(nn.Module):
@@ -84,10 +87,12 @@ class GateBasedQuantumLSTMCell(nn.Module):
         *,
         use_preencoders: bool = False,
         shots: int | None = None,
+        dtype: torch.dtype | None = None,
     ):
         super().__init__()
         self.hidden_size = hidden_size
         self.use_preencoders = use_preencoders
+        self._dtype = dtype if dtype is not None else torch.get_default_dtype()
 
         if use_preencoders:
             # Two encoders: map x (R^{input_size}) -> R^{hidden_size}, and h (R^{hidden_size}) -> R^{hidden_size}
@@ -99,6 +104,7 @@ class GateBasedQuantumLSTMCell(nn.Module):
                 n_class=hidden_size,
                 device_name=device_name,
                 shots=shots,
+                dtype=self._dtype,
             )
             self.h_encoder = VQC(
                 vqc_depth,
@@ -106,6 +112,7 @@ class GateBasedQuantumLSTMCell(nn.Module):
                 n_class=hidden_size,
                 device_name=device_name,
                 shots=shots,
+                dtype=self._dtype,
             )
             # Gate VQCs consume concatenated encodings of size 2*hidden_size
             gate_n_qubits = 2 * hidden_size
@@ -114,18 +121,39 @@ class GateBasedQuantumLSTMCell(nn.Module):
             gate_n_qubits = input_size + hidden_size
 
         self.input_gate = VQC(
-            vqc_depth, gate_n_qubits, hidden_size, device_name, shots=shots
+            vqc_depth,
+            gate_n_qubits,
+            hidden_size,
+            device_name,
+            shots=shots,
+            dtype=self._dtype,
         )
         self.forget_gate = VQC(
-            vqc_depth, gate_n_qubits, hidden_size, device_name, shots=shots
+            vqc_depth,
+            gate_n_qubits,
+            hidden_size,
+            device_name,
+            shots=shots,
+            dtype=self._dtype,
         )
         self.cell_gate = VQC(
-            vqc_depth, gate_n_qubits, hidden_size, device_name, shots=shots
+            vqc_depth,
+            gate_n_qubits,
+            hidden_size,
+            device_name,
+            shots=shots,
+            dtype=self._dtype,
         )
         self.output_gate = VQC(
-            vqc_depth, gate_n_qubits, hidden_size, device_name, shots=shots
+            vqc_depth,
+            gate_n_qubits,
+            hidden_size,
+            device_name,
+            shots=shots,
+            dtype=self._dtype,
         )
-        self.output_proj = torch.nn.Linear(hidden_size, output_size)
+        lin_kwargs = {"dtype": self._dtype} if dtype is not None else {}
+        self.output_proj = torch.nn.Linear(hidden_size, output_size, **lin_kwargs)
 
         # --- Logging: architecture summary ---
         logger = logging.getLogger(__name__)
@@ -146,6 +174,7 @@ class GateBasedQuantumLSTMCell(nn.Module):
             f"  - qubits per gate-VQC={gate_n_qubits}",
             f"  - pre-encoders={'enabled' if use_preencoders else 'disabled'}",
             f"  - hidden_size={hidden_size}, output_size={output_size}",
+            f"  - dtype={self._dtype}",
             f"  - total trainable parameters ≈ {total_params}",
         ]
         logger.info("\n".join(parts))

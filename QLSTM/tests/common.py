@@ -1,15 +1,16 @@
-import importlib.util
-import pathlib
+from __future__ import annotations
+
+import json
 import sys
+from pathlib import Path
+
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+REPO_ROOT = PROJECT_DIR.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
-def _load_impl_module():
-    impl_path = pathlib.Path(__file__).resolve().parents[1] / "implementation.py"
-    assert impl_path.exists(), "implementation.py missing"
-    # Ensure local 'lib' package is importable
-    sys.path.insert(0, str(impl_path.parent))
-    spec = importlib.util.spec_from_file_location("qlstm_impl", impl_path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+def load_cli_schema():
+    schema_path = PROJECT_DIR / "configs" / "cli.json"
+    with schema_path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)

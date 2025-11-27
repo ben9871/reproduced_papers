@@ -51,7 +51,6 @@ class MerlinPhotonicGate(nn.Module):
         super().__init__()
         self.quantum_layer = qlayer
         self.shots = int(shots)
-        # Par défaut on utilise float32 pour rester compatible avec MerLin
         self._dtype = dtype if dtype is not None else torch.float32
         if qlayer.output_size != target_size:
             # Learned linear projection decouples features (LexGrouping keeps them on the simplex).
@@ -116,8 +115,8 @@ class PhotonicQLSTMCell(nn.Module):
         self.output_size = output_size
         self.use_photonic_head = use_photonic_head
 
-        # Par défaut float32 pour cohérence avec couches MerLin
-        self._dtype = dtype if dtype is not None else torch.float32
+        # Par défaut float64 pour cohérence avec couches MerLin
+        self._dtype = dtype if dtype is not None else torch.float64
 
         n_v = input_size + hidden_size  # concat [x, h]
 

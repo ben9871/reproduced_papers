@@ -1,0 +1,55 @@
+{
+  "description": "Paper reproduction runner",
+  "arguments": [
+    {
+      "flags": ["-c", "--config"],
+      "help": "Path to JSON config file to merge with defaults",
+      "type": "path",
+      "dest": "config",
+      "default": null,
+      "apply": {"kind": "config_file"}
+    },
+    {
+      "flags": ["--seed"],
+      "help": "Random seed",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "seed"}
+    },
+    {
+      "flags": ["--outdir"],
+      "help": "Base output directory",
+      "type": "path",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "outdir"}
+    },
+    {
+      "flags": ["--device"],
+      "help": "Device string (cpu, cuda:0, mps)",
+      "type": "str",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "device"}
+    },
+    {
+      "flags": ["--epochs"],
+      "help": "Override number of training epochs",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.epochs"}
+    },
+    {
+      "flags": ["--batch-size"],
+      "help": "Override dataset batch size",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "dataset.batch_size"}
+    },
+    {
+      "flags": ["--lr"],
+      "help": "Override learning rate",
+      "type": "float",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.lr"}
+    }
+  ]
+}

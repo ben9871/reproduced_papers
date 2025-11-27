@@ -3,10 +3,6 @@ import torch
 
 pytest.importorskip("merlin")
 
-from .common import _load_impl_module
-
-_ = _load_impl_module()
-
 
 def test_photonic_cell_forward_shapes():
     from lib.photonic_quantum_cell import PhotonicQuantumLSTMCell

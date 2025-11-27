@@ -1,9 +1,7 @@
-#!/usr/bin/env python3
-"""Unified CLI entrypoint for reproducing the Photonic QCNN paper."""
+"""Runtime entrypoints for the Photonic QCNN project."""
 
 from __future__ import annotations
 
-import argparse
 import copy
 import json
 import os
@@ -18,12 +16,11 @@ from typing import Any
 import numpy as np
 import torch
 
-PROJECT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PROJECT_ROOT.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-PROJECT_ROOT = Path(__file__).resolve().parent
 CONFIG_DIR = PROJECT_ROOT / "configs"
 DEFAULT_CONFIG_PATH = CONFIG_DIR / "defaults.json"
 DATASET_CHOICES = ("BAS", "Custom BAS", "MNIST")
@@ -35,7 +32,7 @@ PAPER_SCRIPT_MAP = {
 
 
 def read_json(path: Path) -> dict[str, Any]:
-    with open(path, encoding="utf-8") as handle:
+    with path.open(encoding="utf-8") as handle:
         return json.load(handle)
 
 
@@ -51,119 +48,11 @@ def deep_update(base: dict[str, Any], overrides: dict[str, Any]) -> dict[str, An
 def load_config(config_path: Path | None) -> dict[str, Any]:
     config = read_json(DEFAULT_CONFIG_PATH)
     if config_path:
-        if not config_path.exists():
+        if not config_path.exists():  # pragma: no cover - sanity check
             raise FileNotFoundError(f"Config file '{config_path}' does not exist.")
         user_cfg = read_json(config_path)
         config = deep_update(config, user_cfg)
     return config
-
-
-def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Run Photonic QCNN experiments using either MerLin or the original paper implementation.",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-Examples:
-  python implementation.py --merlin --config configs/example.json
-  python implementation.py --paper --datasets BAS MNIST
-  python implementation.py --config configs/example.json --epochs 50 --lr 1e-3
-""",
-    )
-
-    parser.add_argument(
-        "--config",
-        type=Path,
-        help="Path to a JSON configuration file (merged on top of defaults).",
-    )
-    parser.add_argument(
-        "--datasets",
-        nargs="+",
-        choices=DATASET_CHOICES,
-        help="Subset of datasets to run. Defaults to all datasets in the config.",
-    )
-    parser.add_argument("--seed", type=int, help="Global random seed override.")
-    parser.add_argument("--outdir", type=str, help="Base output directory override.")
-    parser.add_argument(
-        "--device", type=str, help="Device string (cpu, cuda:0, mps, ...)."
-    )
-    parser.add_argument(
-        "--epochs", type=int, help="Number of training epochs override."
-    )
-    parser.add_argument(
-        "--batch-size", type=int, dest="batch_size", help="Batch size override."
-    )
-    parser.add_argument("--lr", type=float, help="Learning rate override.")
-    parser.add_argument(
-        "--weight-decay", type=float, dest="weight_decay", help="Weight decay override."
-    )
-    parser.add_argument("--gamma", type=float, help="LR scheduler gamma override.")
-    parser.add_argument(
-        "--n-runs",
-        type=int,
-        dest="n_runs",
-        help="Number of random restarts per dataset.",
-    )
-    parser.add_argument(
-        "--figure4",
-        "--readout",
-        dest="figure4",
-        action="store_true",
-        help="Generate the Figure 4 readout analysis (runs specialized scripts and exits).",
-    )
-    parser.add_argument(
-        "--max-iter",
-        "--max_iter",
-        dest="max_iter",
-        type=int,
-        help="(Figure 4) Limit the number of two-fold readout experiments (incomplete results).",
-    )
-    parser.add_argument(
-        "--figure12",
-        action="store_true",
-        help="Generate the Figure 12 simulation plots (runs MerLin experiments and visualizations).",
-    )
-
-    impl_group = parser.add_mutually_exclusive_group()
-    impl_group.add_argument(
-        "--paper",
-        action="store_true",
-        help="Run the authors' original implementation.",
-    )
-    impl_group.add_argument(
-        "--merlin",
-        action="store_true",
-        help="Run the MerLin-based implementation.",
-    )
-
-    return parser.parse_args()
-
-
-def apply_cli_overrides(config: dict[str, Any], args: argparse.Namespace) -> None:
-    runs_cfg = config.setdefault("runs", {})
-    if args.datasets:
-        config["datasets"] = args.datasets
-    if args.seed is not None:
-        config["seed"] = args.seed
-    if args.outdir:
-        config["outdir"] = args.outdir
-    if args.device:
-        config["device"] = args.device
-    if args.batch_size is not None:
-        for dataset in DATASET_CHOICES:
-            runs_cfg.setdefault(dataset, {})["batch_size"] = args.batch_size
-    if args.n_runs is not None:
-        for dataset in DATASET_CHOICES:
-            runs_cfg.setdefault(dataset, {})["n_runs"] = args.n_runs
-
-    training_cfg = config.setdefault("training", {})
-    for key, value in (
-        ("epochs", args.epochs),
-        ("lr", args.lr),
-        ("weight_decay", args.weight_decay),
-        ("gamma", args.gamma),
-    ):
-        if value is not None:
-            training_cfg[key] = value
 
 
 def set_global_seeds(seed: int) -> None:
@@ -191,7 +80,7 @@ def _prepare_dataset_config(
     return cfg
 
 
-def _get_merlin_runners():
+def _get_merlin_runners() -> dict[str, Any]:
     from photonic_QCNN.lib.run_BAS import run_bas_experiments
     from photonic_QCNN.lib.run_custom_BAS import run_custom_bas_experiments
     from photonic_QCNN.lib.run_MNIST import run_mnist_experiments
@@ -206,7 +95,7 @@ def _get_merlin_runners():
 def run_merlin_pipeline(config: dict[str, Any]) -> dict[str, Any]:
     runners = _get_merlin_runners()
     datasets = config.get("datasets", list(DATASET_CHOICES))
-    results = {}
+    results: dict[str, Any] = {}
     training_params = config.get("training") or None
     runs_cfg = config.get("runs", {})
 
@@ -269,7 +158,6 @@ def _prepare_figure12_dir(outdir: str | None) -> Path:
 def run_readout_pipeline(
     outdir: str | None = None, *, max_iter: int | None = None
 ) -> dict[str, Any]:
-    """Run the Figure 4 readout analysis end-to-end."""
     from photonic_QCNN.lib.run_modes_pair_readout import run_modes_pair_readout
     from photonic_QCNN.lib.run_two_fold_readout import run_two_fold_readout
     from photonic_QCNN.utils import readout_visu
@@ -287,7 +175,7 @@ def run_readout_pipeline(
     time.sleep(2)
 
     two_fold_dir = base_dir / "two_fold"
-    two_fold_results = {}
+    two_fold_results: dict[int, dict[str, Any]] = {}
     for k in (7, 8):
         print(f"[Figure4] Launching two-fold readout strategy for k={k}")
         time.sleep(2)
@@ -330,7 +218,6 @@ def run_readout_pipeline(
 
 
 def run_simulation_pipeline(outdir: str | None = None) -> dict[str, Any]:
-    """Run MerLin experiments and generate Figure 12-style simulation plots."""
     from photonic_QCNN.utils import simulation_visu
 
     base_dir = _prepare_figure12_dir(outdir)
@@ -432,66 +319,67 @@ def print_summary(results: dict[str, Any], implementation: str) -> None:
     )
 
 
-def main() -> None:
-    args = parse_args()
-    if args.figure4 and args.figure12:
-        print(
-            "Error: --figure4/--readout and --figure12 cannot be combined. Please run them separately."
-        )
-        return
-    if args.max_iter is not None and not args.figure4:
-        print(
-            "Warning: --max-iter is only respected when --figure4/--readout is used. Ignoring."
-        )
-    if args.figure12:
-        run_simulation_pipeline(args.outdir)
-        return
-    if args.figure4:
-        run_readout_pipeline(args.outdir, max_iter=args.max_iter)
-        return
+def _stringify(obj: Any) -> Any:
+    if isinstance(obj, dict):
+        return {k: _stringify(v) for k, v in obj.items()}
+    if isinstance(obj, list):
+        return [_stringify(v) for v in obj]
+    if isinstance(obj, Path):
+        return str(obj)
+    return obj
 
-    config_path = args.config.resolve() if args.config else None
-    config = load_config(config_path)
-    apply_cli_overrides(config, args)
 
-    implementation = "merlin"
-    if args.paper:
-        implementation = "paper"
-    elif args.merlin:
-        implementation = "merlin"
-    else:
-        implementation = config.get("implementation", "merlin")
-    config["implementation"] = implementation
+def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
+    figure4 = bool(cfg.get("figure4"))
+    figure12 = bool(cfg.get("figure12"))
+    if figure4 and figure12:
+        raise ValueError("figure4/figure12 modes are mutually exclusive")
 
+    config = copy.deepcopy(cfg)
     config.setdefault("datasets", list(DATASET_CHOICES))
-    config.setdefault("outdir", "results")
+    config.setdefault("outdir", str(run_dir))
     config.setdefault("device", "cpu")
     config.setdefault("seed", 42)
+    config["outdir"] = str(run_dir)
 
-    header = (
-        "Photonic Quantum Convolutional Neural Network Experiments\n"
-        "Paper: Photonic Quantum Convolutional Neural Networks with Adaptive State Injection"
-    )
-    print(header)
-    print("Started at:", datetime.now().strftime("%Y-%m-%d %H:%M:%S"))
+    set_global_seeds(int(config["seed"]))
 
-    set_global_seeds(config["seed"])
+    summary_path = run_dir / "summary.json"
+    if figure12:
+        summary = run_simulation_pipeline(str(run_dir))
+        summary_path.write_text(json.dumps(_stringify(summary), indent=2))
+        return
+    if figure4:
+        max_iter = cfg.get("max_iter")
+        summary = run_readout_pipeline(
+            str(run_dir), max_iter=int(max_iter) if max_iter is not None else None
+        )
+        summary_path.write_text(json.dumps(_stringify(summary), indent=2))
+        return
+
+    implementation = config.get("implementation", "merlin")
+    if implementation not in {"merlin", "paper"}:
+        raise ValueError(
+            f"Unsupported implementation '{implementation}' (use 'merlin' or 'paper')"
+        )
 
     if implementation == "merlin":
         results = run_merlin_pipeline(config)
     else:
-        print(
-            "!!!\nWarning: All hyperparameter overrides (e.g., --epochs, --lr, --outdir, "
-            "--batch-size) are ignored when running the paper implementation.\n!!!"
-        )
-        results = run_paper_pipeline(config.get("datasets", list(DATASET_CHOICES)))
+        datasets = config.get("datasets", list(DATASET_CHOICES))
+        results = run_paper_pipeline(datasets)
 
     print_summary(results, implementation)
-    print(
-        f"\nAll experiments finished at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    )
-    print("Check the results/ directory for detailed outputs.")
+    summary_path.write_text(json.dumps(_stringify(results), indent=2))
 
 
-if __name__ == "__main__":
-    main()
+__all__ = [
+    "DATASET_CHOICES",
+    "train_and_evaluate",
+    "set_global_seeds",
+    "run_merlin_pipeline",
+    "run_paper_pipeline",
+    "run_readout_pipeline",
+    "run_simulation_pipeline",
+    "print_summary",
+]
