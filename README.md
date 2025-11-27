@@ -12,6 +12,20 @@ and complements the online documentation available at:
 
 Each paper reproduction is designed to be accessible, well-documented, and easy to extend. Contributions are welcome!
 
+## Running existing reproductions
+
+- Browse the up-to-date catalogue at [https://merlinquantum.ai/reproduced_papers/index.html](https://merlinquantum.ai/reproduced_papers/index.html) to pick the paper you want to execute. The `<NAME>` you pass to the CLI is simply the folder name under the repo root (e.g., `QLSTM/`, `QORC/`, `reproduction_template/`).
+- `cd` into the chosen folder and install its dependencies: `pip install -r requirements.txt` (each reproduction keeps its own list).
+- Launch training/eval runs through the shared CLI from the repo root:
+
+	```bash
+	python implementation.py --project <NAME> --config <NAME>/configs/<config>.json
+	```
+
+- If you prefer running from inside the project directory, reference the parent runner instead: `python ../implementation.py --project <NAME> --config configs/<config>.json`.
+
+All logs, checkpoints, and figures land in `<NAME>/outdir/run_YYYYMMDD-HHMMSS/` unless the configs specify a different base path.
+
 ## How to contribute a reproduced paper
 
 We encourage contributions of new quantum ML paper reproductions. Please follow the guidelines below:
@@ -49,6 +63,7 @@ cd NAME
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+# Optional shared deps can go in the repo root, but each project keeps its own requirements.txt.
 
 # 3) Run with the example config (JSON-only) via the repo-level runner
 python ../implementation.py --project NAME --config configs/example.json
@@ -72,6 +87,8 @@ Then edit the placeholders in:
 - `README.md` — paper reference/authors, reproduction details, CLI options, results analysis
 - `configs/example.json` — dataset/model/training defaults (extend or add more configs)
 - `lib/runner.py` and supporting modules inside `lib/` — dataset/model/training logic invoked by the shared runner
+
+> **Note:** Every reproduction has its own `requirements.txt`. Install the relevant file before running `implementation.py --project ...` to ensure dependencies are available.
 
 Notes:
 - Configs are JSON-only in the template.
