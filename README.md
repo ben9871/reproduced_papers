@@ -26,6 +26,8 @@ Each paper reproduction is designed to be accessible, well-documented, and easy 
 
 All logs, checkpoints, and figures land in `<NAME>/outdir/run_YYYYMMDD-HHMMSS/` unless the configs specify a different base path.
 
+Need a quick tour of a project’s knobs? Run `python implementation.py --project <NAME> --help` to print the runtime-generated CLI for that reproduction (dataset switches, figure toggles, etc.) before launching a full experiment.
+
 ### Precision control (`dtype`)
 
 - Every reproduction accepts an optional top-level `"dtype"` entry in its configs, just like `"seed"`. When present, the shared runner casts input tensors and initializes models in that dtype.

@@ -1,13 +1,13 @@
-"""Photonic QCNN library package."""
+"""Shared library helpers for the Quantum Gaussian kernel project."""
 
 from __future__ import annotations
 
 import sys
 from pathlib import Path
 
-_REPO_ROOT = Path(__file__).resolve().parents[2]
+_REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(_REPO_ROOT) not in sys.path:
-	sys.path.insert(0, str(_REPO_ROOT))
+    sys.path.insert(0, str(_REPO_ROOT))
 
 from runtime_lib import config as _shared_config
 

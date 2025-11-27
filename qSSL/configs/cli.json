@@ -1,0 +1,202 @@
+{
+  "description": "CLI schema for the Quantum Self-Supervised Learning reproduction.",
+  "arguments": [
+    {
+      "flags": ["-c", "--config"],
+      "help": "Path to a JSON config file to merge with defaults",
+      "type": "path",
+      "default": null,
+      "apply": {"kind": "config_file"}
+    },
+    {
+      "flags": ["--seed"],
+      "help": "Random seed",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "seed"}
+    },
+    {
+      "flags": ["--outdir"],
+      "help": "Base directory for runtime artifacts",
+      "type": "path",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "outdir"}
+    },
+    {
+      "flags": ["--device"],
+      "help": "Device string (cpu, cuda:0, mps)",
+      "type": "str",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "device"}
+    },
+    {
+      "flags": ["-d", "--datadir"],
+      "help": "Dataset root directory",
+      "type": "path",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "dataset.root"}
+    },
+    {
+      "flags": ["-cl", "--classes"],
+      "help": "Number of CIFAR-10 classes to keep",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "dataset.classes"}
+    },
+    {
+      "flags": ["-bs", "--batch_size"],
+      "help": "Batch size for both SSL and linear evaluation phases",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "dataset.batch_size"}
+    },
+    {
+      "flags": ["-e", "--epochs"],
+      "help": "Number of SSL pre-training epochs",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.epochs"}
+    },
+    {
+      "flags": ["-le", "--le-epochs"],
+      "help": "Number of epochs for linear evaluation",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.le_epochs"}
+    },
+    {
+      "flags": ["-ckpt", "--ckpt-step"],
+      "help": "Save SSL checkpoint every N epochs",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.ckpt_step"}
+    },
+    {
+      "flags": ["--backend"],
+      "help": "Representation network backend",
+      "type": "str",
+      "choices": ["classical", "merlin", "qiskit"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.backend"}
+    },
+    {
+      "flags": ["--merlin"],
+      "help": "Shortcut to select the MerLin backend",
+      "action": "store_true",
+      "default": false,
+      "apply": {"kind": "config_path", "path": "model.backend", "value": "merlin"}
+    },
+    {
+      "flags": ["--qiskit"],
+      "help": "Shortcut to select the Qiskit backend",
+      "action": "store_true",
+      "default": false,
+      "apply": {"kind": "config_path", "path": "model.backend", "value": "qiskit"}
+    },
+    {
+      "flags": ["--classical"],
+      "help": "Force the classical MLP baseline backend",
+      "action": "store_true",
+      "default": false,
+      "apply": {"kind": "config_path", "path": "model.backend", "value": "classical"}
+    },
+    {
+      "flags": ["-w", "--width"],
+      "help": "Feature width after the ResNet18 backbone",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.width"}
+    },
+    {
+      "flags": ["-ld", "--loss_dim"],
+      "help": "Projection head output dimension",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.loss_dim"}
+    },
+    {
+      "flags": ["-tau", "--temperature"],
+      "help": "InfoNCE temperature",
+      "type": "float",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.temperature"}
+    },
+    {
+      "flags": ["-bn", "--batch_norm"],
+      "help": "Enable batch norm after compression",
+      "action": "store_true",
+      "default": false,
+      "apply": {"kind": "config_path", "path": "model.batch_norm", "value": true}
+    },
+    {
+      "flags": ["-m", "--modes"],
+      "help": "Number of photonic modes (MerLin backend)",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.modes"}
+    },
+    {
+      "flags": ["-bunch", "--no_bunching"],
+      "help": "Disable photon bunching (MerLin backend)",
+      "action": "store_true",
+      "default": false,
+      "apply": {"kind": "config_path", "path": "model.no_bunching", "value": true}
+    },
+    {
+      "flags": ["--layers"],
+      "help": "Number of layers in the representation network",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.layers"}
+    },
+    {
+      "flags": ["--encoding"],
+      "help": "Data encoding method for the quantum representation",
+      "type": "str",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.encoding"}
+    },
+    {
+      "flags": ["--q_ansatz"],
+      "help": "Variational ansatz for the Qiskit backend",
+      "type": "str",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.q_ansatz"}
+    },
+    {
+      "flags": ["--q_sweeps"],
+      "help": "Number of ansatz sweeps per layer (Qiskit)",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.q_sweeps"}
+    },
+    {
+      "flags": ["--activation"],
+      "help": "Quantum activation function type",
+      "type": "str",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.activation"}
+    },
+    {
+      "flags": ["--shots"],
+      "help": "Number of shots for Qiskit evaluations",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.shots"}
+    },
+    {
+      "flags": ["--q_backend"],
+      "help": "Backend name for Qiskit simulations",
+      "type": "str",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.q_backend"}
+    },
+    {
+      "flags": ["--save-dhs"],
+      "help": "Store Hilbert-Schmidt distances for analysis (Qiskit)",
+      "action": "store_true",
+      "default": false,
+      "apply": {"kind": "config_path", "path": "model.save_dhs", "value": true}
+    }
+  ]
+}

@@ -1,0 +1,40 @@
+{
+  "description": "CLI schema for VQC Fourier-series experiments.",
+  "arguments": [
+    {
+      "flags": ["-c", "--config"],
+      "help": "Path to JSON config file to merge with defaults",
+      "type": "path",
+      "default": null,
+      "apply": {"kind": "config_file"}
+    },
+    {
+      "flags": ["--seed"],
+      "help": "Random seed",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "seed"}
+    },
+    {
+      "flags": ["--outdir"],
+      "help": "Base output directory",
+      "type": "path",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "outdir"}
+    },
+    {
+      "flags": ["--device"],
+      "help": "Device string for torch (cpu, cuda, mps)",
+      "type": "str",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "device"}
+    },
+    {
+      "flags": ["--show-plots"],
+      "help": "Display plots interactively in addition to saving them",
+      "action": "store_true",
+      "default": false,
+      "apply": {"kind": "config_path", "path": "plotting.show", "value": true}
+    }
+  ]
+}
