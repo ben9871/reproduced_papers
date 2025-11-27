@@ -86,7 +86,9 @@ python implementation.py --project NAME --config NAME/configs/example.json
 Then edit the placeholders in:
 - `README.md` — paper reference/authors, reproduction details, CLI options, results analysis
 - `configs/example.json` — dataset/model/training defaults (extend or add more configs)
+- `configs/cli.json` + `configs/runtime.json` — CLI definitions plus metadata telling the shared runner which callable to import (set `runner_callable`, `defaults_path`, and optionally `seed_callable` pointing to your seeding helper)
 - `lib/runner.py` and supporting modules inside `lib/` — dataset/model/training logic invoked by the shared runner
+- `runtime_lib.config.load_config` / `.deep_update` handle JSON loading and overrides globally; the template already wires `lib.config` to these helpers so you must not add a custom `lib/config.py` (JSON is the only supported format).
 
 > **Note:** Every reproduction has its own `requirements.txt`. Install the relevant file before running `implementation.py --project ...` to ensure dependencies are available.
 
