@@ -1,21 +1,19 @@
-import pathlib
+from pathlib import Path
 
-from .common import _load_impl_module
+from lib.config import deep_update, load_config
+from lib.runner import setup_seed, train_and_evaluate
 
 
 def test_figure6_lstm_sine_smoke(tmp_path):
-    impl = _load_impl_module()
-    parser = impl.build_arg_parser()
-    cfg_path = (
-        pathlib.Path(__file__).resolve().parents[1] / "configs" / "sine_lstm.json"
-    )
+    project_dir = Path(__file__).resolve().parents[1]
+    defaults = load_config(project_dir / "configs" / "defaults.json")
+    cfg_path = project_dir / "configs" / "sine_lstm.json"
     assert cfg_path.exists(), "sine_lstm.json missing"
-    # Force a very small epoch count for a quick smoke test
-    args = parser.parse_args(
-        ["--config", str(cfg_path), "--epochs", "1"]
-    )  # override epochs to 1
-    cfg = impl.resolve_config(args)
+    cfg = deep_update(defaults, load_config(cfg_path))
+    cfg["training"]["epochs"] = 1
+    cfg["training"]["batch_size"] = max(2, cfg["training"].get("batch_size", 2))
+    setup_seed(cfg["seed"])
     run_dir = tmp_path / "run"
     run_dir.mkdir()
-    impl.train_and_evaluate(cfg, run_dir)
+    train_and_evaluate(cfg, run_dir)
     assert (run_dir / "model_final.pth").exists()

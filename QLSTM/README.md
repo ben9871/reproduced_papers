@@ -44,11 +44,11 @@ Stack: PyTorch, PennyLane, MerLin, NumPy/SciPy, scikit‑learn, matplotlib.
 
 ## Folder Structure
 
-- `implementation.py` — CLI entry point (train LSTM or QLSTM on a chosen generator)
+- `../implementation.py --project QLSTM` — Repository-level CLI entry point powered by this folder's `configs/cli.json`
 - `lib/model.py` — Classical LSTM, QLSTM (gate VQCs), sequence wrapper
 - `lib/dataset.py` — Synthetic generators + CSV loader
 - `lib/rendering.py` — Plotting and pickle helpers
-- `configs/` — JSON configs (e.g., `example.json`)
+- `configs/` — JSON configs (`defaults.json`, dataset presets, `cli.json`, `runtime.json`)
 - `data/` — Input datasets (CSV, etc.)
 - `outdir/` — Output base directory (ignored by Git), contains timestamped runs
 - `results/` — Collected figures from helper scripts (e.g., `utils/run_all_configs.sh`)
@@ -64,56 +64,47 @@ pip install -r requirements.txt
 
 ## Command-line Interface
 
-Main entry point: `implementation.py`
+Main entry point: repository root `implementation.py` with `--project QLSTM`. The available arguments live in `configs/cli.json`, so you can extend the CLI by editing JSON rather than Python.
 
 ```bash
-python implementation.py --help
+python implementation.py --project QLSTM --help
 ```
 
-Key options:
+Highlights (see `configs/cli.json` for the authoritative list):
 
-- `--config PATH`: load a JSON config (see `configs/`).
-- `--seed INT`: random seed.
-- `--outdir DIR`: base output directory (default: `outdir`). A timestamped `run_YYYYMMDD-HHMMSS` folder is created inside.
-- `--device STR`: `cpu`, `cuda:0`, `mps`, …
-
-Common overrides:
-
-- `--model {qlstm,lstm,qlstm_photonic}`
-  - For `qlstm`, you can enable a 6‑VQC variant aligning with arXiv Sec. B (eqs. 5a–5g) via `--use-preencoders` (adds two shared VQC encoders for x and h).
-- `--generator {sin,damped_shm,logsine,ma_noise,csv}`
-- `--csv-path PATH` (when `--generator csv`)
-- `--seq-length INT`, `--hidden-size INT`, `--vqc-depth INT`
-- `--batch-size INT`, `--epochs INT`, `--lr FLOAT`
-- `--train-split FLOAT`, `--fmt {png,pdf}`, `--save-all`
-- `--snapshot-epochs LIST` (alias: `--snapshot_epochs`): comma-separated epochs at which to also save intermediate simulation plots, e.g. `--snapshot-epochs 1,15,30,100`. The final epoch is always saved even if not listed.
-- `--plot-width FLOAT` (alias: `--plot_width`): figure width in inches for simulation plots (height scales automatically). Titles show the epoch, e.g. `Epoch 30`.
+- `--config PATH`: merge an additional JSON config into `configs/defaults.json` (deep merge).
+- `--seed INT`, `--outdir DIR`, `--device STR`: generic runtime overrides.
+- `--model {qlstm,lstm,qlstm_photonic}` with `--use-preencoders` / `--use-photonic-head` flags.
+- Dataset controls: `--generator {sin,damped_shm,logsine,ma_noise,csv}`, `--csv-path PATH`, `--seq-length INT`, `--train-split FLOAT`.
+- Model hyperparameters: `--hidden-size INT`, `--vqc-depth INT`, `--shots INT`.
+- Training overrides: `--epochs INT`, `--batch-size INT`, `--lr FLOAT`.
+- Visualization: `--fmt {png,pdf}`, `--snapshot-epochs 1,15,...`, `--plot-width FLOAT`.
 
 Example runs:
 
 ```bash
 # From a JSON config
-python implementation.py --config configs/example.json
+python implementation.py --project QLSTM --config configs/example.json
 
 # Inline overrides
-python implementation.py --config configs/example.json --epochs 50 --lr 1e-3
+python implementation.py --project QLSTM --config configs/example.json --epochs 50 --lr 1e-3
 
 # Minimal quantum “smoke” run
-python implementation.py --model qlstm --generator sin --epochs 3 --seq-length 8 --hidden-size 4 --vqc-depth 2
+python implementation.py --project QLSTM --model qlstm --generator sin --epochs 3 --seq-length 8 --hidden-size 4 --vqc-depth 2
 
 # Quantum with 6‑VQC pre-encoders (closer to paper’s Sec. B)
-python implementation.py --model qlstm --use-preencoders --generator sin --epochs 3 --seq-length 8 --hidden-size 4 --vqc-depth 2
+python implementation.py --project QLSTM --model qlstm --use-preencoders --generator sin --epochs 3 --seq-length 8 --hidden-size 4 --vqc-depth 2
 
 # Classical baseline
-python implementation.py --model lstm --generator damped_shm --epochs 10 --seq-length 6 --hidden-size 8
+python implementation.py --project QLSTM --model lstm --generator damped_shm --epochs 10 --seq-length 6 --hidden-size 8
 
 # Quick snapshot demo (2 epochs, save both e1 and e2, custom width)
-python implementation.py --model lstm --generator sin --epochs 2 --seq-length 8 --hidden-size 4 \
-  --snapshot_epochs 1,2 --plot_width 7
+python implementation.py --project QLSTM --model lstm --generator sin --epochs 2 --seq-length 8 --hidden-size 4 \
+  --snapshot-epochs 1,2 --plot-width 7
 
 # Experimental: Photonic QLSTM (requires merlinquantum)
 # Note: this can be slow in simulation; recommended for targeted tests
-python implementation.py --model qlstm_photonic --generator sin --epochs 1 --seq-length 4 --hidden-size 2 --device cpu
+python implementation.py --project QLSTM --model qlstm_photonic --generator sin --epochs 1 --seq-length 4 --hidden-size 2 --device cpu
 ```
 
 ## Output Directory and Artifacts
@@ -140,12 +131,11 @@ Notes:
 
 Place JSON files in `configs/`.
 
-- `configs/example.json` shows typical keys: `seed`, `device`, `outdir`, `logging.level`,
-  - `experiment`: `generator`, `csv_path`, `seq_length`, `train_split`, `fmt`, `save_only_last`,
-    - snapshot options: `snapshot_epochs` (array of ints, e.g., `[1,15,30,100]`), `plot_width` (float, inches)
-  - `model`: `type`, `hidden_size`, `vqc_depth`
-  - `training`: `epochs`, `batch_size`, `lr`
-- CLI options override corresponding JSON keys. Most options accept both dash and underscore forms (e.g., `--snapshot-epochs` or `--snapshot_epochs`).
+- `defaults.json` is the base experiment (sine generator with QLSTM).
+- Dataset/model presets (e.g., `sine_qlstm.json`) can be layered via `--config`.
+- `cli.json` defines every CLI argument, its type, and the config key it overrides.
+- `runtime.json` tells the generic runner where to find defaults, CLI schema, and the callable (`lib/runner.py::train_and_evaluate`).
+- Keys follow the same structure as before: `experiment`, `model`, `training`, `logging`, etc. CLI overrides mutate these dictionaries via the dot-paths defined in `cli.json`.
 
 ## Available Generators
 

@@ -1,10 +1,6 @@
 import torch
 from lib.classical_cell import ClassicalLSTMCell
 
-from .common import _load_impl_module
-
-_ = _load_impl_module()
-
 
 def test_classical_cell_forward_shapes():
     input_size, hidden_size, output_size = 1, 5, 1

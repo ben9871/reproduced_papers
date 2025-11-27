@@ -21,13 +21,12 @@ We encourage contributions of new quantum ML paper reproductions. Please follow 
 ```
 NAME/                     # Non-ambiguous acronym or fullname of the reproduced paper
 ├── .gitignore            # specific .gitignore rules for clean repository
-├── implementation.py     # Main engine to train a model - the cli can accept parameters or config file
 ├── notebook.ipynb        # Interactive exploration of key concepts
 ├── README.md             # Paper overview and results overview
 ├── requirements.txt      # additional requirements for the scripts
-├── configs/              # predefined configurations to train models
+├── configs/              # defaults + CLI/runtime descriptors consumed by the repo root runner
 ├── data/                 # Datasets and preprocessing if any
-├── lib/                  # code used by implementation.py and notebook.ipynb - as a integrated library
+├── lib/                  # code used by the shared runner and notebooks - as an integrated library
 ├── models/               # Trained models 
 ├── results/              # Selected generated figures, tables, or outputs from trained models
 ├── tests/                # Validation tests
@@ -51,20 +50,28 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 
-# 3) Run with the example config (JSON-only)
-python implementation.py --config configs/example.json
+# 3) Run with the example config (JSON-only) via the repo-level runner
+python ../implementation.py --project NAME --config configs/example.json
 
-# 4) See outputs (default base outdir is `outdir/`)
+# 4) See outputs (default base outdir is `outdir/` inside NAME/)
 ls outdir
 
 # 5) Run tests (from inside NAME/)
 pytest -q
 ```
 
+You can also run from the repository root:
+
+```bash
+python implementation.py --project NAME --config NAME/configs/example.json
+```
+
+`--project` (or `--project-dir`) is mandatory so the shared runner knows which reproduction folder to load.
+
 Then edit the placeholders in:
 - `README.md` — paper reference/authors, reproduction details, CLI options, results analysis
 - `configs/example.json` — dataset/model/training defaults (extend or add more configs)
-- `implementation.py` and `lib/` — actual dataset/model/training logic
+- `lib/runner.py` and supporting modules inside `lib/` — dataset/model/training logic invoked by the shared runner
 
 Notes:
 - Configs are JSON-only in the template.

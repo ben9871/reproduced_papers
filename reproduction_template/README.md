@@ -30,23 +30,20 @@ pip install -r requirements.txt
 
 ### Command-line interface
 
-Main entry point: `implementation.py`
+Main entry point: `implementation.py`. The CLI is entirely described in `configs/cli.json`, so updating/adding arguments does not require editing Python code.
 
 ```bash
 python implementation.py --help
 ```
 
-Supported options:
+Example overrides (see `configs/cli.json` for the authoritative list):
 
-- `--config PATH` Load config from JSON (example files in `configs/`).
-- `--seed INT`    Random seed for reproducibility.
-- `--outdir DIR`  Output base directory (default: `outdir`). A timestamped run folder `run_YYYYMMDD-HHMMSS` is created inside.
-
-Example reproduction specific options:
-- `--device STR`  Device string (e.g., cpu, cuda:0, mps).
-- `--epochs INT`  Number of training epochs.
-- `--batch-size INT` Batch size.
-- `--lr FLOAT`    Learning rate.
+- `--config PATH` Load an additional JSON config (merged over `defaults.json`).
+- `--seed INT` Random seed applied via the generic runtime.
+- `--outdir DIR` Base output directory (default in `defaults.json`).
+- `--epochs INT` Override `training.epochs`.
+- `--batch-size INT` Override `dataset.batch_size`.
+- `--lr FLOAT` Override `training.lr`.
 
 Example runs:
 
@@ -79,6 +76,8 @@ Notes:
 Place configuration files in `configs/`.
 
 - `defaults.json` defines the default parameter values.
+- `cli.json` declares the CLI arguments, their types, and the config keys they mutate.
+- `runtime.json` points the generic runner to `cli.json`, `defaults.json`, and the callable that implements the actual training loop (`lib/runner.py::train_and_evaluate` by default).
 - `example.json` shows the structure for a specific experiment.
 - Keys typically include: dataset, model, training, evaluation, logging.
 
