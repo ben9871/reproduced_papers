@@ -1,5 +1,5 @@
 matplotlib==3.10.6
-merlinquantum==0.1.2
+merlinquantum==0.2.3
 numpy==2.3.3
 perceval-quandela==1.0.0
 pytest==8.4.2

@@ -5,7 +5,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 
 import torch
-from merlin import OutputMappingStrategy, QuantumLayer
+from merlin import QuantumLayer, ComputationSpace
 from torch import nn
 from utils.quantum import create_quantum_circuit
 
@@ -92,17 +92,16 @@ def build_hqnn_model(
         input_state[2 * index] = 1
 
     circuit = create_quantum_circuit(architecture.modes, size=num_features)
+    computation_space = ComputationSpace.UNBUNCHED if architecture.no_bunching else ComputationSpace.FOCK
     quantum_layer = QuantumLayer(
         input_size=num_features,
-        output_size=None,
         circuit=circuit,
         trainable_parameters=[
             p.name for p in circuit.get_parameters() if not p.name.startswith("px")
         ],
         input_parameters=["px"],
         input_state=input_state,
-        no_bunching=architecture.no_bunching,
-        output_mapping_strategy=OutputMappingStrategy.NONE,
+        computation_space=computation_space,
         device=device,
     )
     output_size = quantum_layer.output_size

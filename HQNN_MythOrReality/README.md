@@ -1,16 +1,22 @@
 # Reproduction of the work: "Computational Advantage in Hybrid Quantum Neural Networks: Myth or Reality?", by Kashif et al.
 
-Here, we reproduce the experiments presented in the following paper [Computational Advantage in Hybrid Quantum Neural Networks: Myth or Reality?](https://arxiv.org/abs/2412.04991)
+## Reference and Attribution
+
+- Paper: Computational Advantage in Hybrid Quantum Neural Networks: Myth or Reality? (2024 preprint)
+- Authors: Kashif et al.
+- ArXiv: https://arxiv.org/abs/2412.04991
+- Original repository: not provided by the authors (built from description)
+- License and attribution: cite the paper above when reusing this reproduction
 
 ## Overview
 
-The paper investigates whether hybrid quantum neural networks (HQNNs) can surpass purely classical models when both are trained on increasing-complexity spiral datasets. Our reproduction rebuilds the synthetic 3-class spiral data generator, the hybrid photonic HQNN stack, and the classical multilayer perceptron baseline so we can compare accuracy and parameter efficiency as the number of features ranges from 10 to 110.
+The paper investigates whether hybrid quantum neural networks (HQNNs) can surpass purely classical models when both are trained on increasingly complex spiral datasets. Our reproduction rebuilds the synthetic 3-class spiral data generator, the hybrid photonic HQNN stack, and the classical multilayer perceptron baseline so we can compare accuracy and parameter efficiency as the number of features ranges from 10 to 110.
 
 - **Reproduced scope:** spiral dataset (12 feature settings), HQNN configurations with variable qubits/modes and depths, 155+ classical MLPs, accuracy and parameter-count metrics logged per setting.
 - **Deviations & assumptions:** extended the classical search space to larger hidden layers (up to 256 neurons) because the original bounds underperformed on >70 features; photonic HQNN search additionally swept 2–24 modes with optional bunching to mirror the photonic simulator available locally.
-- **Hardware / software environment:** runs executed in a Python virtual environment (`hqnn-venv`) using the pinned dependencies in `requirements.txt` (PyTorch 3.12, merlinquantum) on a CPU-only workstation; no GPU acceleration is required for the reported sweeps.
+- **Hardware / software environment:** runs executed in a Python virtual environment (`hqnn-venv`) using the pinned dependencies in `requirements.txt` (PyTorch 2.8.0, scikit-learn 1.7.2, perceval-quandela 1.0.0, etc.) on a CPU-only workstation; no GPU acceleration is required for the reported sweeps.
 
-## Project layout
+## Project Layout
 
 - `implementation.py`: main file to run the model
 - `configs/`: JSON configuration files (default spiral sweep provided)
@@ -20,46 +26,73 @@ The paper investigates whether hybrid quantum neural networks (HQNNs) can surpas
 - `scripts/`: auxiliary runners such as the classical baseline sweep
 - `requirements.txt`: pinned dependencies matching the `hqnn-venv` environment
 
-## Setup
+## How to Run
+
+### Install dependencies
 
 - Create an isolated environment (e.g. `python -m venv hqnn-venv && source hqnn-venv/bin/activate`)
-- Install the exact dependencies with `pip install -r requirements.txt` to mirror the `hqnn-venv` used for development
+- Install the pinned requirements: `pip install -r requirements.txt`
 
-Once dependencies are installed, the commands below can be executed from the repository root.
+### Command-line interface
 
-## Running the models
+- HQNN sweep: `python3 implementation.py --config configs/spiral_default.json` creates a timestamped run folder under `results/` with logs and metrics. Override config values with CLI flags such as `--feature-grid 10,20` or `--accuracy-threshold 92`.
+- Classical baseline: `python3 scripts/run_classical_baseline.py --features 10,20,30` sweeps MLP configurations and appends results to `results/classical_baseline.json`. Adjust `--lr`, `--batch-size`, or `--threshold` as needed.
+- Both runners expose additional options (see `--help`) for seed control, training schedule, and output directories.
 
-- HQNN sweep: `python3 implementation.py --config configs/spiral_default.json` creates a timestamped run folder under `results/` with logs and metrics. Use CLI flags such as `--feature-grid 10,20` or `--accuracy-threshold 92` to override config values without editing JSON.
-- Classical baseline: `python3 scripts/run_classical_baseline.py --features 10,20,30` sweeps the MLP configurations and appends results to `results/classical_baseline.json`. Adjust `--lr`, `--batch-size`, or `--threshold` to explore other training setups.
-- Quick checks: `pytest tests -q` (after ensuring `pytest` is installed) runs the smoke tests that verify CLI wiring and architecture enumeration.
+### Output directory and generated files
 
-### The dataset
-The original paper mentions the following dataset: _"We generate a spiral dataset with 1500 data points distributed across 3 classes. The dataset’s core structure is a spiral, as shown in Fig. 4(a) with each class represented by a distinct arm, offering a challenging yet learnable pattern for models. To investigate the effect of task complexity, we maintain a fixed number of data points and classes while systematically increasing complexity by augmenting the number of features. The increase in feature dimensions is accompanied by a corresponding increase in noise, further enhancing the complexity of the dataset. Specifically, the additional features introduce subtle variations through non-linear transformations of the existing features. Controlled noise is introduced, scaled with the number of features (noise = 0.1 + 0.003 × num features), ensuring a progressive rise in task difficulty. We utilize feature sizes ranging from 10 to 110 in increments of 10"_
+- HQNN runs write `results/hqnn/<timestamp>/` directories containing resolved configs, log files, and per-feature accuracy summaries.
+- The classical sweep accumulates results in `results/classical_baseline.json` so repeated commands append without overwriting earlier experiments.
 
-Here is the dataset that we generated
+## Configuration
+
+- JSON files under `configs/` encode feature grids, training regimes, and HQNN search bounds; `configs/spiral_default.json` mirrors the paper’s setup.
+- CLI overrides (`--lr`, `--feature-grid`, `--accuracy-threshold`, etc.) merge with the JSON to produce a resolved config saved alongside every run.
+
+## Dataset
+
+The original paper states: _"We generate a spiral dataset with 1500 data points distributed across 3 classes... We utilize feature sizes ranging from 10 to 110 in increments of 10"._
+
+Here is the dataset that we generated:
 ![First 2 features of the Spiral dataset](./assets/blobs_dataset.png)
-And we can observe that the complexity increases with the number of features as the performance of fixed classical neural networks (NN) and Hybrid Quantum NN (HQNN) decrease:
+And we can observe that the complexity increases with the number of features as the performance of fixed classical neural networks (NN) and Hybrid Quantum NN (HQNN) decreases:
 ![Performance with respect to feature size](./assets/acc_param_wrt_features.png)
 
-### The classical Neural Networks
-The original paper mentions the following classical models: _"We restrict the classical models to have a maximum of n = 3 layers, with the number of neurons in each layer chosen from the set m = {2, 4, 6, 8, 10} resulting in a search space of total 155 model combinations for classical models for each complexity level."_
+## Results and Analysis
 
-Here, we implement the same models but it seems that our biggest model cannot classify with at least 90% of accuracy the spiral dataset with more than 70 features.
-We increase the search space to more neurons in hidden layers, up to 256.
-The search space looks as follows:
+### Classical neural networks
+The original paper mentions: _"We restrict the classical models to have a maximum of n = 3 layers, with the number of neurons in each layer chosen from the set m = {2, 4, 6, 8, 10} resulting in a search space of total 155 model combinations for classical models for each complexity level."_
+
+Here, we implement the same models but the largest network cannot classify the spiral dataset with ≥90% accuracy when the feature count exceeds 70. We therefore increase the search space to allow more neurons per hidden layer (up to 256). The resulting parameter sweep is illustrated below:
 ![Search space for the classical NN](./assets/cl_NN_params.png)
 
-To run the classical experiments ```python3 scripts/run_classical_baseline.py``` 
+`python3 scripts/run_classical_baseline.py` executes the sweep and logs results to `results/classical_baseline.json`.
 
-### The Hybrid Quantum Neural Networks
-The original paper mentions: _"During the hybrid model search only the quantum layers are varied. We use [3, 4, 5] qubits quantum layers, and for each qubit size, quantum layers of depth [1, 2, 3, ..., 10] are tested, yielding 30 model combinations per feature size."_
+### Hybrid Quantum Neural Networks
+The original paper describes: _"During the hybrid model search only the quantum layers are varied. We use [3, 4, 5] qubits quantum layers, and for each qubit size, quantum layers of depth [1, 2, 3, ..., 10] are tested, yielding 30 model combinations per feature size."_
 
-For the photonic implementation, we use network from 2 to 24 modes with 1 photon up to modes/2 photons. We use bunching and no bunching modes.
-The search space looks as follows:
+For the photonic implementation, we search 2–24 modes with 1 photon up to modes/2 photons, testing both Fock and unbunched configurations. The search space looks as follows:
 ![Search space for the HQNN](./assets/HQNN_params.png)
 
-To run the HQNN experiments ```python3 implementation.py``` 
+`python3 implementation.py` launches the HQNN experiments and stores outputs under `results/hqnn/`.
 
-### Results
-The results we obtained for the parameter counts are as follows:
+### Summary metrics
+The parameter-count comparison is captured below:
 ![Results parameters](./assets/Results.png)
+
+## Extensions and Next Steps
+
+1. Explore additional dataset complexities (noise schedules, new class counts) to probe HQNN robustness.
+2. Replace the photonic simulator with different quantum backends or hardware access.
+3. Add Bayesian search or pruning heuristics to reduce the number of HQNN/MLP experiments while maintaining coverage.
+
+## Reproducibility Notes
+
+- Random seeds can be fixed via CLI flags (see `implementation.py --help`); each run stores the resolved configuration alongside outputs.
+- Dataset generation relies on deterministic numpy/torch calls; enabling `torch.backends.cudnn.deterministic = True` keeps GPU executions reproducible if GPUs are later used.
+- Export dependency versions via `pip freeze > results/requirements.txt` when publishing artifacts.
+
+## Testing
+
+- Run `pytest tests -q` from the project root to execute smoke tests that validate CLI wiring and architecture enumeration.
+- Ensure dependencies from `requirements.txt` are installed; install `pytest` separately if omitted from your environment.
