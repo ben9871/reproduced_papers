@@ -2,6 +2,14 @@
 
 Here, we reproduce the experiments presented in the following paper [Computational Advantage in Hybrid Quantum Neural Networks: Myth or Reality?](https://arxiv.org/abs/2412.04991)
 
+## Overview
+
+The paper investigates whether hybrid quantum neural networks (HQNNs) can surpass purely classical models when both are trained on increasing-complexity spiral datasets. Our reproduction rebuilds the synthetic 3-class spiral data generator, the hybrid photonic HQNN stack, and the classical multilayer perceptron baseline so we can compare accuracy and parameter efficiency as the number of features ranges from 10 to 110.
+
+- **Reproduced scope:** spiral dataset (12 feature settings), HQNN configurations with variable qubits/modes and depths, 155+ classical MLPs, accuracy and parameter-count metrics logged per setting.
+- **Deviations & assumptions:** extended the classical search space to larger hidden layers (up to 256 neurons) because the original bounds underperformed on >70 features; photonic HQNN search additionally swept 2–24 modes with optional bunching to mirror the photonic simulator available locally.
+- **Hardware / software environment:** runs executed in a Python virtual environment (`hqnn-venv`) using the pinned dependencies in `requirements.txt` (PyTorch 3.12, merlinquantum) on a CPU-only workstation; no GPU acceleration is required for the reported sweeps.
+
 ## Project layout
 
 - `implementation.py`: main file to run the model
