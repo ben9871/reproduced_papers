@@ -63,7 +63,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--config",
         type=str,
-        default=".configs/spiral_default.json",
+        default="./configs/spiral_default.json",
         help="Path to JSON config file",
     )
     parser.add_argument("--seed", type=int, default=None, help="Random seed")
