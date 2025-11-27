@@ -52,7 +52,9 @@ class VQC(nn.Module):
     ):
         super().__init__()
         param_dtype = dtype if dtype is not None else torch.get_default_dtype()
-        self.weights = nn.Parameter(0.01 * torch.randn(depth, n_qubits, dtype=param_dtype))
+        self.weights = nn.Parameter(
+            0.01 * torch.randn(depth, n_qubits, dtype=param_dtype)
+        )
         # shots=None -> analytic expectation; shots>0 -> finite-shot sampling
         _shots = None if (shots is None or int(shots) <= 0) else int(shots)
         self.dev = qml.device(device_name, wires=n_qubits, shots=_shots)

@@ -17,25 +17,11 @@
       "apply": {"kind": "config_path", "path": "experiment.task"}
     },
     {
-      "flags": ["--seed"],
-      "help": "Random seed",
-      "type": "int",
-      "default": null,
-      "apply": {"kind": "config_path", "path": "seed"}
-    },
-    {
       "flags": ["--outdir"],
       "help": "Base output directory",
       "type": "path",
       "default": null,
       "apply": {"kind": "config_path", "path": "outdir"}
-    },
-    {
-      "flags": ["--device"],
-      "help": "Torch device string",
-      "type": "str",
-      "default": null,
-      "apply": {"kind": "config_path", "path": "device"}
     },
     {
       "flags": ["--manifest"],

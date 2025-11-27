@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import datetime as dt
 import json
 import logging
@@ -9,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .cli import apply_cli_overrides, build_cli_parser
-from .config import load_config
+from .config import deep_update, load_config
 from .logging_utils import configure_logging
 from .utils import import_callable
 
@@ -17,6 +18,16 @@ from .utils import import_callable
 def _load_json(path: Path) -> dict[str, Any]:
     with path.open("r", encoding="utf-8") as handle:
         return json.load(handle)
+
+
+_RUNTIME_DIR = Path(__file__).resolve().parent
+_GLOBAL_CLI_SCHEMA = _load_json(_RUNTIME_DIR / "global_cli.json")
+_GLOBAL_DEFAULTS: dict[str, Any] = {
+    "seed": 1337,
+    "dtype": None,
+    "device": "cpu",
+    "logging": {"level": "info"},
+}
 
 
 def _purge_project_modules() -> None:
@@ -55,11 +66,16 @@ def run_from_project(project_dir: Path, argv: list[str] | None = None) -> Path:
 
     meta = load_runtime_meta(project_dir)
     cli_schema = _load_json(project_dir / meta["cli_schema_path"])
+    cli_schema.setdefault("arguments", [])
+    cli_schema["arguments"].extend(
+        copy.deepcopy(_GLOBAL_CLI_SCHEMA.get("arguments", []))
+    )
     parser, arg_defs = build_cli_parser(cli_schema)
     args = parser.parse_args(argv)
 
     defaults_path = project_dir / meta["defaults_path"]
-    cfg = load_config(defaults_path)
+    project_defaults = load_config(defaults_path)
+    cfg = deep_update(copy.deepcopy(_GLOBAL_DEFAULTS), project_defaults)
     cfg = apply_cli_overrides(cfg, args, arg_defs, project_dir, invocation_dir)
 
     seed_callable_path = meta.get("seed_callable")

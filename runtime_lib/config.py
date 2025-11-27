@@ -2,8 +2,9 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Mapping
 from pathlib import Path
-from typing import Any, Mapping
+from typing import Any
 
 
 def load_config(path: Path) -> dict[str, Any]:
@@ -21,7 +22,9 @@ def load_config(path: Path) -> dict[str, Any]:
 
     description = data.get("description")
     if description is None:
-        raise ValueError("Config files must provide a 'description' field for traceability")
+        raise ValueError(
+            "Config files must provide a 'description' field for traceability"
+        )
     logger.info(" JSON Description:%s", description)
     return data
 

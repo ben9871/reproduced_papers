@@ -9,25 +9,11 @@
       "apply": {"kind": "config_file"}
     },
     {
-      "flags": ["--seed"],
-      "help": "Random seed",
-      "type": "int",
-      "default": null,
-      "apply": {"kind": "config_path", "path": "seed"}
-    },
-    {
       "flags": ["--outdir"],
       "help": "Base directory for runtime artifacts",
       "type": "path",
       "default": null,
       "apply": {"kind": "config_path", "path": "outdir"}
-    },
-    {
-      "flags": ["--device"],
-      "help": "Device string (cpu, cuda:0, mps)",
-      "type": "str",
-      "default": null,
-      "apply": {"kind": "config_path", "path": "device"}
     },
     {
       "flags": ["-d", "--datadir"],

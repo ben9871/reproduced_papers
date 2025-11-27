@@ -40,9 +40,7 @@ def build_model(
     dtype: torch.dtype | None = None,
 ):
     if model_type == "lstm":
-        cell = ClassicalLSTMCell(
-            input_size, hidden_size, output_size, dtype=dtype
-        )
+        cell = ClassicalLSTMCell(input_size, hidden_size, output_size, dtype=dtype)
     elif model_type == "qlstm":
         cell = GateBasedQuantumLSTMCell(
             input_size,

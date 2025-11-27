@@ -4,11 +4,12 @@ from dataclasses import dataclass
 
 import torch
 import torch.nn as nn
-from lib.quantum_kernel import build_quantum_kernel
 from sklearn.metrics import accuracy_score, mean_squared_error
 from sklearn.svm import SVC
 from torch.utils.data import DataLoader, TensorDataset
 from tqdm import tqdm
+
+from lib.quantum_kernel import build_quantum_kernel
 
 
 @dataclass

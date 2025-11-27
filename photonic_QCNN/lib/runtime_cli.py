@@ -12,9 +12,13 @@ def _apply_to_runs(cfg: dict[str, Any], key: str, value: int) -> dict[str, Any]:
     return cfg
 
 
-def apply_batch_size(cfg: dict[str, Any], value: Any, _arg_def: dict[str, Any]) -> dict[str, Any]:
+def apply_batch_size(
+    cfg: dict[str, Any], value: Any, _arg_def: dict[str, Any]
+) -> dict[str, Any]:
     return _apply_to_runs(cfg, "batch_size", int(value))
 
 
-def apply_n_runs(cfg: dict[str, Any], value: Any, _arg_def: dict[str, Any]) -> dict[str, Any]:
+def apply_n_runs(
+    cfg: dict[str, Any], value: Any, _arg_def: dict[str, Any]
+) -> dict[str, Any]:
     return _apply_to_runs(cfg, "n_runs", int(value))

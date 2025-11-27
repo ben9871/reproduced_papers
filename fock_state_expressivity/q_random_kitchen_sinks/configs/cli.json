@@ -9,13 +9,6 @@
       "apply": {"kind": "config_file"}
     },
     {
-      "flags": ["--seed"],
-      "help": "Random seed",
-      "type": "int",
-      "default": null,
-      "apply": {"kind": "config_path", "path": "seed"}
-    },
-    {
       "flags": ["--outdir"],
       "help": "Base output directory",
       "type": "path",

@@ -17,9 +17,9 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from lib.data_utils import load_finetuning_data
-from lib.model import QSSL
-from lib.training_utils import linear_evaluation
+from lib.data_utils import load_finetuning_data  # noqa: E402
+from lib.model import QSSL  # noqa: E402
+from lib.training_utils import linear_evaluation  # noqa: E402
 
 # Command-line argument parser for configuring the experiment
 parser = argparse.ArgumentParser(description="PyTorch Quantum self-sup training")

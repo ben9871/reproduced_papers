@@ -11,18 +11,18 @@ from typing import Any
 
 import numpy as np
 import torch
-
 from data.datasets import build_gaussian_grid, prepare_classification_data
+from utils.plotting import (
+    plot_accuracy_bars,
+    plot_dataset_examples,
+    plot_gaussian_fits,
+)
+
 from lib.training import (
     evaluate_classical_rbf,
     evaluate_quantum_classifiers,
     summarize_sampler,
     train_sampler,
-)
-from utils.plotting import (
-    plot_accuracy_bars,
-    plot_dataset_examples,
-    plot_gaussian_fits,
 )
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -49,7 +49,9 @@ def setup_seed(seed: int) -> None:
     torch.manual_seed(seed)
 
 
-def save_checkpoints(best_models: list[dict[str, Any]], dest_dir: Path) -> list[dict[str, Any]]:
+def save_checkpoints(
+    best_models: list[dict[str, Any]], dest_dir: Path
+) -> list[dict[str, Any]]:
     dest_dir.mkdir(parents=True, exist_ok=True)
     manifest: list[dict[str, Any]] = []
     for entry in best_models:
@@ -161,7 +163,9 @@ def run_sampler_task(cfg: dict[str, Any], run_dir: Path, device: torch.device) -
         LOGGER.info("Copied sampler checkpoints to %s", export_path.resolve())
 
 
-def run_classification_task(cfg: dict[str, Any], run_dir: Path, device: torch.device) -> None:
+def run_classification_task(
+    cfg: dict[str, Any], run_dir: Path, device: torch.device
+) -> None:
     classification_cfg = cfg.get("classification", {})
     manifest_path = _resolve_project_path(classification_cfg.get("manifest"))
     if manifest_path is None:
@@ -206,9 +210,7 @@ def run_classification_task(cfg: dict[str, Any], run_dir: Path, device: torch.de
 
     summary = summarize_classification(quantum_results, classical_results)
     (run_dir / "summary.txt").write_text(summary)
-    (run_dir / "quantum_metrics.json").write_text(
-        json.dumps(quantum_results, indent=2)
-    )
+    (run_dir / "quantum_metrics.json").write_text(json.dumps(quantum_results, indent=2))
     (run_dir / "classical_metrics.json").write_text(
         json.dumps(classical_results, indent=2)
     )

@@ -6,11 +6,12 @@ from dataclasses import dataclass
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from lib.classical import count_svm_parameters, get_mlp_deep, get_mlp_wide
-from lib.vqc import count_parameters, get_vqc
 from sklearn.metrics import accuracy_score
 from sklearn.svm import SVC
 from tqdm import tqdm
+
+from lib.classical import count_svm_parameters, get_mlp_deep, get_mlp_wide
+from lib.vqc import count_parameters, get_vqc
 
 try:
     import wandb
