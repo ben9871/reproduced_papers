@@ -12,6 +12,7 @@ import random
 from pathlib import Path
 from typing import Any
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from data.data import SpiralDatasetConfig, load_spiral_dataset
@@ -60,7 +61,7 @@ def configure_logging(level: str = "info", log_file: Path | None = None) -> None
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description="HQNN spiral reproduction experiments")
     parser.add_argument(
-        "--config", type=str, default=None, help="Path to JSON config file"
+        "--config", type=str, default=".configs/spiral_default.json", help="Path to JSON config file"
     )
     parser.add_argument("--seed", type=int, default=None, help="Random seed")
     parser.add_argument(
@@ -87,6 +88,11 @@ def build_arg_parser() -> argparse.ArgumentParser:
         type=float,
         default=None,
         help="Stop searching architectures once this validation accuracy is reached",
+    )
+    parser.add_argument(
+        "--figure",
+        action="store_true",
+        help="Generate a parameter-count figure for threshold-achieving models",
     )
     return parser
 
@@ -159,7 +165,7 @@ def _format_results_filename(pattern: str, batch_size: int, lr: float) -> str:
         return pattern
 
 
-def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
+def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> dict[str, Any]:
     logger = logging.getLogger(__name__)
 
     dataset_cfg = cfg["dataset"]
@@ -179,6 +185,7 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
     results_path = run_dir / results_filename
 
     logger.info("Writing aggregated results to %s", results_path)
+    threshold_hits: list[dict[str, float]] = []
 
     for feature_dim in dataset_cfg["feature_grid"]:
         logger.info("Evaluating architectures for %s features", feature_dim)
@@ -262,6 +269,7 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
                 logger.warning("Skipping result logging due to missing state.")
                 continue
 
+            param_count = count_parameters(last_model)
             results = {
                 "dataset": dataset_cfg.get("name", "spiral"),
                 "lr": lr,
@@ -278,19 +286,67 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
                 "init": model_cfg.get("init"),
                 "BEST q ACC": mean_acc,
                 "BEST q ACC std": std_acc,
-                "q parameters": count_parameters(last_model),
+                "q parameters": param_count,
                 "q curves": last_curves,
             }
 
             save_experiment_results(results, results_path)
 
             if mean_acc >= model_cfg["accuracy_threshold"]:
+                threshold_hits.append(
+                    {
+                        "nb_features": feature_dim,
+                        "param_count": param_count,
+                        "mean_acc": mean_acc,
+                        "std_acc": std_acc,
+                    }
+                )
                 logger.info(
                     "Threshold %.2f reached (mean=%.2f). Moving to next feature size.",
                     model_cfg["accuracy_threshold"],
                     mean_acc,
                 )
                 break
+
+    return {"results_path": results_path, "threshold_hits": threshold_hits}
+
+
+def plot_threshold_params(
+    threshold_hits: list[dict[str, float]], output_path: Path
+) -> Path | None:
+    logger = logging.getLogger(__name__)
+    if not threshold_hits:
+        logger.warning(
+            "No architectures reached the accuracy threshold; skipping figure."
+        )
+        return None
+
+    sorted_hits = sorted(threshold_hits, key=lambda entry: entry["nb_features"])
+    features = [entry["nb_features"] for entry in sorted_hits]
+    params = [entry["param_count"] for entry in sorted_hits]
+    mean_accs = [entry["mean_acc"] for entry in sorted_hits]
+
+    plt.style.use("seaborn-v0_8-darkgrid")
+    fig, ax1 = plt.subplots(figsize=(7, 4))
+    ax1.plot(features, params, marker="o", color="#1f77b4", label = "Parameter count")
+    ax1.set_xlabel("Number of features")
+    ax1.set_ylabel("Parameter count")
+    ax1.set_title("Parameter count vs. feature size (threshold-achieving HQNNs)")
+    
+    ax2 = ax1.twinx()
+    ax2.plot(features, mean_accs, marker="s", linestyle="--", color="#ff7f0e", label = "Mean accuracy")
+    ax2.set_ylabel("Mean validation accuracy (%)")
+
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, loc="best")
+
+    fig.tight_layout()
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    fig.savefig(output_path, dpi=200)
+    plt.close(fig)
+    logger.info("Saved threshold parameter figure to %s", output_path)
+    return output_path
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -314,7 +370,10 @@ def main(argv: list[str] | None = None) -> int:
     configure_logging(cfg.get("logging", {}).get("level", "info"), run_dir / "run.log")
     (run_dir / "config_snapshot.json").write_text(json.dumps(cfg, indent=2))
 
-    train_and_evaluate(cfg, run_dir)
+    summary = train_and_evaluate(cfg, run_dir)
+    if getattr(args, "figure", False):
+        figure_path = run_dir / "threshold_params.png"
+        plot_threshold_params(summary["threshold_hits"], figure_path)
     return 0
 
 
