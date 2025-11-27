@@ -1,6 +1,7 @@
 {
   "description": "Default QLSTM reproduction config (sine generator).",
   "seed": 0,
+  "dtype": "float64",
   "device": "cpu",
   "outdir": "outdir",
   "logging": { "level": "info" },
@@ -15,7 +16,7 @@
     "snapshot_epochs": [1, 15, 30, 100]
   },
   "model": {
-    "type": "qlstm",
+    "type": "qlstm_photonic",
     "hidden_size": 5,
     "vqc_depth": 2,
     "use_preencoders": false,

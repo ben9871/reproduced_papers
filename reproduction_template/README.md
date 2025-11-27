@@ -80,6 +80,7 @@ Place configuration files in `configs/`.
 - `runtime.json` points the generic runner to `cli.json`, `defaults.json`, and the callable that implements the actual training loop (`lib/runner.py::train_and_evaluate` by default).
 - `example.json` shows the structure for a specific experiment.
 - Keys typically include: dataset, model, training, evaluation, logging.
+- Precision control: add a top-level `"dtype"` entry (mirrors `"seed"`) to force the entire pipeline (datasets + models) to run in a specific torch dtype; individual models may still expose a `model.dtype` override if required.
 
 ## Results and Analysis
 
@@ -96,6 +97,7 @@ Place configuration files in `configs/`.
 ## Reproducibility Notes
 
 - Random seed control
+- Precision/number format control via `dtype` (global or per-model) so experiments can target `float32`, `float64`, `bfloat16`, etc.
 - Determinism settings (if applicable)
 - Exact versions of libraries (consider `pip freeze > results/requirements.txt`)
 

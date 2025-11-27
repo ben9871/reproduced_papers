@@ -14,6 +14,39 @@ from lib.model import build_model
 from lib.rendering import save_losses_plot, save_pickle, save_simulation_plot
 
 
+DTYPE_ALIASES: dict[str, torch.dtype] = {
+    "float16": torch.float16,
+    "half": torch.float16,
+    "bfloat16": torch.bfloat16,
+    "bf16": torch.bfloat16,
+    "float32": torch.float32,
+    "float": torch.float32,
+    "single": torch.float32,
+    "float64": torch.float64,
+    "double": torch.float64,
+}
+
+
+def _resolve_model_dtype(requested, model_type: str) -> torch.dtype:
+    """Map config value to a torch dtype with sensible defaults per model type."""
+
+    default = torch.float64 if "photonic" in model_type else torch.float32
+    if requested is None:
+        return default
+    if isinstance(requested, torch.dtype):
+        return requested
+    if isinstance(requested, str):
+        key = requested.strip().lower()
+        if key in DTYPE_ALIASES:
+            return DTYPE_ALIASES[key]
+        if key == "auto":
+            return default
+    raise ValueError(
+        f"Unsupported dtype '{requested}' for model_type '{model_type}'. "
+        f"Allowed values: {sorted(DTYPE_ALIASES)} plus 'auto'."
+    )
+
+
 def setup_seed(seed: int) -> None:
     random.seed(seed)
     np.random.seed(seed)
@@ -30,6 +63,10 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
     exp = cfg["experiment"]
     model_cfg = cfg["model"]
     train_cfg = cfg["training"]
+    global_dtype = cfg.get("dtype")
+    model_dtype = _resolve_model_dtype(
+        model_cfg.get("dtype", global_dtype), model_cfg["type"]
+    )
 
     if exp["generator"] == "csv" and exp.get("csv_path"):
         gen = data_factory.get("csv", path=exp["csv_path"])  # type: ignore[arg-type]
@@ -50,30 +87,37 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
     )
 
     x, y = gen.get_data(exp["seq_length"])  # type: ignore[call-arg]
+    x = x.to(dtype=model_dtype)
+    y = y.to(dtype=model_dtype)
     n_train = int(exp["train_split"] * len(x))
     log.info(
         "Dataset samples=%d (train=%d, test=%d)", len(x), n_train, len(x) - n_train
     )
+    dtype_source = (
+        "model.dtype"
+        if "dtype" in model_cfg
+        else "cfg.dtype"
+        if global_dtype is not None
+        else "auto"
+    )
+    log.info("Using model dtype %s (source=%s)", model_dtype, dtype_source)
     x_train, y_train = x[:n_train], y[:n_train]
     x_test, y_test = x[n_train:], y[n_train:]
     x_train_in = x_train.unsqueeze(2)
     x_test_in = x_test.unsqueeze(2)
 
     device = torch.device(cfg["device"])
-    model = (
-        build_model(
-            model_cfg["type"],
-            1,
-            model_cfg["hidden_size"],
-            model_cfg["vqc_depth"],
-            1,
-            use_preencoders=bool(model_cfg.get("use_preencoders", False)),
-            shots=int(model_cfg.get("shots", 0)),
-            use_photonic_head=bool(model_cfg.get("use_photonic_head", False)),
-        )
-        .to(device)
-        .double()
-    )
+    model = build_model(
+        model_cfg["type"],
+        1,
+        model_cfg["hidden_size"],
+        model_cfg["vqc_depth"],
+        1,
+        use_preencoders=bool(model_cfg.get("use_preencoders", False)),
+        shots=int(model_cfg.get("shots", 0)),
+        use_photonic_head=bool(model_cfg.get("use_photonic_head", False)),
+        dtype=model_dtype,
+    ).to(device=device, dtype=model_dtype)
     opt = torch.optim.RMSprop(model.parameters(), lr=train_cfg["lr"])
     mse = nn.MSELoss()
 

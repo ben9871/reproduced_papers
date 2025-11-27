@@ -37,9 +37,12 @@ def build_model(
     device_name: str = "default.qubit",  # gate-based QLSTM only
     use_preencoders: bool = False,  # gate-based QLSTM only
     use_photonic_head: bool = False,  # photonic QLSTM only
+    dtype: torch.dtype | None = None,
 ):
     if model_type == "lstm":
-        cell = ClassicalLSTMCell(input_size, hidden_size, output_size)
+        cell = ClassicalLSTMCell(
+            input_size, hidden_size, output_size, dtype=dtype
+        )
     elif model_type == "qlstm":
         cell = GateBasedQuantumLSTMCell(
             input_size,
@@ -49,6 +52,7 @@ def build_model(
             device_name,
             use_preencoders=use_preencoders,
             shots=shots,
+            dtype=dtype,
         )
     elif model_type == "qlstm_photonic":
         # Provide sensible defaults; vqc_depth is unused here
@@ -58,6 +62,7 @@ def build_model(
             output_size,
             shots=shots,
             use_photonic_head=use_photonic_head,
+            dtype=dtype,
         )
     else:
         raise ValueError(f"Unknown model_type {model_type}")

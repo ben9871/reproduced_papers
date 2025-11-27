@@ -26,6 +26,12 @@ Each paper reproduction is designed to be accessible, well-documented, and easy 
 
 All logs, checkpoints, and figures land in `<NAME>/outdir/run_YYYYMMDD-HHMMSS/` unless the configs specify a different base path.
 
+### Precision control (`dtype`)
+
+- Every reproduction accepts an optional top-level `"dtype"` entry in its configs, just like `"seed"`. When present, the shared runner casts input tensors and initializes models in that dtype.
+- Individual models can still override via `model.dtype`; if omitted, each reproduction picks a sensible default (e.g., `float64` for photonic MerLin layers).
+- Use this to downgrade to `float32` for speed, experiment with `bfloat16`, or enforce `float64` reproducibility across classical/quantum variants.
+
 ## How to contribute a reproduced paper
 
 We encourage contributions of new quantum ML paper reproductions. Please follow the guidelines below:

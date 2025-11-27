@@ -266,6 +266,7 @@ python -m utils.compare_losses \
 ## Reproducibility Notes
 
 - Seed control via `--seed` and per-run config snapshot.
+- Global dtype via the top-level `"dtype"` config key (per-model overrides still supported). This dtype is applied to the dataset tensors and every cell implementation.
 - Default dtype: `torch.double` (float64) for PennyLane compatibility. If using float32, verify device support.
 - Optionally freeze exact versions (`pip freeze > outdir/run_.../requirements.txt`).
 
