@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import pytest
-
 import common  # noqa: F401  (ensures project paths are on sys.path)
-from runtime_lib.cli import apply_cli_overrides
-
+import pytest
 from common import build_project_parser, load_defaults_copy, project_root
+
+from runtime_lib.cli import apply_cli_overrides
 
 
 def test_cli_help_exits_cleanly():

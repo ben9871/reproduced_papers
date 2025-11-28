@@ -1,8 +1,7 @@
 from __future__ import annotations
 
-import pytest
-
 import common  # noqa: F401  (ensures project paths are on sys.path)
+import pytest
 from models.hqnn import enumerate_architectures
 
 

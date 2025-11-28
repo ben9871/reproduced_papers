@@ -8,10 +8,9 @@ from typing import Any
 import matplotlib.pyplot as plt
 import numpy as np
 import torch
-from torch.utils.data import DataLoader, TensorDataset
-
 from data.data import SpiralDatasetConfig, load_spiral_dataset
 from models.hqnn import ArchitectureSpec, build_hqnn_model, enumerate_architectures
+from torch.utils.data import DataLoader, TensorDataset
 from utils.io import save_experiment_results
 from utils.training import count_parameters, train_model
 
