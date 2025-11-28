@@ -18,8 +18,8 @@ The paper investigates whether hybrid quantum neural networks (HQNNs) can surpas
 
 ## Project Layout
 
-- `implementation.py`: main file to run the model
-- `configs/`: JSON configuration files (default spiral sweep provided)
+- Repository root `implementation.py`: shared CLI that dispatches to every paper folder via `--project`
+- `configs/`: JSON configuration files (`defaults.json`, `cli.json`, `runtime.json`)
 - `models/`: HQNN and classical baseline model definitions
 - `utils/`: shared helpers for data loading, training, and result persistence
 - `tests/`: lightweight sanity tests for the CLI and architecture enumeration
@@ -35,19 +35,20 @@ The paper investigates whether hybrid quantum neural networks (HQNNs) can surpas
 
 ### Command-line interface
 
-- HQNN sweep: `python3 implementation.py --config configs/spiral_default.json` creates a timestamped run folder under `results/` with logs and metrics. Override config values with CLI flags such as `--feature-grid 10,20` or `--accuracy-threshold 92`.
+- List available reproductions: `python implementation.py --list-projects`
+- HQNN sweep: `python implementation.py --project HQNN_MythOrReality` creates a timestamped run folder under `results/` with logs, metrics, and config snapshots. Override config values with flags such as `--feature-grid 10,20`, `--accuracy-threshold 92`, `--lr 0.02`, or `--figure` (parameter-count plot generation). Combine with global switches like `--seed` or `--device mps` as needed.
 - Classical baseline: `python3 scripts/run_classical_baseline.py --features 10,20,30` sweeps MLP configurations and appends results to `results/classical_baseline.json`. Adjust `--lr`, `--batch-size`, or `--threshold` as needed.
-- Both runners expose additional options (see `--help`) for seed control, training schedule, and output directories.
+- Every run persists its merged configuration to `<outdir>/run_<timestamp>/config_snapshot.json` for traceability.
 
 ### Output directory and generated files
 
-- HQNN runs write `results/hqnn/<timestamp>/` directories containing resolved configs, log files, and per-feature accuracy summaries.
+- HQNN runs write `results/run_<timestamp>/` directories containing resolved configs, log files, optional figures, and per-feature accuracy summaries.
 - The classical sweep accumulates results in `results/classical_baseline.json` so repeated commands append without overwriting earlier experiments.
 
 ## Configuration
 
-- JSON files under `configs/` encode feature grids, training regimes, and HQNN search bounds; `configs/spiral_default.json` mirrors the paper’s setup.
-- CLI overrides (`--lr`, `--feature-grid`, `--accuracy-threshold`, etc.) merge with the JSON to produce a resolved config saved alongside every run.
+- JSON files under `configs/` encode feature grids, training regimes, and HQNN search bounds; `configs/defaults.json` mirrors the paper’s setup, `configs/cli.json` defines exposed overrides, and `configs/runtime.json` wires the project into the shared runner.
+- CLI overrides (`--lr`, `--feature-grid`, `--accuracy-threshold`, etc.) merge with the JSON defaults via the runtime layer and are recorded with each run.
 
 ## Dataset
 
@@ -74,7 +75,7 @@ The original paper describes: _"During the hybrid model search only the quantum 
 For the photonic implementation, we search 2–24 modes with 1 photon up to modes/2 photons, testing both Fock and unbunched configurations. The search space looks as follows:
 ![Search space for the HQNN](./assets/HQNN_params.png)
 
-`python3 implementation.py` launches the HQNN experiments and stores outputs under `results/hqnn/`.
+`python implementation.py --project HQNN_MythOrReality` launches the HQNN experiments and stores outputs under `results/run_<timestamp>/`.
 
 ### Summary metrics
 The parameter-count comparison is captured below:

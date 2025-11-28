@@ -1,16 +1,18 @@
 {
+  "description": "Full scan of features for HQNN spiral experiments",
   "seed": 42,
   "device": "cpu",
+  "outdir": "results",
+  "logging": {
+    "level": "info"
+  },
   "dataset": {
+    "name": "spiral",
     "num_instances": 1875,
     "num_classes": 3,
     "feature_grid": [5, 10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110],
     "test_size": 0.2,
     "batch_size": 64
-  },
-  "training": {
-    "epochs": 25,
-    "lr": 0.05
   },
   "model": {
     "accuracy_threshold": 90.0,
@@ -19,7 +21,13 @@
     "embedding": "learned",
     "init": "none"
   },
+  "training": {
+    "epochs": 25,
+    "lr": 0.05
+  },
   "results": {
-    "filename": "HQNN_MM_bs{batch_size}_lr{lr}.json"
+    "filename": "HQNN_MM_bs{batch_size}_lr{lr}.json",
+    "make_threshold_figure": true,
+    "threshold_figure_name": "threshold_params.png"
   }
 }
