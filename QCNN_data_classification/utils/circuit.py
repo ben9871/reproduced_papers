@@ -7,6 +7,7 @@ from enum import Enum
 import numpy as np
 import perceval as pcvl
 import merlin as ML
+import torch.nn as nn
 
 
 class StatePattern(Enum):
@@ -153,7 +154,7 @@ def build_single_gi_layer(
     input_prefixes = ["px"]
 
     return ML.QuantumLayer(
-        input_size=n_modes,
+        input_size=n_features,
         output_size=2,
         circuit=circ,
         trainable_parameters=trainable_prefixes,
@@ -167,13 +168,13 @@ def build_single_gi_layer(
 def build_quantum_kernel_layer(
     kernel_modes: int,
     kernel_features: int,
-    kernel_size: int,
-    shots: int,
     n_photons: int,
     state_pattern: str,
     reservoir_mode: bool,
 ) -> ML.QuantumLayer:
     circuit = create_quantum_circuit(kernel_modes, kernel_features)
+    print(f"\n ----- Created a quantum kernel circuit with {kernel_modes} modes and {kernel_features} features -----\n")
+    #pcvl.pdisplay(circuit)
     pattern = StatePattern[state_pattern.upper()]
     photon_state = StateGenerator.generate_state(
         kernel_modes,
@@ -182,14 +183,13 @@ def build_quantum_kernel_layer(
     )
     trainable_prefixes = [] if reservoir_mode else ["theta"]
     input_prefixes = ["px"]
-
-    return ML.QuantumLayer(
-        input_size=kernel_modes,
-        output_size=2,
+    q_layer = ML.QuantumLayer(
+        input_size=kernel_features,
         circuit=circuit,
         trainable_parameters=trainable_prefixes,
         input_parameters=input_prefixes,
         input_state=photon_state,
-        output_mapping_strategy=ML.OutputMappingStrategy.GROUPING,
-        shots=shots,
+        measurement_strategy=ML.MeasurementStrategy.PROBABILITIES,
     )
+    complete = nn.Sequential(q_layer, ML.LexGrouping(input_size = q_layer.output_size, output_size=2))
+    return complete

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import math
 from typing import List
 
 import torch
@@ -59,9 +58,6 @@ class QuantumPatchKernel(nn.Module):
     def __init__(self, q_layer: nn.Module, patch_dim: int) -> None:
         super().__init__()
         self.q_layer = q_layer
-        self.output_size = getattr(q_layer, "output_size", None)
-        if self.output_size is None:
-            raise ValueError("QuantumLayer must expose an output_size attribute.")
         self.patch_dim = patch_dim
 
     def forward(self, patch: torch.Tensor) -> torch.Tensor:
@@ -106,22 +102,21 @@ class QConvModel(nn.Module):
             if kernel_modules is None or len(kernel_modules) != n_kernels:
                 raise ValueError("kernel_modules must contain one module per kernel.")
             self.kernel_modules = nn.ModuleList(kernel_modules)
-            sample_output = getattr(self.kernel_modules[0], "output_size", None)
-            if sample_output is None:
-                raise ValueError("Quantum kernels must expose an output_size attribute.")
-            self.kernel_output_dim = sample_output
+            self.kernel_output_dim = 2  # Each quantum kernel outputs 2 features.
             self.register_parameter("weight", None)
             self.register_parameter("bias", None)
+            self.classical_conv = None
         else:
-            # Classical fallback: learn dense kernels and optional bias per filter.
-            weight = torch.empty(n_kernels, kernel_size)
-            nn.init.kaiming_uniform_(weight, a=math.sqrt(5))
-            self.weight = nn.Parameter(weight)
-            if bias:
-                bound = 1 / kernel_size**0.5
-                self.bias = nn.Parameter(torch.empty(n_kernels).uniform_(-bound, bound))
-            else:
-                self.register_parameter("bias", None)
+            # Classical fallback: delegate to Conv1d for efficiency and correctness.
+            self.classical_conv = nn.Conv1d(
+                in_channels=1,
+                out_channels=n_kernels,
+                kernel_size=kernel_size,
+                stride=stride,
+                bias=bias,
+            )
+            self.register_parameter("weight", None)
+            self.register_parameter("bias", None)
             self.kernel_modules = None
             self.kernel_output_dim = 1
 
@@ -140,12 +135,10 @@ class QConvModel(nn.Module):
         num_windows = self._compute_num_windows(input_len)
         return num_windows * self.n_kernels * self.kernel_output_dim
 
-    def _apply_classical(self, patches: torch.Tensor) -> torch.Tensor:
-        # Project each patch with the learned weights then concatenate feature maps.
-        out = torch.einsum("bpk,nk->bpn", patches, self.weight)
-        if self.bias is not None:
-            out = out + self.bias.view(1, 1, -1)
-        out = out.permute(0, 2, 1).contiguous()
+    def _apply_classical(self, x: torch.Tensor) -> torch.Tensor:
+        # Apply a learnable 1D convolution to match the quantum receptive field.
+        conv_in = x.unsqueeze(1)  # (batch, channels=1, features)
+        out = self.classical_conv(conv_in)
         return out.view(out.size(0), -1)
 
     def _apply_quantum(self, patches: torch.Tensor, num_windows: int, batch_size: int) -> torch.Tensor:
@@ -169,16 +162,11 @@ class QConvModel(nn.Module):
                 "QConvModel expects inputs of shape (batch, features) or a single feature vector."
             )
 
-        # `unfold` creates [batch, num_windows, kernel_size] sliding patches.
-        patches = x.unfold(dimension=-1, size=self.kernel_size, step=self.stride)
-        num_windows = patches.size(1)
-        if num_windows == 0:
-            raise ValueError(
-                "Unfold produced zero windows. Check kernel_size and stride values."
-            )
+        num_windows = self._compute_num_windows(x.size(-1))
 
         if self.use_quantum:
+            patches = x.unfold(dimension=-1, size=self.kernel_size, step=self.stride)
             features = self._apply_quantum(patches, num_windows, x.size(0))
         else:
-            features = self._apply_classical(patches)
+            features = self._apply_classical(x)
         return self.head(features)

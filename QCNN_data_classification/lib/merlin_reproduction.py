@@ -483,20 +483,18 @@ def main():
     # Adapter from 8 → K
     ap.add_argument("--adapter", choices=["auto","slice","zero_pad","repeat","linear"], default="auto",
                     help="auto: slice if K≤8 else zero-pad; linear adds a learnable 8→K map")
-    ap.add_argument("--qconv_kernels", type=int, default=4,
+    ap.add_argument("--nb_kernels", type=int, default=4,
                     help="number of kernels for the pseudo-convolution")
-    ap.add_argument("--qconv_kernel_size", type=int, default=2,
+    ap.add_argument("--kernel_size", type=int, default=2,
                     help="kernel size for the pseudo-convolution")
-    ap.add_argument("--qconv_stride", type=int, default=1,
+    ap.add_argument("--stride", type=int, default=1,
                     help="stride for the pseudo-convolution")
-    ap.add_argument("--qconv_classical", action="store_true",
+    ap.add_argument("--conv_classical", action="store_true",
                     help="use classical learnable kernels instead of QuantumLayer kernels")
     ap.add_argument("--compare_classical", action="store_true",
                     help="run both quantum and classical qconv variants with matching kernel counts")
-    ap.add_argument("--qconv_kernel_modes", type=int, default=8,
-                    help="number of optical modes per quantum kernel (default: qconv_kernel_size)")
-    ap.add_argument("--qconv_kernel_features", type=int, default=2,
-                    help="feature depth (stages) for quantum kernels")
+    ap.add_argument("--kernel_modes", type=int, default=8,
+                    help="number of optical modes per quantum kernel (default: kernel_size)")
 
     args = ap.parse_args()
 
@@ -508,44 +506,42 @@ def main():
 
     conv_output_dim = None
     conv_mode_str = "disabled"
-    if args.compare_classical and args.qconv_classical:
-        raise ValueError("compare_classical cannot be combined with qconv_classical.")
+    if args.compare_classical and args.conv_classical:
+        raise ValueError("compare_classical cannot be combined with conv_classical.")
 
     if args.model == "qconv":
-        if args.qconv_kernel_size > args.pca_dim:
-            raise ValueError("qconv kernel_size cannot exceed the PCA dimension.")
-        if args.qconv_stride <= 0:
-            raise ValueError("qconv stride must be a positive integer.")
-        num_windows = 1 + (args.pca_dim - args.qconv_kernel_size) // args.qconv_stride
+        if args.kernel_size > args.pca_dim:
+            raise ValueError("kernel_size cannot exceed the PCA dimension.")
+        if args.stride <= 0:
+            raise ValueError("stride must be a positive integer.")
+        num_windows = 1 + (args.pca_dim - args.kernel_size) // args.stride
         if num_windows <= 0:
             raise ValueError("qconv configuration results in zero sliding windows.")
         base_conv_params = {
-            "n_kernels": args.qconv_kernels,
-            "kernel_size": args.qconv_kernel_size,
-            "stride": args.qconv_stride,
+            "n_kernels": args.nb_kernels,
+            "kernel_size": args.kernel_size,
+            "stride": args.stride,
         }
         classical_conv_params = {**base_conv_params, "bias": True}
-        classical_output_dim = num_windows * args.qconv_kernels
+        classical_output_dim = num_windows * args.nb_kernels
         quantum_conv_params = None
         quantum_output_dim = None
         conv_mode_logs = []
 
-        use_quantum = not args.qconv_classical or args.compare_classical
+        use_quantum = not args.conv_classical or args.compare_classical
         if use_quantum:
-            kernel_modes = args.qconv_kernel_modes or args.qconv_kernel_size
+            kernel_modes = args.kernel_modes or args.kernel_size
             if kernel_modes <= 0:
-                raise ValueError("qconv_kernel_modes must be a positive integer.")
-            if args.qconv_kernel_features <= 0:
-                raise ValueError("qconv_kernel_features must be a positive integer.")
-            kernel_required_inputs = required_input_params(kernel_modes, args.qconv_kernel_features)
-            print(f"Building quantum kernels on {kernel_modes} modes with {args.qconv_kernel_features} features | "
-                  f"{args.qconv_kernels} kernels, stride={args.qconv_stride}")
+                raise ValueError("kernel_modes must be a positive integer.")
+            kernel_required_inputs = required_input_params(kernel_modes, args.kernel_size)
+            print(f"Building quantum kernels on {kernel_modes} modes with {args.kernel_size} features | "
+                  f"{args.nb_kernels} kernels, stride={args.stride}")
 
             def _make_kernel() -> QuantumPatchKernel:
                 q_layer = ML.QuantumLayer(
                     input_size=kernel_modes,
                     output_size=2,
-                    circuit=create_quantum_circuit(kernel_modes, args.qconv_kernel_features),
+                    circuit=create_quantum_circuit(kernel_modes, args.kernel_size),
                     trainable_parameters=["theta"],
                     input_parameters=["px"],
                     input_state=([1, 0] * (kernel_modes // 2) + [0]) if kernel_modes % 2 == 1 else [1, 0] * (kernel_modes // 2),
@@ -554,7 +550,7 @@ def main():
                 return QuantumPatchKernel(
                     q_layer,
                     required_inputs=kernel_required_inputs,
-                    patch_dim=args.qconv_kernel_size,
+                    patch_dim=args.kernel_size,
                 )
 
             sample_kernel = _make_kernel()
@@ -562,18 +558,18 @@ def main():
             del sample_kernel
 
             def _factory():
-                return [_make_kernel() for _ in range(args.qconv_kernels)]
+                return [_make_kernel() for _ in range(args.nb_kernels)]
 
             quantum_conv_params = {
                 **base_conv_params,
                 "bias": False,
                 "kernel_modules_factory": _factory,
             }
-            quantum_output_dim = num_windows * args.qconv_kernels * sample_out_dim
-            conv_mode_logs.append(f"quantum: {args.qconv_kernels} kernels → {quantum_output_dim} dims (out={sample_out_dim})")
+            quantum_output_dim = num_windows * args.nb_kernels * sample_out_dim
+            conv_mode_logs.append(f"quantum: {args.nb_kernels} kernels → {quantum_output_dim} dims (out={sample_out_dim})")
 
-        if args.qconv_classical or args.compare_classical or not use_quantum:
-            conv_mode_logs.append(f"classical: {args.qconv_kernels} kernels → {classical_output_dim} dims")
+        if args.conv_classical or args.compare_classical or not use_quantum:
+            conv_mode_logs.append(f"classical: {args.nb_kernels} kernels → {classical_output_dim} dims")
 
     # Load PCA-8 (or user-override)
     (Ztr, ytr), (Zte, yte) = make_pca(args.pca_dim)
@@ -612,7 +608,7 @@ def main():
                 return QConvModel(input_dim=input_dim, **params)
             model_variants.append(("qconv_quantum", build_quantum))
 
-        if args.qconv_classical or args.compare_classical or not use_quantum:
+        if args.conv_classical or args.compare_classical or not use_quantum:
             def build_classical() -> nn.Module:
                 return QConvModel(input_dim=input_dim, **classical_conv_params)
             label = "qconv_classical" if (args.compare_classical or use_quantum) else "qconv_classical_only"

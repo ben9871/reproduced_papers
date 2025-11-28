@@ -49,8 +49,8 @@ python implementation.py \
   --seeds 3 \
   --n_modes 8 \
   --n_features 8 \
-  --qconv_kernels 4 \
-  --qconv_kernel_size 2 \
+  --nb_kernels 4 \
+  --kernel_size 2 \
   --compare_classical
 ```
 
@@ -59,16 +59,36 @@ Key options (see `implementation.py` or modules under `model/`, `utils/`, and `d
 - `--model`: `qconv` (default) or `single` for the baseline single-layer GI.
 - `--compare_classical`: evaluate quantum and classical pseudo-convolutions
   back-to-back using the very same kernel count and stride.
-- `--qconv_kernels`: number of trainable quantum convolution kernels (i.e.
+- `--nb_kernels`: number of trainable quantum convolution kernels (i.e.
   parallel photonic filters applied across the input patch grid).
-- `--qconv_kernel_modes`: number of optical modes allocated per quantum kernel;
+- `--kernel_modes`: number of optical modes allocated per quantum kernel;
   it sets the circuit width for each filter and affects both parameter count and
   expressive power.
-- `--qconv_kernel_size`, `--qconv_kernel_features`: must match so that every
-  quantum kernel receives exactly the features it expects.
+- `--kernel_size`: sliding patch width (and feature count) consumed by each
+  kernel. This value is shared between the classical and quantum variants.
+- `--conv_classical`: skip the quantum kernels entirely and train the classical
+  pseudo-convolution only.
 - `--n_modes`, `--n_features`: define the circuit depth/width. They must produce
   a required input size equal to the PCA dimension (or, for qconv, the kernel
-  feature count).
+  size).
+
+### Model-specific parameter cheatsheet
+
+**Single GI (`--model single`)**
+- `--n_modes` / `--n_features`: configure the Gaussian interferometer width and depth; they must match the PCA dimension exactly.
+- `--n_photons`, `--reservoir_mode`, `--state_pattern`: photonic hardware settings replicated from the original QCNN work.
+- `--angle_scale`: rescales normalized inputs before they hit the circuit, matching the paper’s experimentation knobs.
+
+**Quantum convolution (`--model qconv` with quantum kernels enabled)**
+- `--nb_kernels`: number of parallel photonic kernels that slide across the PCA vector.
+- `--kernel_size`: number of PCA features per patch (and per optical kernel input).
+- `--stride`: displacement between consecutive patches; mirrors 1D convolution stride.
+- `--kernel_modes`: optical modes allocated per kernel; defaults to `kernel_size` but can be larger for deeper photonic circuits.
+- `--compare_classical`: evaluates the quantum kernels alongside their classical counterparts for apples-to-apples reporting.
+
+**Classical qconv variant (`--conv_classical` or implicit when comparing)**
+- Shares `--nb_kernels`, `--kernel_size`, and `--stride` with the quantum version so both models consume identical patches.
+- Each kernel is a learnable dense weight vector with optional bias; enable via `--conv_classical` to train only the classical branch or combine with `--compare_classical` to log both.
 
 You can also load hyperparameters from JSON and forward them to the CLI, e.g.:
 
@@ -85,15 +105,14 @@ The default `qconv` model emulates a 1D convolution by sliding PCA-compressed
 patches across the input vector. Each kernel can be either:
 
 - **Quantum** — a photonic Gaussian interferometer (`QuantumLayer`) that acts on
-  `qconv_kernel_modes` optical modes and consumes `qconv_kernel_size` features
-  per patch. The outputs of all kernels are concatenated and fed to a linear
-  classifier.
-- **Classical** — a learnable weight vector of size `qconv_kernel_size`, mirroring
+  `kernel_modes` optical modes and consumes `kernel_size` features per patch.
+  The outputs of all kernels are concatenated and fed to a linear classifier.
+- **Classical** — a learnable weight vector of size `kernel_size`, mirroring
   the quantum receptive field so side-by-side comparisons remain fair.
 
 The stride defaults to 1, so the model evaluates every overlapping patch. The
-effective receptive field matches the PCA dimension when `qconv_kernel_size ==
-qconv_kernel_features`, which is required for the quantum kernels.
+quantum kernels always expect `kernel_size` features, so the PCA dimension must
+be large enough to supply that many inputs per patch.
 
 To run the QConv model end-to-end:
 
@@ -106,9 +125,9 @@ To run the QConv model end-to-end:
    python implementation.py \
      --dataset fashionmnist \
      --pca_dim 8 \
-     --qconv_kernels 3 \
-     --qconv_kernel_modes 16 \
-     --qconv_kernel_size 2 \
+     --nb_kernels 3 \
+     --kernel_modes 16 \
+     --kernel_size 2 \
      --steps 200 \
      --seeds 3
    ```
@@ -116,7 +135,7 @@ To run the QConv model end-to-end:
    This saves summaries under `results-fashionmnist/`.
 
 4. **(Optional) Compare against the classical analogue** by adding
-   `--compare_classical`, or force a classical-only run with `--qconv_classical`.
+   `--compare_classical`, or force a classical-only run with `--conv_classical`.
 
 5. **Inspect outputs**: every run logs its configuration in
    `results-<dataset>/run_<timestamp>/`. `run_summary.json` collects per-seed
@@ -155,10 +174,10 @@ findings:
   outcomes spanning `0.668` to `0.967`, highlighting sensitivity to
   initialisation at low kernel counts.
 
-Per-configuration metrics grouped by `qconv_kernels` and `qconv_kernel_modes`
+Per-configuration metrics grouped by `nb_kernels` and `kernel_modes`
 (PCA = 8, one run per combination):
 
-| qconv_kernels | qconv_kernel_modes | runs | seeds | mean_mean_acc | avg_seed_std | min_seed_acc | max_seed_acc |
+| nb_kernels | kernel_modes | runs | seeds | mean_mean_acc | avg_seed_std | min_seed_acc | max_seed_acc |
 |---------------|--------------------|------|-------|---------------|--------------|--------------|--------------|
 | 1             | 8                  | 1    | 3     | 0.957         | 0.014        | 0.948        | 0.974        |
 | 1             | 16                 | 1    | 3     | 0.963         | 0.025        | 0.936        | 0.987        |
@@ -179,7 +198,7 @@ Per-configuration metrics grouped by `qconv_kernels` and `qconv_kernel_modes`
   rapidly stabilises training, with the four-kernel circuit nearing perfect
   accuracy.
 
-| qconv_kernels | qconv_kernel_modes | runs | seeds | mean_mean_acc | avg_seed_std | min_seed_acc | max_seed_acc |
+| nb_kernels | kernel_modes | runs | seeds | mean_mean_acc | avg_seed_std | min_seed_acc | max_seed_acc |
 |---------------|--------------------|------|-------|---------------|--------------|--------------|--------------|
 | 1             | 16                 | 1    | 3     | 0.771         | 0.153        | 0.650        | 0.943        |
 | 1             | 18                 | 1    | 3     | 0.926         | 0.048        | 0.887        | 0.979        |
@@ -196,10 +215,10 @@ Per-configuration metrics grouped by `qconv_kernels` and `qconv_kernel_modes`
   (`run_20251105-171858`, one kernel) drops to `0.842` after a seed stalls at
   `0.645`.
 
-Per-configuration metrics grouped by `qconv_kernels` and `qconv_kernel_modes`
+Per-configuration metrics grouped by `nb_kernels` and `kernel_modes`
 (PCA = 8, one run per combination):
 
-| qconv_kernels | qconv_kernel_modes | runs | seeds | mean_mean_acc | avg_seed_std | min_seed_acc | max_seed_acc |
+| nb_kernels | kernel_modes | runs | seeds | mean_mean_acc | avg_seed_std | min_seed_acc | max_seed_acc |
 |---------------|--------------------|------|-------|---------------|--------------|--------------|--------------|
 | 1             | 8                  | 1    | 3     | 0.938         | 0.009        | 0.930        | 0.948        |
 | 1             | 16                 | 1    | 3     | 0.919         | 0.042        | 0.872        | 0.955        |
@@ -220,7 +239,7 @@ capacity-driven trend. One-kernel circuits (`run_20251106-180951`) are unstable
 with wide variance (`0.708`–`0.903` seed range), whereas four kernels with 16
 optical modes (`run_20251106-202421`) reach `0.954` mean accuracy.
 
-| qconv_kernels | qconv_kernel_modes | runs | seeds | mean_mean_acc | avg_seed_std | min_seed_acc | max_seed_acc |
+| nb_kernels | kernel_modes | runs | seeds | mean_mean_acc | avg_seed_std | min_seed_acc | max_seed_acc |
 |---------------|--------------------|------|-------|---------------|--------------|--------------|--------------|
 | 1             | 16                 | 1    | 3     | 0.836         | 0.110        | 0.709        | 0.903        |
 | 1             | 18                 | 1    | 3     | 0.922         | 0.022        | 0.898        | 0.942        |

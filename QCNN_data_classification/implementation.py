@@ -25,6 +25,7 @@ def _parse_configured_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Parallel-columns GI on 0vs1 classification (PCA-8 everywhere)"
     )
+    # General training parameters
     parser.add_argument("--config", type=str, help="Optional JSON file with CLI arguments")
     parser.add_argument("--steps", type=int, default=200, help="optimizer steps (not epochs)")
     parser.add_argument("--batch", type=int, default=25)
@@ -38,8 +39,18 @@ def _parse_configured_args() -> argparse.Namespace:
         default="none",
         help="map [0,1] → unchanged, [0,π], or [0,2π]",
     )
+    # Dataset and PCA parameters
+    parser.add_argument(
+        "--dataset",
+        choices=["mnist", "fashionmnist", "kmnist"],
+        default="mnist",
+        help="Choose which torchvision dataset to use for the 0 vs 1 split.",
+    )
+    parser.add_argument("--pca_dim", type=int, default=8)
+    
+    parser.add_argument("--model", choices=["qconv", "single"], default="qconv")
+    # Single GI parameters
     parser.add_argument("--n_modes", type=int, default=8)
-    parser.add_argument("--n_features", type=int, default=8)
     parser.add_argument("--reservoir_mode", action="store_true")
     parser.add_argument(
         "--state_pattern",
@@ -47,22 +58,15 @@ def _parse_configured_args() -> argparse.Namespace:
         default="default",
     )
     parser.add_argument("--n_photons", type=int, default=4)
-    parser.add_argument("--pca_dim", type=int, default=8)
-    parser.add_argument(
-        "--dataset",
-        choices=["mnist", "fashionmnist", "kmnist"],
-        default="mnist",
-        help="Choose which torchvision dataset to use for the 0 vs 1 split.",
-    )
+    
 
-    parser.add_argument("--model", choices=["qconv", "single"], default="qconv")
-    parser.add_argument("--qconv_kernels", type=int, default=4)
-    parser.add_argument("--qconv_kernel_size", type=int, default=2)
-    parser.add_argument("--qconv_stride", type=int, default=1)
-    parser.add_argument("--qconv_classical", action="store_true")
+    # QCNN parameters
+    parser.add_argument("--nb_kernels", type=int, default=4)
+    parser.add_argument("--kernel_size", type=int, default=2)
+    parser.add_argument("--stride", type=int, default=1)
+    parser.add_argument("--conv_classical", action="store_true")
     parser.add_argument("--compare_classical", action="store_true")
-    parser.add_argument("--qconv_kernel_modes", type=int, default=8)
-    parser.add_argument("--qconv_kernel_features", type=int, default=2)
+    parser.add_argument("--kernel_modes", type=int, default=8)
 
     prelim_args, remaining = parser.parse_known_args()
 
@@ -102,16 +106,15 @@ def _build_quantum_kernel_modules(
 ) -> Callable[[], List[QuantumPatchKernel]]:
     def factory() -> List[QuantumPatchKernel]:
         modules: List[QuantumPatchKernel] = []
-        for _ in range(args.qconv_kernels):
+        for _ in range(args.nb_kernels):
             layer = build_quantum_kernel_layer(
-                kernel_modes=args.qconv_kernel_modes or args.qconv_kernel_size,
-                kernel_features=args.qconv_kernel_features,
-                kernel_size=args.qconv_kernel_size,
-                n_photons=args.n_photons,
+                kernel_modes=args.kernel_modes or args.kernel_size,
+                kernel_features=args.kernel_size,
+                n_photons=args.kernel_modes // 2,
                 state_pattern=args.state_pattern,
                 reservoir_mode=args.reservoir_mode,
             )
-            modules.append(QuantumPatchKernel(layer, patch_dim=args.qconv_kernel_size))
+            modules.append(QuantumPatchKernel(layer, patch_dim=args.kernel_size))
         return modules
 
     return factory
@@ -126,10 +129,11 @@ def _prepare_models(
     builders: List[Tuple[str, Callable[[], nn.Module]]] = []
 
     if args.model == "single":
+        # Just a simple QuantumLayer on the data
         def build_single() -> nn.Module:
             return SingleGI(
                 n_modes=args.n_modes,
-                n_features=args.n_features,
+                n_features=args.pca_dim,
                 n_photons=args.n_photons,
                 reservoir_mode=args.reservoir_mode,
                 state_pattern=args.state_pattern,
@@ -141,22 +145,19 @@ def _prepare_models(
         return builders, logs
 
     # qconv path
-    if args.qconv_kernel_size > args.pca_dim:
-        raise ValueError("qconv kernel_size cannot exceed the PCA dimension.")
-    if args.qconv_stride <= 0:
-        raise ValueError("qconv stride must be a positive integer.")
-    if args.qconv_kernel_features != args.qconv_kernel_size:
-        raise ValueError("--qconv_kernel_features must match --qconv_kernel_size for quantum kernels.")
-
-    num_windows = 1 + (input_dim - args.qconv_kernel_size) // args.qconv_stride
+    if args.kernel_size > args.pca_dim:
+        raise ValueError("kernel_size cannot exceed the PCA dimension.")
+    if args.stride <= 0:
+        raise ValueError("stride must be a positive integer.")
+    num_windows = 1 + (input_dim - args.kernel_size) // args.stride
     if num_windows <= 0:
         raise ValueError("qconv configuration results in zero sliding windows.")
 
     base_kwargs = dict(
         input_dim=input_dim,
-        n_kernels=args.qconv_kernels,
-        kernel_size=args.qconv_kernel_size,
-        stride=args.qconv_stride,
+        n_kernels=args.nb_kernels,
+        kernel_size=args.kernel_size,
+        stride=args.stride,
     )
 
     # Classical variant (always available for comparison/logging)
@@ -166,10 +167,10 @@ def _prepare_models(
     def build_classical() -> nn.Module:
         return QConvModel(bias=True, **base_kwargs)
 
-    use_quantum = not args.qconv_classical or args.compare_classical
-    if args.qconv_classical and not args.compare_classical:
+    use_quantum = not args.conv_classical or args.compare_classical
+    if args.conv_classical and not args.compare_classical:
         logs.append(
-            f"classical: {args.qconv_kernels} kernels → {classical_output_dim} dims"
+            f"classical: {args.nb_kernels} kernels → {classical_output_dim} dims"
         )
         builders.append(("qconv_classical_only", build_classical))
         return builders, logs
@@ -179,7 +180,7 @@ def _prepare_models(
     quantum_sample = QConvModel(bias=False, kernel_modules=quantum_modules, **base_kwargs)
     quantum_output_dim = quantum_sample.output_features
     logs.append(
-        f"quantum: {args.qconv_kernels} kernels → {quantum_output_dim} dims"
+        f"quantum: {args.nb_kernels} kernels → {quantum_output_dim} dims"
     )
 
     def build_quantum() -> nn.Module:
@@ -193,7 +194,7 @@ def _prepare_models(
 
     if args.compare_classical or not use_quantum:
         logs.append(
-            f"classical: {args.qconv_kernels} kernels → {classical_output_dim} dims"
+            f"classical: {args.nb_kernels} kernels → {classical_output_dim} dims"
         )
         builders.append(("qconv_classical", build_classical))
 
@@ -204,7 +205,7 @@ def main() -> None:
     args = _parse_configured_args()
 
     angle_factor = _angle_factor(args.angle_scale)
-    required_inputs = required_input_params(args.n_modes, args.n_features)
+    required_inputs = required_input_params(args.n_modes, args.pca_dim)
     print(f"Using args.dataset = {args.dataset}, PCA dim = {args.pca_dim}")
     (Ztr, ytr), (Zte, yte) = make_pca(args.pca_dim, dataset=args.dataset)
     input_dim = Ztr.shape[-1]

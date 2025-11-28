@@ -17,11 +17,10 @@ for dataset in "${DATASETS[@]}"; do
                     --pca_dim "${pca}" \
                     --steps 200 \
                     --seeds 3 \
-                    --qconv_kernels "${kfeat}" \
-                    --qconv_kernel_size 2 \
-                    --qconv_kernel_features 2 \
-                    --qconv_kernel_modes "${kmode}" \
-                    --qconv_stride 1 \
+                    --nb_kernels "${kfeat}" \
+                    --kernel_size 2 \
+                    --kernel_modes "${kmode}" \
+                    --stride 1 \
                     --dataset "${dataset}"
             done
         done
