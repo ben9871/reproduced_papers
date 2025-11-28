@@ -10,14 +10,14 @@ from typing import Any
 
 import numpy as np
 import torch
-
 from data.datasets import DATASET_ORDER, prepare_datasets
-from lib.training import ExperimentArgs, summarize_results, train_model_multiple_runs
 from utils.plotting import (
     plot_dataset_samples,
     plot_decision_boundary,
     plot_training_metrics,
 )
+
+from lib.training import ExperimentArgs, summarize_results, train_model_multiple_runs
 
 LOGGER = logging.getLogger(__name__)
 

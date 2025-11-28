@@ -8,9 +8,9 @@ from .defaults import default_config
 
 _REPO_ROOT = Path(__file__).resolve().parents[2]
 if str(_REPO_ROOT) not in sys.path:
-	sys.path.insert(0, str(_REPO_ROOT))
+    sys.path.insert(0, str(_REPO_ROOT))
 
-from runtime_lib import config as _shared_config
+from runtime_lib import config as _shared_config  # noqa: E402
 
 module_name = __name__ + ".config"
 config_module = ModuleType(module_name)

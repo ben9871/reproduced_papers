@@ -103,7 +103,9 @@ def run_qssl_experiment(cfg: dict[str, Any], run_dir: Path) -> None:
     LOGGER.info("Saved resolved arguments to %s", args_path)
 
     LOGGER.info(
-        "Preparing SSL dataset (classes=%s, batch_size=%s)", args.classes, args.batch_size
+        "Preparing SSL dataset (classes=%s, batch_size=%s)",
+        args.classes,
+        args.batch_size,
     )
     ssl_dataset = load_transformed_data(args)
     ssl_loader = _make_dataloader(ssl_dataset, args.batch_size)
@@ -135,7 +137,9 @@ def run_qssl_experiment(cfg: dict[str, Any], run_dir: Path) -> None:
         ft_val_losses,
         ft_train_accs,
         ft_val_accs,
-    ) = linear_evaluation(frozen_model, ft_train_loader, ft_val_loader, args, str(run_dir))
+    ) = linear_evaluation(
+        frozen_model, ft_train_loader, ft_val_loader, args, str(run_dir)
+    )
 
     save_results_to_json(
         args,

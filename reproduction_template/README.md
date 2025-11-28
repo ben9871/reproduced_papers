@@ -40,6 +40,9 @@ Example overrides (see `configs/cli.json` for the authoritative list):
 
 - `--config PATH` Load an additional JSON config (merged over `defaults.json`).
 - `--seed INT` Random seed applied via the generic runtime.
+- `--dtype STR` Force a global torch/NumPy dtype (e.g., `float32`, `float64`).
+- `--device STR` Device override (`cpu`, `cuda:0`, `mps`, etc.).
+- `--log-level LEVEL` Logging verbosity (`DEBUG`, `INFO`, ...).
 - `--outdir DIR` Base output directory (default in `defaults.json`).
 - `--epochs INT` Override `training.epochs`.
 - `--batch-size INT` Override `dataset.batch_size`.

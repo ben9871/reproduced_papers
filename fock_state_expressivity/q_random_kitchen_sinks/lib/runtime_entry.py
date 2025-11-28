@@ -5,19 +5,20 @@ from __future__ import annotations
 import json
 import logging
 import random
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any, Iterable
+from typing import Any
 
 import numpy as np
-
 from data.datasets import load_moons
-from lib.training import run_rks_experiments
 from utils.visualization import (
     plot_accuracy_heatmap,
     plot_combined_decisions,
     plot_dataset,
     save_kernel_heatmap,
 )
+
+from lib.training import run_rks_experiments
 
 DEFAULT_GAMMAS = list(range(1, 11))
 LOGGER = logging.getLogger(__name__)

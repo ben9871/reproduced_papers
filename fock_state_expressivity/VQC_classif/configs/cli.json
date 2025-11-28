@@ -9,13 +9,6 @@
       "apply": {"kind": "config_file"}
     },
     {
-      "flags": ["--seed"],
-      "help": "Random seed",
-      "type": "int",
-      "default": null,
-      "apply": {"kind": "config_path", "path": "seed"}
-    },
-    {
       "flags": ["--outdir"],
       "help": "Base output directory",
       "type": "path",
@@ -29,13 +22,6 @@
       "choices": ["vqc", "vqc_100", "vqc_111", "mlp_wide", "mlp_deep", "svm_lin", "svm_rbf"],
       "default": null,
       "apply": {"kind": "config_path", "path": "experiment.model_type"}
-    },
-    {
-      "flags": ["--device"],
-      "help": "Torch device string",
-      "type": "str",
-      "default": null,
-      "apply": {"kind": "config_path", "path": "device"}
     },
     {
       "flags": ["--visualize-data"],

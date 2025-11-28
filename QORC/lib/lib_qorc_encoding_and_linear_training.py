@@ -218,7 +218,7 @@ def create_qorc_quantum_layer(
         no_bunching=b_no_bunching,
         device=torch.device(device_name),
     )
-    qorc_quantum_layer.eval()   # Put the layer in eval (do not compute gradiants)
+    qorc_quantum_layer.eval()  # Put the layer in eval (do not compute gradiants)
 
     # Verify there are no trainable parameters
     params = qorc_quantum_layer.parameters()

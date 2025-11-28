@@ -39,13 +39,6 @@
       "apply": {"kind": "config_path", "path": "n_modes"}
     },
     {
-      "flags": ["--seed"],
-      "help": "Random seed",
-      "type": "int",
-      "default": null,
-      "apply": {"kind": "config_path", "path": "seed"}
-    },
-    {
       "flags": ["--fold-index"],
       "help": "Fold index for dataset split",
       "type": "int",
@@ -128,13 +121,6 @@
       "type": "bool",
       "default": null,
       "apply": {"kind": "config_path", "path": "b_use_tensorboard"}
-    },
-    {
-      "flags": ["--device"],
-      "help": "Device string (cpu, cuda:0, mps)",
-      "type": "str",
-      "default": null,
-      "apply": {"kind": "config_path", "path": "device"}
     },
     {
       "flags": ["--f-out-results-training-csv"],

@@ -28,6 +28,13 @@ All logs, checkpoints, and figures land in `<NAME>/outdir/run_YYYYMMDD-HHMMSS/` 
 
 Need a quick tour of a project’s knobs? Run `python implementation.py --project <NAME> --help` to print the runtime-generated CLI for that reproduction (dataset switches, figure toggles, etc.) before launching a full experiment.
 
+Universal CLI flags provided by the shared runner:
+- `--seed INT` Reproducibility seed propagated to Python/NumPy/PyTorch backends.
+- `--dtype STR` Force a global tensor dtype before model-specific overrides.
+- `--device STR` Torch device string (`cpu`, `cuda:0`, `mps`, ...).
+- `--log-level LEVEL` Runtime logging verbosity (`INFO` by default).
+Project-specific `configs/cli.json` files only declare the extra paper knobs; the runner injects the global options automatically.
+
 ### Precision control (`dtype`)
 
 - Every reproduction accepts an optional top-level `"dtype"` entry in its configs, just like `"seed"`. When present, the shared runner casts input tensors and initializes models in that dtype.

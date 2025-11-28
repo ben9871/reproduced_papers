@@ -6,16 +6,17 @@ from dataclasses import dataclass
 import numpy as np
 import torch
 from data.datasets import target_function
+from sklearn.metrics import accuracy_score
+from sklearn.svm import SVC
+from torch.utils.data import DataLoader, TensorDataset
+from tqdm import tqdm
+
 from lib.approx_kernel import (
     build_quantum_model,
     classical_features,
     sample_random_features,
     transform_inputs,
 )
-from sklearn.metrics import accuracy_score
-from sklearn.svm import SVC
-from torch.utils.data import DataLoader, TensorDataset
-from tqdm import tqdm
 
 
 @dataclass

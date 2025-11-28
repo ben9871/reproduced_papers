@@ -13,7 +13,6 @@ from lib.dataset import data as data_factory
 from lib.model import build_model
 from lib.rendering import save_losses_plot, save_pickle, save_simulation_plot
 
-
 DTYPE_ALIASES: dict[str, torch.dtype] = {
     "float16": torch.float16,
     "half": torch.float16,
