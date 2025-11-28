@@ -40,6 +40,9 @@ pip install -r requirements.txt
 ```
 
 ### Merlin / Perceval reproduction
+We propose a photonic version of the kernel, sliding on the PCA components:
+
+![Alt text](Photonic_QConv.png)
 
 Run the main experiment with the template-style entrypoint:
 
