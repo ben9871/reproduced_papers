@@ -35,7 +35,6 @@ The paper investigates whether hybrid quantum neural networks (HQNNs) can surpas
 
 ### Command-line interface
 
-- List available reproductions: `python implementation.py --list-projects`
 - HQNN sweep: `python implementation.py --project HQNN_MythOrReality` creates a timestamped run folder under `results/` with logs, metrics, and config snapshots. Override config values with flags such as `--feature-grid 10,20`, `--accuracy-threshold 92`, `--lr 0.02`, or `--figure` (parameter-count plot generation). Combine with global switches like `--seed` or `--device mps` as needed.
 - Classical baseline: `python3 scripts/run_classical_baseline.py --features 10,20,30` sweeps MLP configurations and appends results to `results/classical_baseline.json`. Adjust `--lr`, `--batch-size`, or `--threshold` as needed.
 - Every run persists its merged configuration to `<outdir>/run_<timestamp>/config_snapshot.json` for traceability.
