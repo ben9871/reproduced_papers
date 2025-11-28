@@ -15,6 +15,9 @@ Each paper reproduction is designed to be accessible, well-documented, and easy 
 ## Running existing reproductions
 
 - Browse the up-to-date catalogue at [https://merlinquantum.ai/reproduced_papers/index.html](https://merlinquantum.ai/reproduced_papers/index.html) to pick the paper you want to execute. The `<NAME>` you pass to the CLI is simply the folder name under the repo root (e.g., `QLSTM/`, `QORC/`, `reproduction_template/`).
+
+You can also list available reproductions with `python implementation.py --list-projects`.
+
 - `cd` into the chosen folder and install its dependencies: `pip install -r requirements.txt` (each reproduction keeps its own list).
 - Launch training/eval runs through the shared CLI from the repo root:
 
