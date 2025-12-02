@@ -7,7 +7,7 @@ import datetime
 import json
 import statistics
 from pathlib import Path
-from typing import Callable, dict, list, tuple
+from typing import Callable
 
 import numpy as np
 import torch.nn as nn

@@ -11,7 +11,7 @@ from collections import defaultdict
 from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, dict, list, tuple
+from typing import Any
 
 import matplotlib
 

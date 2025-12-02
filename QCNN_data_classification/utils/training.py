@@ -3,8 +3,6 @@
 from __future__ import annotations
 
 import random
-from typing import list, tuple
-
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
