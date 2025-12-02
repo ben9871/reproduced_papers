@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from typing import List, Tuple
+from typing import list, tuple
 
 import torch
 import torch.nn as nn
@@ -41,22 +41,26 @@ def train_once(
     seed: int,
     model: nn.Module,
     track_metrics: bool = False,
-    ) -> Tuple[float, List[float], List[float]]:
+) -> tuple[float, list[float], list[float]]:
     set_seed(seed)
 
     if opt_name == "adam":
         optim = torch.optim.Adam(model.parameters(), lr=lr)
     else:
-        optim = torch.optim.SGD(model.parameters(), lr=lr, momentum=momentum, nesterov=True)
+        optim = torch.optim.SGD(
+            model.parameters(), lr=lr, momentum=momentum, nesterov=True
+        )
     lossf = nn.CrossEntropyLoss()
 
-    train_loader = DataLoader(TensorDataset(Ztr, ytr), batch_size=batch, shuffle=True, drop_last=True)
+    train_loader = DataLoader(
+        TensorDataset(Ztr, ytr), batch_size=batch, shuffle=True, drop_last=True
+    )
     test_loader = DataLoader(TensorDataset(Zte, yte), batch_size=512, shuffle=False)
 
     model.train()
     it = 0
-    loss_history: List[float] = []
-    accuracy_history: List[float] = []
+    loss_history: list[float] = []
+    accuracy_history: list[float] = []
     while it < steps:
         for xb, yb in train_loader:
             optim.zero_grad(set_to_none=True)

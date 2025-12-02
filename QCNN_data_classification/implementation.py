@@ -7,7 +7,7 @@ import datetime
 import json
 import statistics
 from pathlib import Path
-from typing import Callable, Dict, List, Tuple
+from typing import Callable, dict, list, tuple
 
 import numpy as np
 import torch.nn as nn
@@ -22,8 +22,12 @@ def _parse_configured_args() -> argparse.Namespace:
         description="Parallel-columns GI on 0vs1 classification (PCA-8 everywhere)"
     )
     # General training parameters
-    parser.add_argument("--config", type=str, help="Optional JSON file with CLI arguments")
-    parser.add_argument("--steps", type=int, default=200, help="optimizer steps (not epochs)")
+    parser.add_argument(
+        "--config", type=str, help="Optional JSON file with CLI arguments"
+    )
+    parser.add_argument(
+        "--steps", type=int, default=200, help="optimizer steps (not epochs)"
+    )
     parser.add_argument("--batch", type=int, default=25)
     parser.add_argument("--seeds", type=int, default=3)
     parser.add_argument("--opt", choices=["adam", "sgd"], default="adam")
@@ -56,14 +60,41 @@ def _parse_configured_args() -> argparse.Namespace:
     )
     parser.add_argument("--n_photons", type=int, default=4)
 
-
     # QCNN parameters
-    parser.add_argument("--nb_kernels", type=int, default=4, help="Number of quantum convolutional kernels.")
-    parser.add_argument("--kernel_size", type=int, default=2, help="Size of each quantum convolutional kernel.")
-    parser.add_argument("--stride", type=int, default=1, help="Stride for the quantum convolutional kernels.")
-    parser.add_argument("--kernel_modes", type=int, default=8, help="Number of modes in each quantum convolutional kernel.")
-    parser.add_argument("--conv_classical", action="store_true", help="Use classical kernels instead of quantum.")
-    parser.add_argument("--compare_classical", action="store_true", help="Also include classical kernel variant for comparison.")
+    parser.add_argument(
+        "--nb_kernels",
+        type=int,
+        default=4,
+        help="Number of quantum convolutional kernels.",
+    )
+    parser.add_argument(
+        "--kernel_size",
+        type=int,
+        default=2,
+        help="Size of each quantum convolutional kernel.",
+    )
+    parser.add_argument(
+        "--stride",
+        type=int,
+        default=1,
+        help="Stride for the quantum convolutional kernels.",
+    )
+    parser.add_argument(
+        "--kernel_modes",
+        type=int,
+        default=8,
+        help="Number of modes in each quantum convolutional kernel.",
+    )
+    parser.add_argument(
+        "--conv_classical",
+        action="store_true",
+        help="Use classical kernels instead of quantum.",
+    )
+    parser.add_argument(
+        "--compare_classical",
+        action="store_true",
+        help="Also include classical kernel variant for comparison.",
+    )
     parser.add_argument(
         "--amplitude",
         action="store_true",
@@ -82,7 +113,7 @@ def _parse_configured_args() -> argparse.Namespace:
     if not prelim_args.config:
         return prelim_args
 
-    config_args: List[str] = []
+    config_args: list[str] = []
     with open(prelim_args.config, encoding="utf-8") as fh:
         config_data = json.load(fh)
     for key, value in config_data.items():
@@ -112,9 +143,9 @@ def _prepare_models(
     args: argparse.Namespace,
     input_dim: int,
     required_inputs: int,
-) -> Tuple[List[Tuple[str, Callable[[], nn.Module]]], List[str]]:
-    logs: List[str] = []
-    builders: List[Tuple[str, Callable[[], nn.Module]]] = []
+) -> tuple[list[tuple[str, Callable[[], nn.Module]]], list[str]]:
+    logs: list[str] = []
+    builders: list[tuple[str, Callable[[], nn.Module]]] = []
 
     if args.model == "single":
         # Just a simple QuantumLayer on the data
@@ -152,7 +183,7 @@ def _prepare_models(
     kernel_modes = args.kernel_modes or args.kernel_size
     n_photons = args.kernel_modes // 2
 
-    def _build_quantum_modules() -> List[nn.Module]:
+    def _build_quantum_modules() -> list[nn.Module]:
         return build_quantum_kernels(
             n_kernels=args.nb_kernels,
             kernel_size=args.kernel_size,
@@ -179,11 +210,11 @@ def _prepare_models(
         return builders, logs
 
     quantum_modules = _build_quantum_modules()
-    quantum_sample = QConvModel(bias=False, kernel_modules=quantum_modules, **base_kwargs)
-    quantum_output_dim = quantum_sample.output_features
-    logs.append(
-        f"quantum: {args.nb_kernels} kernels → {quantum_output_dim} dims"
+    quantum_sample = QConvModel(
+        bias=False, kernel_modules=quantum_modules, **base_kwargs
     )
+    quantum_output_dim = quantum_sample.output_features
+    logs.append(f"quantum: {args.nb_kernels} kernels → {quantum_output_dim} dims")
 
     def build_quantum() -> nn.Module:
         return QConvModel(
@@ -203,7 +234,9 @@ def _prepare_models(
     return builders, logs
 
 
-def _plot_training_figures(run_dir: Path, variant_histories: Dict[str, List[Dict[str, List[float]]]]) -> None:
+def _plot_training_figures(
+    run_dir: Path, variant_histories: dict[str, list[dict[str, list[float]]]]
+) -> None:
     try:
         import matplotlib
 
@@ -214,9 +247,9 @@ def _plot_training_figures(run_dir: Path, variant_histories: Dict[str, List[Dict
         return
 
     def _save_metric(metric_key: str, ylabel: str, title: str, filename: str) -> None:
-        metric_curves: Dict[str, List[List[float]]] = {}
+        metric_curves: dict[str, list[list[float]]] = {}
         for variant, histories in variant_histories.items():
-            curves: List[List[float]] = []
+            curves: list[list[float]] = []
             for entry in histories:
                 curve_vals = entry.get(metric_key)
                 if curve_vals:
@@ -236,7 +269,9 @@ def _plot_training_figures(run_dir: Path, variant_histories: Dict[str, List[Dict
             for curve in aligned:
                 plt.plot(steps, curve, color=color, alpha=0.25, linewidth=0.8)
             mean_curve = aligned.mean(axis=0)
-            plt.plot(steps, mean_curve, color=color, linewidth=2.0, label=f"{variant} mean")
+            plt.plot(
+                steps, mean_curve, color=color, linewidth=2.0, label=f"{variant} mean"
+            )
             if aligned.shape[0] > 1:
                 std_curve = aligned.std(axis=0)
                 plt.fill_between(
@@ -258,7 +293,9 @@ def _plot_training_figures(run_dir: Path, variant_histories: Dict[str, List[Dict
         print(f"[figures] Saved {filename.relative_to(run_dir)}")
 
     figures_dir = run_dir / "figures"
-    _save_metric("loss", "Loss", "Training loss per seed", figures_dir / "loss_curves.png")
+    _save_metric(
+        "loss", "Loss", "Training loss per seed", figures_dir / "loss_curves.png"
+    )
     _save_metric(
         "accuracy",
         "Accuracy",
@@ -299,7 +336,7 @@ def main() -> None:
     comparison_results = []
     # store per-variant per-seed training curves for saving
     variant_seed_details = {}
-    variant_histories: Dict[str, List[Dict[str, List[float]]]] = {}
+    variant_histories: dict[str, list[dict[str, list[float]]]] = {}
 
     # Prepare results directories
     results_root = Path(__file__).resolve().parent / f"results-{args.dataset}"
@@ -312,18 +349,23 @@ def main() -> None:
         json.dump(vars(args), fh, indent=2)
     variant_param_counts: dict[str, int] = {}
     for name, builder in builders:
-        print(f"\n=== Evaluating {name} ({args.seeds} seed{'s' if args.seeds > 1 else ''}) ===")
+        print(
+            f"\n=== Evaluating {name} ({args.seeds} seed{'s' if args.seeds > 1 else ''}) ==="
+        )
         variant_accs = []
         seed_records = []
         for s in range(args.seeds):
-            print(f"[Seed {s+1}/{args.seeds}]")
+            print(f"[Seed {s + 1}/{args.seeds}]")
             model = builder()
             param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
             print(f"Number of trainable parameters = {param_count}")
             if name not in variant_param_counts:
                 variant_param_counts[name] = param_count
             acc, loss_history, accuracy_history = train_once(
-                Ztr, ytr, Zte, yte,
+                Ztr,
+                ytr,
+                Zte,
+                yte,
                 steps=args.steps,
                 batch=args.batch,
                 opt_name=args.opt,
@@ -334,7 +376,7 @@ def main() -> None:
                 model=model,
                 track_metrics=args.figures,
             )
-            print(f"  Test accuracy: {acc*100:.2f}%")
+            print(f"  Test accuracy: {acc * 100:.2f}%")
             variant_accs.append(acc)
             # save per-seed JSON into variant folder
             variant_dir = run_dir / name
@@ -352,20 +394,24 @@ def main() -> None:
                 seed_data["accuracy_history"] = [float(x) for x in accuracy_history]
             with open(seed_fname, "w", encoding="utf-8") as fh:
                 json.dump(seed_data, fh, indent=2)
-            seed_records.append({
-                "seed_index": seed_index,
-                "seed_value": seed_value,
-                "test_accuracy": float(acc),
-                "curve_file": seed_fname.name,
-            })
+            seed_records.append(
+                {
+                    "seed_index": seed_index,
+                    "seed_value": seed_value,
+                    "test_accuracy": float(acc),
+                    "curve_file": seed_fname.name,
+                }
+            )
             if args.figures:
-                variant_histories.setdefault(name, []).append({
-                    "loss": [float(x) for x in loss_history],
-                    "accuracy": [float(x) for x in accuracy_history],
-                })
+                variant_histories.setdefault(name, []).append(
+                    {
+                        "loss": [float(x) for x in loss_history],
+                        "accuracy": [float(x) for x in accuracy_history],
+                    }
+                )
         mean = statistics.mean(variant_accs)
         std = statistics.stdev(variant_accs) if len(variant_accs) > 1 else 0.0
-        print(f"→ Summary for {name}: mean {mean*100:.2f}% ± {std*100:.2f}%")
+        print(f"→ Summary for {name}: mean {mean * 100:.2f}% ± {std * 100:.2f}%")
         # write variant summary.json
         variant_dir = run_dir / name
         summary = {
@@ -391,15 +437,17 @@ def main() -> None:
         "variants": [],
         "convolution_logs": conv_logs,
     }
-    for name, accs, mean, std in comparison_results:
-        run_summary["variants"].append({
-            "variant": name,
-            "mean_accuracy": float(mean),
-            "std_accuracy": float(std),
-            "seeds": variant_seed_details.get(name, []),
-            "summary_file": f"{name}/summary.json",
-            "param_count": variant_param_counts.get(name),
-        })
+    for name, _accs, mean, std in comparison_results:
+        run_summary["variants"].append(
+            {
+                "variant": name,
+                "mean_accuracy": float(mean),
+                "std_accuracy": float(std),
+                "seeds": variant_seed_details.get(name, []),
+                "summary_file": f"{name}/summary.json",
+                "param_count": variant_param_counts.get(name),
+            }
+        )
 
     with open(run_dir / "run_summary.json", "w", encoding="utf-8") as fh:
         json.dump(run_summary, fh, indent=2)
@@ -410,13 +458,13 @@ def main() -> None:
     if len(comparison_results) > 1:
         print("\n=== Overall Comparison ===")
         for name, accs, mean, std in comparison_results:
-            acc_line = ", ".join(f"{a*100:.2f}%" for a in accs)
-            print(f"{name}: [{acc_line}] → mean {mean*100:.2f}% ± {std*100:.2f}%")
+            acc_line = ", ".join(f"{a * 100:.2f}%" for a in accs)
+            print(f"{name}: [{acc_line}] → mean {mean * 100:.2f}% ± {std * 100:.2f}%")
     elif comparison_results:
         name, accs, mean, std = comparison_results[0]
         print("\n=== Summary ===")
-        print("Accuracies:", ", ".join(f"{a*100:.2f}%" for a in accs))
-        print(f"Mean ± Std: {mean*100:.2f}% ± {std*100:.2f}%")
+        print("Accuracies:", ", ".join(f"{a * 100:.2f}%" for a in accs))
+        print(f"Mean ± Std: {mean * 100:.2f}% ± {std * 100:.2f}%")
 
 
 if __name__ == "__main__":

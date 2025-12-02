@@ -5,7 +5,7 @@ from __future__ import annotations
 import random
 from enum import Enum
 
-import merlin as ML
+import merlin as ML  # noqa: N812
 import numpy as np
 import perceval as pcvl
 import torch.nn as nn
@@ -20,7 +20,9 @@ class StatePattern(Enum):
 
 class StateGenerator:
     @staticmethod
-    def generate_state(n_modes: int, n_photons: int, state_pattern: StatePattern) -> list[int]:
+    def generate_state(
+        n_modes: int, n_photons: int, state_pattern: StatePattern
+    ) -> list[int]:
         if n_photons < 0 or n_photons > n_modes:
             raise ValueError(f"Cannot place {n_photons} photons into {n_modes} modes.")
         if state_pattern == StatePattern.SPACED:
@@ -63,7 +65,9 @@ class StateGenerator:
         return [1 if i < n_photons else 0 for i in range(n_modes)]
 
 
-def _generate_interferometer(n_modes: int, stage_idx: int, reservoir_mode: bool = False):
+def _generate_interferometer(
+    n_modes: int, stage_idx: int, reservoir_mode: bool = False
+):
     if reservoir_mode:
         return pcvl.GenericInterferometer(
             n_modes,
@@ -71,9 +75,7 @@ def _generate_interferometer(n_modes: int, stage_idx: int, reservoir_mode: bool 
             // (0, pcvl.PS(phi=np.pi * 2 * random.random())),
             shape=pcvl.InterferometerShape.RECTANGLE,
             depth=2 * n_modes,
-            phase_shifter_fun_gen=lambda idx: pcvl.PS(
-                phi=np.pi * 2 * random.random()
-            ),
+            phase_shifter_fun_gen=lambda idx: pcvl.PS(phi=np.pi * 2 * random.random()),
         )
 
     def mzi(P1, P2):
@@ -99,7 +101,9 @@ def _generate_interferometer(n_modes: int, stage_idx: int, reservoir_mode: bool 
     )
 
 
-def build_parallel_columns_circuit(n_modes: int, n_features: int, reservoir_mode: bool = False):
+def build_parallel_columns_circuit(
+    n_modes: int, n_features: int, reservoir_mode: bool = False
+):
     circuit = pcvl.Circuit(n_modes)
     ps_idx = 0
     for stage in range(n_features + 1):
@@ -111,12 +115,16 @@ def build_parallel_columns_circuit(n_modes: int, n_features: int, reservoir_mode
     return circuit
 
 
-def create_quantum_circuit(n_modes: int, n_features: int, amplitudes_encoding: bool = False) -> pcvl.Circuit:
+def create_quantum_circuit(
+    n_modes: int, n_features: int, amplitudes_encoding: bool = False
+) -> pcvl.Circuit:
     wl = pcvl.GenericInterferometer(
         n_modes,
-        lambda i: pcvl.BS() // pcvl.PS(pcvl.P(f"theta_li{i}")) //
-        pcvl.BS() // pcvl.PS(pcvl.P(f"theta_lo{i}")),
-        shape=pcvl.InterferometerShape.RECTANGLE
+        lambda i: pcvl.BS()
+        // pcvl.PS(pcvl.P(f"theta_li{i}"))
+        // pcvl.BS()
+        // pcvl.PS(pcvl.P(f"theta_lo{i}")),
+        shape=pcvl.InterferometerShape.RECTANGLE,
     )
     if not amplitudes_encoding:
         c_var = pcvl.Circuit(n_modes)
@@ -126,9 +134,11 @@ def create_quantum_circuit(n_modes: int, n_features: int, amplitudes_encoding: b
 
         wr = pcvl.GenericInterferometer(
             n_modes,
-            lambda i: pcvl.BS() // pcvl.PS(pcvl.P(f"theta_ri{i}")) //
-            pcvl.BS() // pcvl.PS(pcvl.P(f"theta_ro{i}")),
-            shape=pcvl.InterferometerShape.RECTANGLE
+            lambda i: pcvl.BS()
+            // pcvl.PS(pcvl.P(f"theta_ri{i}"))
+            // pcvl.BS()
+            // pcvl.PS(pcvl.P(f"theta_ro{i}")),
+            shape=pcvl.InterferometerShape.RECTANGLE,
         )
 
         return wl // c_var // wr
@@ -136,10 +146,11 @@ def create_quantum_circuit(n_modes: int, n_features: int, amplitudes_encoding: b
         return wl
 
 
-
 def required_input_params(n_modes: int, n_features: int) -> int:
     if n_features > n_modes:
-        raise ValueError("n_features cannot exceed n_modes when matching inputs one-to-one.")
+        raise ValueError(
+            "n_features cannot exceed n_modes when matching inputs one-to-one."
+        )
     return n_features
 
 
@@ -180,9 +191,11 @@ def build_quantum_kernel_layer(
 ) -> ML.QuantumLayer:
     circuit = create_quantum_circuit(kernel_modes, kernel_features, amplitudes_encoding)
     if show_circuit:
-        print(f"\n ----- Created a quantum kernel circuit with {kernel_modes} modes and {kernel_features} features -----\n")
+        print(
+            f"\n ----- Created a quantum kernel circuit with {kernel_modes} modes and {kernel_features} features -----\n"
+        )
         pcvl.pdisplay(circuit)
-    
+
     if not amplitudes_encoding:
         # use "px" input parameters
         pattern = StatePattern[state_pattern.upper()]
@@ -191,7 +204,7 @@ def build_quantum_kernel_layer(
             min(n_photons, kernel_modes),
             pattern,
         )
-        
+
         trainable_prefixes = [] if reservoir_mode else ["theta"]
         input_prefixes = ["px"]
         q_layer = ML.QuantumLayer(
@@ -203,16 +216,17 @@ def build_quantum_kernel_layer(
             measurement_strategy=ML.MeasurementStrategy.PROBABILITIES,
         )
     else:
-        
         trainable_prefixes = [] if reservoir_mode else ["theta"]
         q_layer = ML.QuantumLayer(
             circuit=circuit,
             trainable_parameters=trainable_prefixes,
             n_photons=2,
             measurement_strategy=ML.MeasurementStrategy.PROBABILITIES,
-            computation_space = ML.ComputationSpace.UNBUNCHED,
+            computation_space=ML.ComputationSpace.UNBUNCHED,
             amplitude_encoding=True,
         )
 
-    complete = nn.Sequential(q_layer, ML.LexGrouping(input_size = q_layer.output_size, output_size=2))
+    complete = nn.Sequential(
+        q_layer, ML.LexGrouping(input_size=q_layer.output_size, output_size=2)
+    )
     return complete

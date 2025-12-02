@@ -11,14 +11,13 @@ from collections import defaultdict
 from collections.abc import Iterable
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List, Tuple
+from typing import Any, dict, list, tuple
 
 import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import numpy as np
-
 from model import QConvModel, build_quantum_kernels
 
 PCA_OPTIONS = (16,)
@@ -41,31 +40,44 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Sweep qconv hyperparameters, run implementation.py, and plot results."
     )
-    parser.add_argument("--implementation", type=Path, default=Path("implementation.py"),
-                        help="Path to the implementation.py entrypoint.")
-    parser.add_argument("--dataset", type=str, default="mnist",
-                        choices=["mnist", "fashionmnist", "kmnist"],
-                        help="Dataset to feed into implementation.py.")
-    parser.add_argument("--steps", type=int, default=100,
-                        help="Optimizer steps per run (default: 100 for faster sweeps).")
-    parser.add_argument("--seeds", type=int, default=1,
-                        help="Number of seeds per run (default: 1).")
-    parser.add_argument("--output-dir", type=Path, default=Path("plots"),
-                        help="Directory where aggregated data and figures are stored.")
+    parser.add_argument(
+        "--implementation",
+        type=Path,
+        default=Path("implementation.py"),
+        help="Path to the implementation.py entrypoint.",
+    )
+    parser.add_argument(
+        "--dataset",
+        type=str,
+        default="mnist",
+        choices=["mnist", "fashionmnist", "kmnist"],
+        help="Dataset to feed into implementation.py.",
+    )
+    parser.add_argument(
+        "--steps",
+        type=int,
+        default=100,
+        help="Optimizer steps per run (default: 100 for faster sweeps).",
+    )
+    parser.add_argument(
+        "--seeds", type=int, default=1, help="Number of seeds per run (default: 1)."
+    )
+    parser.add_argument(
+        "--output-dir",
+        type=Path,
+        default=Path("plots"),
+        help="Directory where aggregated data and figures are stored.",
+    )
     return parser.parse_args()
 
 
-def snapshot_run_dirs(results_dir: Path) -> Dict[str, Path]:
+def snapshot_run_dirs(results_dir: Path) -> dict[str, Path]:
     if not results_dir.exists():
         return {}
-    return {
-        path.name: path
-        for path in results_dir.glob("run_*")
-        if path.is_dir()
-    }
+    return {path.name: path for path in results_dir.glob("run_*") if path.is_dir()}
 
 
-def detect_new_run_dir(before: Dict[str, Path], after: Dict[str, Path]) -> Path:
+def detect_new_run_dir(before: dict[str, Path], after: dict[str, Path]) -> Path:
     before_names = set(before)
     after_names = set(after)
     new_names = after_names - before_names
@@ -77,16 +89,20 @@ def detect_new_run_dir(before: Dict[str, Path], after: Dict[str, Path]) -> Path:
     newest = max(after.values(), key=lambda p: p.stat().st_mtime, default=None)
     if newest and newest.stat().st_mtime > before_mtime:
         return newest
-    raise RuntimeError("Failed to locate new results directory after running implementation.")
+    raise RuntimeError(
+        "Failed to locate new results directory after running implementation."
+    )
 
 
-def load_config_snapshot(run_dir: Path) -> Dict[str, Any]:
+def load_config_snapshot(run_dir: Path) -> dict[str, Any]:
     snapshot_path = run_dir / "config_snapshot.json"
     with open(snapshot_path, encoding="utf-8") as fh:
         return json.load(fh)
 
 
-def build_config_key_from_values(dataset: str, steps: int, seeds: int, config: Dict[str, int]) -> Tuple:
+def build_config_key_from_values(
+    dataset: str, steps: int, seeds: int, config: dict[str, int]
+) -> tuple:
     return (
         dataset,
         config["pca_dim"],
@@ -100,8 +116,17 @@ def build_config_key_from_values(dataset: str, steps: int, seeds: int, config: D
     )
 
 
-def build_config_key_from_snapshot(snapshot: Dict[str, Any]) -> Tuple | None:
-    required = ["dataset", "pca_dim", "nb_kernels", "kernel_size", "stride", "kernel_modes", "steps", "seeds"]
+def build_config_key_from_snapshot(snapshot: dict[str, Any]) -> tuple | None:
+    required = [
+        "dataset",
+        "pca_dim",
+        "nb_kernels",
+        "kernel_size",
+        "stride",
+        "kernel_modes",
+        "steps",
+        "seeds",
+    ]
     if not all(k in snapshot for k in required):
         return None
     if snapshot.get("model") != "qconv":
@@ -121,8 +146,8 @@ def build_config_key_from_snapshot(snapshot: Dict[str, Any]) -> Tuple | None:
     )
 
 
-def index_existing_runs(results_root: Path) -> Dict[Tuple, Tuple[Path, Dict[str, Any]]]:
-    index: Dict[Tuple, Tuple[Path, Dict[str, Any]]] = {}
+def index_existing_runs(results_root: Path) -> dict[tuple, tuple[Path, dict[str, Any]]]:
+    index: dict[tuple, tuple[Path, dict[str, Any]]] = {}
     if not results_root.exists():
         return index
     for run_dir in sorted(results_root.glob("run_*")):
@@ -139,7 +164,7 @@ def index_existing_runs(results_root: Path) -> Dict[Tuple, Tuple[Path, Dict[str,
     return index
 
 
-def parse_run_summary(run_dir: Path) -> Dict[str, Dict[str, float]]:
+def parse_run_summary(run_dir: Path) -> dict[str, dict[str, float]]:
     summary_path = run_dir / "run_summary.json"
     with open(summary_path, encoding="utf-8") as fh:
         data = json.load(fh)
@@ -154,7 +179,9 @@ def parse_run_summary(run_dir: Path) -> Dict[str, Dict[str, float]]:
     return variants
 
 
-def compute_param_counts(snapshot: Dict[str, Any], cache: Dict[Tuple, Dict[str, int]]) -> Dict[str, int]:
+def compute_param_counts(
+    snapshot: dict[str, Any], cache: dict[tuple, dict[str, int]]
+) -> dict[str, int]:
     key = (
         int(snapshot["pca_dim"]),
         int(snapshot["nb_kernels"]),
@@ -178,7 +205,9 @@ def compute_param_counts(snapshot: Dict[str, Any], cache: Dict[Tuple, Dict[str, 
         amplitudes_encoding=amplitudes,
     )
     classical_model = QConvModel(bias=True, **base_kwargs)
-    classical_params = sum(p.numel() for p in classical_model.parameters() if p.requires_grad)
+    classical_params = sum(
+        p.numel() for p in classical_model.parameters() if p.requires_grad
+    )
 
     kernel_modes = int(snapshot.get("kernel_modes") or snapshot["kernel_size"])
     n_photons = int(snapshot.get("n_photons", 4))
@@ -192,8 +221,12 @@ def compute_param_counts(snapshot: Dict[str, Any], cache: Dict[Tuple, Dict[str, 
         amplitudes_encoding=amplitudes,
         show_circuit=False,
     )
-    quantum_model = QConvModel(bias=False, kernel_modules=quantum_modules, **base_kwargs)
-    quantum_params = sum(p.numel() for p in quantum_model.parameters() if p.requires_grad)
+    quantum_model = QConvModel(
+        bias=False, kernel_modules=quantum_modules, **base_kwargs
+    )
+    quantum_params = sum(
+        p.numel() for p in quantum_model.parameters() if p.requires_grad
+    )
 
     counts = {
         "qconv_quantum": quantum_params,
@@ -205,11 +238,15 @@ def compute_param_counts(snapshot: Dict[str, Any], cache: Dict[Tuple, Dict[str, 
 
 
 def ensure_variant_param_counts(
-    variant_stats: Dict[str, Dict[str, float]],
-    snapshot: Dict[str, Any],
-    cache: Dict[Tuple, Dict[str, int]],
+    variant_stats: dict[str, dict[str, float]],
+    snapshot: dict[str, Any],
+    cache: dict[tuple, dict[str, int]],
 ) -> None:
-    missing = [name for name, stats in variant_stats.items() if stats.get("param_count") is None]
+    missing = [
+        name
+        for name, stats in variant_stats.items()
+        if stats.get("param_count") is None
+    ]
     if not missing:
         return
     counts = compute_param_counts(snapshot, cache)
@@ -220,7 +257,7 @@ def ensure_variant_param_counts(
 
 def run_configuration(
     impl_path: Path,
-    config: Dict[str, int],
+    config: dict[str, int],
     dataset: str,
     steps: int,
     seeds: int,
@@ -230,16 +267,25 @@ def run_configuration(
     cmd = [
         sys.executable,
         str(impl_path),
-        "--model", "qconv",
-        "--dataset", dataset,
+        "--model",
+        "qconv",
+        "--dataset",
+        dataset,
         "--compare_classical",
-        "--nb_kernels", str(config["nb_kernels"]),
-        "--kernel_size", str(config["kernel_size"]),
-        "--stride", str(config["stride"]),
-        "--kernel_modes", str(config["kernel_modes"]),
-        "--pca_dim", str(config["pca_dim"]),
-        "--steps", str(steps),
-        "--seeds", str(seeds),
+        "--nb_kernels",
+        str(config["nb_kernels"]),
+        "--kernel_size",
+        str(config["kernel_size"]),
+        "--stride",
+        str(config["stride"]),
+        "--kernel_modes",
+        str(config["kernel_modes"]),
+        "--pca_dim",
+        str(config["pca_dim"]),
+        "--steps",
+        str(steps),
+        "--seeds",
+        str(seeds),
     ]
     proc = subprocess.run(
         cmd,
@@ -255,7 +301,7 @@ def run_configuration(
     return detect_new_run_dir(before, after)
 
 
-def generate_configs() -> Iterable[Dict[str, int]]:
+def generate_configs() -> Iterable[dict[str, int]]:
     for pca_dim in PCA_OPTIONS:
         for nb_kernels in NB_KERNELS:
             for kernel_size in KERNEL_SIZES:
@@ -278,14 +324,14 @@ def generate_configs() -> Iterable[Dict[str, int]]:
 
 
 def summarize_series(
-    records: List[Dict],
+    records: list[dict],
     pca_dim: int,
     param_key: str,
     variant: str,
-    filters: Dict[str, Any] | None = None,
-) -> Tuple[List[int], List[float], List[float]]:
-    metric_values: Dict[int, List[float]] = defaultdict(list)
-    param_counts: Dict[int, List[float]] = defaultdict(list)
+    filters: dict[str, Any] | None = None,
+) -> tuple[list[int], list[float], list[float]]:
+    metric_values: dict[int, list[float]] = defaultdict(list)
+    param_counts: dict[int, list[float]] = defaultdict(list)
     filters = filters or {}
     for entry in records:
         if entry["pca_dim"] != pca_dim or entry["variant"] != variant:
@@ -307,7 +353,7 @@ def summarize_series(
     return sorted_keys, accuracies, param_means
 
 
-def find_variant(records: List[Dict], prefix: str, pca_dim: int) -> str | None:
+def find_variant(records: list[dict], prefix: str, pca_dim: int) -> str | None:
     for entry in records:
         if entry["pca_dim"] == pca_dim and entry["variant"].startswith(prefix):
             return entry["variant"]
@@ -315,19 +361,21 @@ def find_variant(records: List[Dict], prefix: str, pca_dim: int) -> str | None:
 
 
 def plot_relationship(
-    records: List[Dict],
+    records: list[dict],
     pca_dim: int,
     param_key: str,
-    variants: List[Tuple[str, str]],
+    variants: list[tuple[str, str]],
     title_suffix: str,
     output_path: Path,
-    filters: Dict[str, Any] | None = None,
+    filters: dict[str, Any] | None = None,
 ) -> None:
     if not variants:
         return
     fig, axes = plt.subplots(1, 2, figsize=(12, 5))
     for variant_name, label in variants:
-        xs, accs, params = summarize_series(records, pca_dim, param_key, variant_name, filters=filters)
+        xs, accs, params = summarize_series(
+            records, pca_dim, param_key, variant_name, filters=filters
+        )
         if not xs:
             continue
         axes[0].plot(xs, accs, marker="o", label=label)
@@ -346,7 +394,9 @@ def plot_relationship(
     plt.close(fig)
 
 
-def write_records(output_dir: Path, args: argparse.Namespace, records: List[Dict]) -> None:
+def write_records(
+    output_dir: Path, args: argparse.Namespace, records: list[dict]
+) -> None:
     data_path = output_dir / "sweep_records.json"
     payload = {
         "updated_at": datetime.utcnow().isoformat(),
@@ -371,8 +421,8 @@ def main() -> None:
     total = len(configs)
     results_root = impl_path.parent / f"results-{args.dataset}"
     existing_runs = index_existing_runs(results_root)
-    param_cache: Dict[Tuple, Dict[str, int]] = {}
-    records: List[Dict] = []
+    param_cache: dict[tuple, dict[str, int]] = {}
+    records: list[dict] = []
 
     print(f"Planned {total} runs.")
     for idx, config in enumerate(configs, start=1):
@@ -401,14 +451,16 @@ def main() -> None:
         variant_stats = parse_run_summary(run_dir)
         ensure_variant_param_counts(variant_stats, snapshot, param_cache)
         for variant_name, stats in variant_stats.items():
-            records.append({
-                **config,
-                "variant": variant_name,
-                "mean_accuracy": stats["mean_accuracy"],
-                "std_accuracy": stats["std_accuracy"],
-                "param_count": stats.get("param_count"),
-                "run_dir": str(run_dir),
-            })
+            records.append(
+                {
+                    **config,
+                    "variant": variant_name,
+                    "mean_accuracy": stats["mean_accuracy"],
+                    "std_accuracy": stats["std_accuracy"],
+                    "param_count": stats.get("param_count"),
+                    "run_dir": str(run_dir),
+                }
+            )
         write_records(output_dir, args, records)
 
     print(f"Wrote sweep data to {output_dir / 'sweep_records.json'}")

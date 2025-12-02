@@ -1,5 +1,6 @@
 """Basic smoke tests ensuring the reproduction entry points import."""
 
+
 def test_import_implementation():
     import importlib
 

@@ -2,11 +2,11 @@
 
 from __future__ import annotations
 
-from typing import List
+from typing import list
 
 import torch
 import torch.nn as nn
-from utils.circuit import build_single_gi_layer, build_quantum_kernel_layer
+from utils.circuit import build_quantum_kernel_layer, build_single_gi_layer
 
 
 class SingleGI(nn.Module):
@@ -61,7 +61,7 @@ class QuantumPatchKernel(nn.Module):
         self.output_keys = self._extract_output_keys(q_layer)
 
     @staticmethod
-    def _extract_output_keys(q_layer: nn.Module) -> List[str]:
+    def _extract_output_keys(q_layer: nn.Module) -> list[str]:
         keys = getattr(q_layer, "output_keys", None)
         if keys is not None:
             return list(keys)
@@ -92,7 +92,7 @@ class QConvModel(nn.Module):
         kernel_size: int,
         stride: int = 1,
         bias: bool = True,
-        kernel_modules: List[nn.Module] | None = None,
+        kernel_modules: list[nn.Module] | None = None,
         amplitudes_encoding: bool = False,
     ) -> None:
         super().__init__()
@@ -114,7 +114,7 @@ class QConvModel(nn.Module):
             # Quantum mode: we receive a pre-built list of QuantumPatchKernel modules.
             if kernel_modules is None or len(kernel_modules) != n_kernels:
                 raise ValueError("kernel_modules must contain one module per kernel.")
-            self.kernel_modules = nn.ModuleList(kernel_modules)
+            self.kernel_modules = nn.Modulelist(kernel_modules)
             self.space_dim = len(self.kernel_modules[0].output_keys)
             if self.amplitudes_encoding and self.space_dim == 0:
                 raise ValueError(
@@ -162,7 +162,9 @@ class QConvModel(nn.Module):
         out = self.classical_conv(conv_in)
         return out.view(out.size(0), -1)
 
-    def _apply_quantum(self, patches: torch.Tensor, num_windows: int, batch_size: int) -> torch.Tensor:
+    def _apply_quantum(
+        self, patches: torch.Tensor, num_windows: int, batch_size: int
+    ) -> torch.Tensor:
         # Evaluate every patch with each quantum kernel module and stack responses.
         patches_flat = patches.contiguous().view(-1, patches.size(-1))
         outputs = []
@@ -194,7 +196,7 @@ class QConvModel(nn.Module):
                         "Amplitude encoding patches cannot exceed the computation space dimension."
                     )
                 pad = self.space_dim - patch_width
-                
+
                 if pad:
                     pad_shape = patches.shape[:-1] + (pad,)
                     zeros = patches.new_zeros(*pad_shape)
@@ -214,9 +216,9 @@ def build_quantum_kernels(
     reservoir_mode: bool,
     amplitudes_encoding: bool,
     show_circuit: bool = False,
-) -> List[QuantumPatchKernel]:
+) -> list[QuantumPatchKernel]:
     """Build a list of QuantumPatchKernel modules with shared configuration."""
-    modules: List[QuantumPatchKernel] = []
+    modules: list[QuantumPatchKernel] = []
     for _ in range(n_kernels):
         layer = build_quantum_kernel_layer(
             kernel_modes=kernel_modes,
