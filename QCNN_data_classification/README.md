@@ -153,14 +153,14 @@ Here, we use 12 kernel modes, 3 kernels, and a kernel size of 3 and a stride of 
 |  | 8 PCA components | 16 PCA components |
 | ----------- | ----------- | ----------- |
 | MNIST | 96.08 ± 3.64 | 80.11 ± 23.29 |
-| FashionMNIST | | 82.75 ± 19.07 |
+| FashionMNIST | 93.18% ± 1.20% | 82.75 ± 19.07 |
 
 - Classical convolution (32 trainable parameters)
 
 |  | 8 PCA components | 16 PCA components |
 | ----------- | ----------- | ----------- |
 | MNIST | 76.78 ± 11.16 | 72.84 ± 15.04 |
-| FashionMNIST | | 76.85 ± 23.14 |
+| FashionMNIST | 81.35% ± 6.38% | 76.85 ± 23.14 |
 
 Below, you can observe the training losses and accuracies for trainings done on 8 PCA components for MNIST then FashionMNIST
 
