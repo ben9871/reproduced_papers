@@ -1,0 +1,5 @@
+,mean_accuracy,mean_accuracy,mean_accuracy,mean_accuracy,param_count,param_count,param_count
+,mean,std,min,max,mean,min,max
+variant,,,,,,,
+qconv_classical,0.6375,0.0715,0.5368,0.7723,30.0,12,56
+qconv_quantum,0.7591,0.1346,0.5366,0.98,467.1429,38,1538

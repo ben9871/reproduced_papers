@@ -6,7 +6,6 @@ from typing import List
 
 import torch
 import torch.nn as nn
-
 from utils.circuit import build_single_gi_layer
 
 

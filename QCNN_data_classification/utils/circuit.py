@@ -4,9 +4,10 @@ from __future__ import annotations
 
 import random
 from enum import Enum
+
+import merlin as ML
 import numpy as np
 import perceval as pcvl
-import merlin as ML
 import torch.nn as nn
 
 
@@ -171,10 +172,12 @@ def build_quantum_kernel_layer(
     n_photons: int,
     state_pattern: str,
     reservoir_mode: bool,
+    show_circuit: bool = False,
 ) -> ML.QuantumLayer:
     circuit = create_quantum_circuit(kernel_modes, kernel_features)
-    print(f"\n ----- Created a quantum kernel circuit with {kernel_modes} modes and {kernel_features} features -----\n")
-    #pcvl.pdisplay(circuit)
+    if show_circuit:
+        print(f"\n ----- Created a quantum kernel circuit with {kernel_modes} modes and {kernel_features} features -----\n")
+        pcvl.pdisplay(circuit)
     pattern = StatePattern[state_pattern.upper()]
     photon_state = StateGenerator.generate_state(
         kernel_modes,

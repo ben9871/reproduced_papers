@@ -3,15 +3,14 @@
 from __future__ import annotations
 
 import argparse
+import datetime
 import json
 import statistics
 from pathlib import Path
-import datetime
 from typing import Callable, List, Tuple
 
 import numpy as np
 import torch.nn as nn
-
 from data import make_pca
 from model import QConvModel, QuantumPatchKernel, SingleGI
 from utils.circuit import (
@@ -47,10 +46,11 @@ def _parse_configured_args() -> argparse.Namespace:
         help="Choose which torchvision dataset to use for the 0 vs 1 split.",
     )
     parser.add_argument("--pca_dim", type=int, default=8)
-    
+
     parser.add_argument("--model", choices=["qconv", "single"], default="qconv")
     # Single GI parameters
     parser.add_argument("--n_modes", type=int, default=8)
+    parser.add_argument("--n_features", type=int, default=8)
     parser.add_argument("--reservoir_mode", action="store_true")
     parser.add_argument(
         "--state_pattern",
@@ -58,7 +58,7 @@ def _parse_configured_args() -> argparse.Namespace:
         default="default",
     )
     parser.add_argument("--n_photons", type=int, default=4)
-    
+
 
     # QCNN parameters
     parser.add_argument("--nb_kernels", type=int, default=4)
@@ -76,7 +76,7 @@ def _parse_configured_args() -> argparse.Namespace:
         return prelim_args
 
     config_args: List[str] = []
-    with open(prelim_args.config, "r", encoding="utf-8") as fh:
+    with open(prelim_args.config, encoding="utf-8") as fh:
         config_data = json.load(fh)
     for key, value in config_data.items():
         flag = f"--{key}"
@@ -133,7 +133,7 @@ def _prepare_models(
         def build_single() -> nn.Module:
             return SingleGI(
                 n_modes=args.n_modes,
-                n_features=args.pca_dim,
+                n_features=args.n_features,
                 n_photons=args.n_photons,
                 reservoir_mode=args.reservoir_mode,
                 state_pattern=args.state_pattern,
@@ -205,7 +205,7 @@ def main() -> None:
     args = _parse_configured_args()
 
     angle_factor = _angle_factor(args.angle_scale)
-    required_inputs = required_input_params(args.n_modes, args.pca_dim)
+    required_inputs = required_input_params(args.n_modes, args.n_features)
     print(f"Using args.dataset = {args.dataset}, PCA dim = {args.pca_dim}")
     (Ztr, ytr), (Zte, yte) = make_pca(args.pca_dim, dataset=args.dataset)
     input_dim = Ztr.shape[-1]
@@ -243,6 +243,7 @@ def main() -> None:
     config_snapshot_path = run_dir / "config_snapshot.json"
     with open(config_snapshot_path, "w", encoding="utf-8") as fh:
         json.dump(vars(args), fh, indent=2)
+    variant_param_counts: dict[str, int] = {}
     for name, builder in builders:
         print(f"\n=== Evaluating {name} ({args.seeds} seed{'s' if args.seeds > 1 else ''}) ===")
         variant_accs = []
@@ -250,9 +251,10 @@ def main() -> None:
         for s in range(args.seeds):
             print(f"[Seed {s+1}/{args.seeds}]")
             model = builder()
-            print(
-                f"Number of trainable parameters = {sum(p.numel() for p in model.parameters() if p.requires_grad)}"
-            )
+            param_count = sum(p.numel() for p in model.parameters() if p.requires_grad)
+            print(f"Number of trainable parameters = {param_count}")
+            if name not in variant_param_counts:
+                variant_param_counts[name] = param_count
             acc, loss_history = train_once(
                 Ztr, ytr, Zte, yte,
                 steps=args.steps,
@@ -297,6 +299,7 @@ def main() -> None:
             "std_accuracy": float(std),
             "seeds": seed_records,
             "summary_file": "summary.json",
+            "param_count": variant_param_counts.get(name),
         }
         with open(variant_dir / "summary.json", "w", encoding="utf-8") as fh:
             json.dump(summary, fh, indent=2)
@@ -320,6 +323,7 @@ def main() -> None:
             "std_accuracy": float(std),
             "seeds": variant_seed_details.get(name, []),
             "summary_file": f"{name}/summary.json",
+            "param_count": variant_param_counts.get(name),
         })
 
     with open(run_dir / "run_summary.json", "w", encoding="utf-8") as fh:

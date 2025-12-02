@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import random
-from typing import Tuple, List
+from typing import List, Tuple
 
 import torch
 import torch.nn as nn
