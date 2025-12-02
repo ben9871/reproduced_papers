@@ -6,7 +6,7 @@ from typing import List
 
 import torch
 import torch.nn as nn
-from utils.circuit import build_single_gi_layer
+from utils.circuit import build_single_gi_layer, build_quantum_kernel_layer
 
 
 class SingleGI(nn.Module):
@@ -194,6 +194,7 @@ class QConvModel(nn.Module):
                         "Amplitude encoding patches cannot exceed the computation space dimension."
                     )
                 pad = self.space_dim - patch_width
+                
                 if pad:
                     pad_shape = patches.shape[:-1] + (pad,)
                     zeros = patches.new_zeros(*pad_shape)
@@ -202,3 +203,29 @@ class QConvModel(nn.Module):
         else:
             features = self._apply_classical(x)
         return self.head(features)
+
+
+def build_quantum_kernels(
+    n_kernels: int,
+    kernel_size: int,
+    kernel_modes: int,
+    n_photons: int,
+    state_pattern: str,
+    reservoir_mode: bool,
+    amplitudes_encoding: bool,
+    show_circuit: bool = False,
+) -> List[QuantumPatchKernel]:
+    """Build a list of QuantumPatchKernel modules with shared configuration."""
+    modules: List[QuantumPatchKernel] = []
+    for _ in range(n_kernels):
+        layer = build_quantum_kernel_layer(
+            kernel_modes=kernel_modes,
+            kernel_features=kernel_size,
+            n_photons=n_photons,
+            state_pattern=state_pattern,
+            reservoir_mode=reservoir_mode,
+            show_circuit=show_circuit,
+            amplitudes_encoding=amplitudes_encoding,
+        )
+        modules.append(QuantumPatchKernel(layer, patch_dim=kernel_size))
+    return modules

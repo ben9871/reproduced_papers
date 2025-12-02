@@ -12,11 +12,8 @@ from typing import Callable, Dict, List, Tuple
 import numpy as np
 import torch.nn as nn
 from data import make_pca
-from model import QConvModel, QuantumPatchKernel, SingleGI
-from utils.circuit import (
-    build_quantum_kernel_layer,
-    required_input_params,
-)
+from model import QConvModel, SingleGI, build_quantum_kernels
+from utils.circuit import required_input_params
 from utils.training import train_once
 
 
@@ -111,26 +108,6 @@ def _angle_factor(scale: str) -> float:
     return 1.0
 
 
-def _build_quantum_kernel_modules(
-    args: argparse.Namespace,
-) -> Callable[[], List[QuantumPatchKernel]]:
-    def factory() -> List[QuantumPatchKernel]:
-        modules: List[QuantumPatchKernel] = []
-        for _ in range(args.nb_kernels):
-            layer = build_quantum_kernel_layer(
-                kernel_modes=args.kernel_modes or args.kernel_size,
-                kernel_features=args.kernel_size,
-                n_photons=args.kernel_modes // 2,
-                state_pattern=args.state_pattern,
-                reservoir_mode=args.reservoir_mode,
-                amplitudes_encoding=args.amplitude,
-            )
-            modules.append(QuantumPatchKernel(layer, patch_dim=args.kernel_size))
-        return modules
-
-    return factory
-
-
 def _prepare_models(
     args: argparse.Namespace,
     input_dim: int,
@@ -172,6 +149,20 @@ def _prepare_models(
         amplitudes_encoding=args.amplitude,
     )
 
+    kernel_modes = args.kernel_modes or args.kernel_size
+    n_photons = args.kernel_modes // 2
+
+    def _build_quantum_modules() -> List[nn.Module]:
+        return build_quantum_kernels(
+            n_kernels=args.nb_kernels,
+            kernel_size=args.kernel_size,
+            kernel_modes=kernel_modes,
+            n_photons=n_photons,
+            state_pattern=args.state_pattern,
+            reservoir_mode=args.reservoir_mode,
+            amplitudes_encoding=args.amplitude,
+        )
+
     # Classical variant (always available for comparison/logging)
     classical_sample = QConvModel(bias=True, **base_kwargs)
     classical_output_dim = classical_sample.output_features
@@ -187,8 +178,7 @@ def _prepare_models(
         builders.append(("qconv_classical_only", build_classical))
         return builders, logs
 
-    quantum_factory = _build_quantum_kernel_modules(args)
-    quantum_modules = quantum_factory()
+    quantum_modules = _build_quantum_modules()
     quantum_sample = QConvModel(bias=False, kernel_modules=quantum_modules, **base_kwargs)
     quantum_output_dim = quantum_sample.output_features
     logs.append(
@@ -198,7 +188,7 @@ def _prepare_models(
     def build_quantum() -> nn.Module:
         return QConvModel(
             bias=False,
-            kernel_modules=quantum_factory(),
+            kernel_modules=_build_quantum_modules(),
             **base_kwargs,
         )
 
