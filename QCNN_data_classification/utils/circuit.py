@@ -111,27 +111,30 @@ def build_parallel_columns_circuit(n_modes: int, n_features: int, reservoir_mode
     return circuit
 
 
-def create_quantum_circuit(n_modes: int, n_features: int):
+def create_quantum_circuit(n_modes: int, n_features: int, amplitudes_encoding: bool = False) -> pcvl.Circuit:
     wl = pcvl.GenericInterferometer(
         n_modes,
         lambda i: pcvl.BS() // pcvl.PS(pcvl.P(f"theta_li{i}")) //
         pcvl.BS() // pcvl.PS(pcvl.P(f"theta_lo{i}")),
         shape=pcvl.InterferometerShape.RECTANGLE
     )
+    if not amplitudes_encoding:
+        c_var = pcvl.Circuit(n_modes)
+        for i in range(n_features):
+            px = pcvl.P(f"px{i + 1}")
+            c_var.add(i, pcvl.PS(px))
 
-    c_var = pcvl.Circuit(n_modes)
-    for i in range(n_features):
-        px = pcvl.P(f"px{i + 1}")
-        c_var.add(i, pcvl.PS(px))
+        wr = pcvl.GenericInterferometer(
+            n_modes,
+            lambda i: pcvl.BS() // pcvl.PS(pcvl.P(f"theta_ri{i}")) //
+            pcvl.BS() // pcvl.PS(pcvl.P(f"theta_ro{i}")),
+            shape=pcvl.InterferometerShape.RECTANGLE
+        )
 
-    wr = pcvl.GenericInterferometer(
-        n_modes,
-        lambda i: pcvl.BS() // pcvl.PS(pcvl.P(f"theta_ri{i}")) //
-        pcvl.BS() // pcvl.PS(pcvl.P(f"theta_ro{i}")),
-        shape=pcvl.InterferometerShape.RECTANGLE
-    )
+        return wl // c_var // wr
+    else:
+        return wl
 
-    return wl // c_var // wr
 
 
 def required_input_params(n_modes: int, n_features: int) -> int:
@@ -173,26 +176,43 @@ def build_quantum_kernel_layer(
     state_pattern: str,
     reservoir_mode: bool,
     show_circuit: bool = False,
+    amplitudes_encoding: bool = False,
 ) -> ML.QuantumLayer:
-    circuit = create_quantum_circuit(kernel_modes, kernel_features)
+    circuit = create_quantum_circuit(kernel_modes, kernel_features, amplitudes_encoding)
     if show_circuit:
         print(f"\n ----- Created a quantum kernel circuit with {kernel_modes} modes and {kernel_features} features -----\n")
         pcvl.pdisplay(circuit)
-    pattern = StatePattern[state_pattern.upper()]
-    photon_state = StateGenerator.generate_state(
-        kernel_modes,
-        min(n_photons, kernel_modes),
-        pattern,
-    )
-    trainable_prefixes = [] if reservoir_mode else ["theta"]
-    input_prefixes = ["px"]
-    q_layer = ML.QuantumLayer(
-        input_size=kernel_features,
-        circuit=circuit,
-        trainable_parameters=trainable_prefixes,
-        input_parameters=input_prefixes,
-        input_state=photon_state,
-        measurement_strategy=ML.MeasurementStrategy.PROBABILITIES,
-    )
+    
+    if not amplitudes_encoding:
+        # use "px" input parameters
+        pattern = StatePattern[state_pattern.upper()]
+        photon_state = StateGenerator.generate_state(
+            kernel_modes,
+            min(n_photons, kernel_modes),
+            pattern,
+        )
+        
+        trainable_prefixes = [] if reservoir_mode else ["theta"]
+        input_prefixes = ["px"]
+        q_layer = ML.QuantumLayer(
+            input_size=kernel_features,
+            circuit=circuit,
+            trainable_parameters=trainable_prefixes,
+            input_parameters=input_prefixes,
+            input_state=photon_state,
+            measurement_strategy=ML.MeasurementStrategy.PROBABILITIES,
+        )
+    else:
+        
+        trainable_prefixes = [] if reservoir_mode else ["theta"]
+        q_layer = ML.QuantumLayer(
+            circuit=circuit,
+            trainable_parameters=trainable_prefixes,
+            n_photons=2,
+            measurement_strategy=ML.MeasurementStrategy.PROBABILITIES,
+            computation_space = ML.ComputationSpace.UNBUNCHED,
+            amplitude_encoding=True,
+        )
+
     complete = nn.Sequential(q_layer, ML.LexGrouping(input_size = q_layer.output_size, output_size=2))
     return complete

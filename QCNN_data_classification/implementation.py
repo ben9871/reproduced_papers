@@ -7,7 +7,7 @@ import datetime
 import json
 import statistics
 from pathlib import Path
-from typing import Callable, List, Tuple
+from typing import Callable, Dict, List, Tuple
 
 import numpy as np
 import torch.nn as nn
@@ -61,12 +61,22 @@ def _parse_configured_args() -> argparse.Namespace:
 
 
     # QCNN parameters
-    parser.add_argument("--nb_kernels", type=int, default=4)
-    parser.add_argument("--kernel_size", type=int, default=2)
-    parser.add_argument("--stride", type=int, default=1)
-    parser.add_argument("--conv_classical", action="store_true")
-    parser.add_argument("--compare_classical", action="store_true")
-    parser.add_argument("--kernel_modes", type=int, default=8)
+    parser.add_argument("--nb_kernels", type=int, default=4, help="Number of quantum convolutional kernels.")
+    parser.add_argument("--kernel_size", type=int, default=2, help="Size of each quantum convolutional kernel.")
+    parser.add_argument("--stride", type=int, default=1, help="Stride for the quantum convolutional kernels.")
+    parser.add_argument("--kernel_modes", type=int, default=8, help="Number of modes in each quantum convolutional kernel.")
+    parser.add_argument("--conv_classical", action="store_true", help="Use classical kernels instead of quantum.")
+    parser.add_argument("--compare_classical", action="store_true", help="Also include classical kernel variant for comparison.")
+    parser.add_argument(
+        "--amplitude",
+        action="store_true",
+        help="Use amplitude encoding in quantum kernels.",
+    )
+    parser.add_argument(
+        "--figures",
+        action="store_true",
+        help="Save loss/accuracy curves per run inside the results directory.",
+    )
 
     prelim_args, remaining = parser.parse_known_args()
 
@@ -113,6 +123,7 @@ def _build_quantum_kernel_modules(
                 n_photons=args.kernel_modes // 2,
                 state_pattern=args.state_pattern,
                 reservoir_mode=args.reservoir_mode,
+                amplitudes_encoding=args.amplitude,
             )
             modules.append(QuantumPatchKernel(layer, patch_dim=args.kernel_size))
         return modules
@@ -158,6 +169,7 @@ def _prepare_models(
         n_kernels=args.nb_kernels,
         kernel_size=args.kernel_size,
         stride=args.stride,
+        amplitudes_encoding=args.amplitude,
     )
 
     # Classical variant (always available for comparison/logging)
@@ -201,6 +213,70 @@ def _prepare_models(
     return builders, logs
 
 
+def _plot_training_figures(run_dir: Path, variant_histories: Dict[str, List[Dict[str, List[float]]]]) -> None:
+    try:
+        import matplotlib
+
+        matplotlib.use("Agg")
+        import matplotlib.pyplot as plt
+    except Exception as exc:  # pragma: no cover - matplotlib optional
+        print(f"[figures] Could not import matplotlib ({exc}); skipping figure export.")
+        return
+
+    def _save_metric(metric_key: str, ylabel: str, title: str, filename: str) -> None:
+        metric_curves: Dict[str, List[List[float]]] = {}
+        for variant, histories in variant_histories.items():
+            curves: List[List[float]] = []
+            for entry in histories:
+                curve_vals = entry.get(metric_key)
+                if curve_vals:
+                    curves.append(curve_vals)
+            if curves:
+                metric_curves[variant] = curves
+        if not metric_curves:
+            return
+
+        plt.figure(figsize=(10, 6))
+        color_cycle = plt.cm.get_cmap("tab10", len(metric_curves))
+        for idx, (variant, curves) in enumerate(sorted(metric_curves.items())):
+            color = color_cycle(idx % color_cycle.N)
+            min_len = min(len(curve) for curve in curves)
+            aligned = np.array([curve[:min_len] for curve in curves], dtype=float)
+            steps = np.arange(1, min_len + 1)
+            for curve in aligned:
+                plt.plot(steps, curve, color=color, alpha=0.25, linewidth=0.8)
+            mean_curve = aligned.mean(axis=0)
+            plt.plot(steps, mean_curve, color=color, linewidth=2.0, label=f"{variant} mean")
+            if aligned.shape[0] > 1:
+                std_curve = aligned.std(axis=0)
+                plt.fill_between(
+                    steps,
+                    mean_curve - std_curve,
+                    mean_curve + std_curve,
+                    color=color,
+                    alpha=0.1,
+                )
+
+        plt.xlabel("Training step")
+        plt.ylabel(ylabel)
+        plt.title(title)
+        plt.grid(True, alpha=0.3)
+        plt.legend()
+        filename.parent.mkdir(parents=True, exist_ok=True)
+        plt.savefig(filename, dpi=300, bbox_inches="tight")
+        plt.close()
+        print(f"[figures] Saved {filename.relative_to(run_dir)}")
+
+    figures_dir = run_dir / "figures"
+    _save_metric("loss", "Loss", "Training loss per seed", figures_dir / "loss_curves.png")
+    _save_metric(
+        "accuracy",
+        "Accuracy",
+        "Test accuracy per step",
+        figures_dir / "accuracy_curves.png",
+    )
+
+
 def main() -> None:
     args = _parse_configured_args()
 
@@ -233,6 +309,7 @@ def main() -> None:
     comparison_results = []
     # store per-variant per-seed training curves for saving
     variant_seed_details = {}
+    variant_histories: Dict[str, List[Dict[str, List[float]]]] = {}
 
     # Prepare results directories
     results_root = Path(__file__).resolve().parent / f"results-{args.dataset}"
@@ -255,7 +332,7 @@ def main() -> None:
             print(f"Number of trainable parameters = {param_count}")
             if name not in variant_param_counts:
                 variant_param_counts[name] = param_count
-            acc, loss_history = train_once(
+            acc, loss_history, accuracy_history = train_once(
                 Ztr, ytr, Zte, yte,
                 steps=args.steps,
                 batch=args.batch,
@@ -265,6 +342,7 @@ def main() -> None:
                 angle_factor=angle_factor,
                 seed=1235 + s,
                 model=model,
+                track_metrics=args.figures,
             )
             print(f"  Test accuracy: {acc*100:.2f}%")
             variant_accs.append(acc)
@@ -280,6 +358,8 @@ def main() -> None:
                 "test_accuracy": float(acc),
                 "loss_history": [float(x) for x in loss_history],
             }
+            if args.figures:
+                seed_data["accuracy_history"] = [float(x) for x in accuracy_history]
             with open(seed_fname, "w", encoding="utf-8") as fh:
                 json.dump(seed_data, fh, indent=2)
             seed_records.append({
@@ -288,6 +368,11 @@ def main() -> None:
                 "test_accuracy": float(acc),
                 "curve_file": seed_fname.name,
             })
+            if args.figures:
+                variant_histories.setdefault(name, []).append({
+                    "loss": [float(x) for x in loss_history],
+                    "accuracy": [float(x) for x in accuracy_history],
+                })
         mean = statistics.mean(variant_accs)
         std = statistics.stdev(variant_accs) if len(variant_accs) > 1 else 0.0
         print(f"→ Summary for {name}: mean {mean*100:.2f}% ± {std*100:.2f}%")
@@ -328,6 +413,9 @@ def main() -> None:
 
     with open(run_dir / "run_summary.json", "w", encoding="utf-8") as fh:
         json.dump(run_summary, fh, indent=2)
+
+    if args.figures and variant_histories:
+        _plot_training_figures(run_dir, variant_histories)
 
     if len(comparison_results) > 1:
         print("\n=== Overall Comparison ===")

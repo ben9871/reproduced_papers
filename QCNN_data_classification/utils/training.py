@@ -40,7 +40,8 @@ def train_once(
     angle_factor: float,
     seed: int,
     model: nn.Module,
-    ) -> Tuple[float, List[float]]:
+    track_metrics: bool = False,
+    ) -> Tuple[float, List[float], List[float]]:
     set_seed(seed)
 
     if opt_name == "adam":
@@ -55,6 +56,7 @@ def train_once(
     model.train()
     it = 0
     loss_history: List[float] = []
+    accuracy_history: List[float] = []
     while it < steps:
         for xb, yb in train_loader:
             optim.zero_grad(set_to_none=True)
@@ -63,9 +65,13 @@ def train_once(
             loss.backward()
             optim.step()
             loss_history.append(float(loss.item()))
+            if track_metrics:
+                step_acc = evaluate(model, test_loader, angle_factor)
+                accuracy_history.append(float(step_acc))
+                model.train()
             it += 1
             if it >= steps:
                 break
 
     acc = evaluate(model, test_loader, angle_factor)
-    return acc, loss_history
+    return acc, loss_history, accuracy_history

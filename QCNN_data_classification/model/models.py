@@ -58,6 +58,18 @@ class QuantumPatchKernel(nn.Module):
         super().__init__()
         self.q_layer = q_layer
         self.patch_dim = patch_dim
+        self.output_keys = self._extract_output_keys(q_layer)
+
+    @staticmethod
+    def _extract_output_keys(q_layer: nn.Module) -> List[str]:
+        keys = getattr(q_layer, "output_keys", None)
+        if keys is not None:
+            return list(keys)
+        for child in q_layer.children():
+            child_keys = getattr(child, "output_keys", None)
+            if child_keys is not None:
+                return list(child_keys)
+        return []
 
     def forward(self, patch: torch.Tensor) -> torch.Tensor:
         # Kernels are evaluated on flattened PCA patches, so enforce the width.
@@ -81,6 +93,7 @@ class QConvModel(nn.Module):
         stride: int = 1,
         bias: bool = True,
         kernel_modules: List[nn.Module] | None = None,
+        amplitudes_encoding: bool = False,
     ) -> None:
         super().__init__()
         if n_kernels <= 0:
@@ -95,12 +108,21 @@ class QConvModel(nn.Module):
         self.kernel_size = kernel_size
         self.stride = stride
         self.use_quantum = kernel_modules is not None
+        self.amplitudes_encoding = amplitudes_encoding
 
         if self.use_quantum:
             # Quantum mode: we receive a pre-built list of QuantumPatchKernel modules.
             if kernel_modules is None or len(kernel_modules) != n_kernels:
                 raise ValueError("kernel_modules must contain one module per kernel.")
             self.kernel_modules = nn.ModuleList(kernel_modules)
+            self.space_dim = len(self.kernel_modules[0].output_keys)
+            if self.amplitudes_encoding and self.space_dim == 0:
+                raise ValueError(
+                    "Amplitude encoding requires quantum kernels that expose non-empty output_keys."
+                )
+            if self.amplitudes_encoding:
+                for kernel in self.kernel_modules:
+                    kernel.patch_dim = self.space_dim
             self.kernel_output_dim = 2  # Each quantum kernel outputs 2 features.
             self.register_parameter("weight", None)
             self.register_parameter("bias", None)
@@ -165,6 +187,17 @@ class QConvModel(nn.Module):
 
         if self.use_quantum:
             patches = x.unfold(dimension=-1, size=self.kernel_size, step=self.stride)
+            if self.amplitudes_encoding:
+                patch_width = patches.shape[-1]
+                if patch_width > self.space_dim:
+                    raise ValueError(
+                        "Amplitude encoding patches cannot exceed the computation space dimension."
+                    )
+                pad = self.space_dim - patch_width
+                if pad:
+                    pad_shape = patches.shape[:-1] + (pad,)
+                    zeros = patches.new_zeros(*pad_shape)
+                    patches = torch.cat((patches, zeros), dim=-1)
             features = self._apply_quantum(patches, num_windows, x.size(0))
         else:
             features = self._apply_classical(x)
