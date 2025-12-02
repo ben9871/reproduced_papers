@@ -197,13 +197,13 @@ def compute_param_counts(
         return cache[key]
 
     amplitudes = bool(snapshot.get("amplitudes", False))
-    base_kwargs = dict(
-        input_dim=int(snapshot["pca_dim"]),
-        n_kernels=int(snapshot["nb_kernels"]),
-        kernel_size=int(snapshot["kernel_size"]),
-        stride=int(snapshot["stride"]),
-        amplitudes_encoding=amplitudes,
-    )
+    base_kwargs = {
+        "input_dim": int(snapshot["pca_dim"]),
+        "n_kernels": int(snapshot["nb_kernels"]),
+        "kernel_size": int(snapshot["kernel_size"]),
+        "stride": int(snapshot["stride"]),
+        "amplitudes_encoding": amplitudes,
+    }
     classical_model = QConvModel(bias=True, **base_kwargs)
     classical_params = sum(
         p.numel() for p in classical_model.parameters() if p.requires_grad

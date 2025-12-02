@@ -172,13 +172,13 @@ def _prepare_models(
     if num_windows <= 0:
         raise ValueError("qconv configuration results in zero sliding windows.")
 
-    base_kwargs = dict(
-        input_dim=input_dim,
-        n_kernels=args.nb_kernels,
-        kernel_size=args.kernel_size,
-        stride=args.stride,
-        amplitudes_encoding=args.amplitude,
-    )
+    base_kwargs = {
+        "input_dim": input_dim,
+        "n_kernels": args.nb_kernels,
+        "kernel_size": args.kernel_size,
+        "stride": args.stride,
+        "amplitudes_encoding": args.amplitude,
+    }
 
     kernel_modes = args.kernel_modes or args.kernel_size
     n_photons = args.kernel_modes // 2

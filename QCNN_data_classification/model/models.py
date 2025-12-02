@@ -1,6 +1,7 @@
 """Model definitions for the QCNN data classification reproduction."""
 
 from __future__ import annotations
+
 import torch
 import torch.nn as nn
 from utils.circuit import build_quantum_kernel_layer, build_single_gi_layer

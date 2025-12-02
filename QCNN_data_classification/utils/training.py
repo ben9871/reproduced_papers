@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import random
+
 import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader, TensorDataset
