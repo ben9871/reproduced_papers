@@ -1,0 +1,27 @@
+{
+  "variant": "qconv_classical",
+  "mean_accuracy": 0.7685,
+  "std_accuracy": 0.2313671324972499,
+  "seeds": [
+    {
+      "seed_index": 1,
+      "seed_value": 1235,
+      "test_accuracy": 0.918,
+      "curve_file": "seed_01.json"
+    },
+    {
+      "seed_index": 2,
+      "seed_value": 1236,
+      "test_accuracy": 0.502,
+      "curve_file": "seed_02.json"
+    },
+    {
+      "seed_index": 3,
+      "seed_value": 1237,
+      "test_accuracy": 0.8855,
+      "curve_file": "seed_03.json"
+    }
+  ],
+  "summary_file": "summary.json",
+  "param_count": 56
+}

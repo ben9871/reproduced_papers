@@ -1,0 +1,66 @@
+{
+  "timestamp": "20251202-151926",
+  "model": "qconv",
+  "pca_dim": 8,
+  "config_snapshot": "config_snapshot.json",
+  "variants": [
+    {
+      "variant": "qconv_quantum",
+      "mean_accuracy": 0.7148333333333333,
+      "std_accuracy": 0.12532092137122733,
+      "seeds": [
+        {
+          "seed_index": 1,
+          "seed_value": 1235,
+          "test_accuracy": 0.6455,
+          "curve_file": "seed_01.json"
+        },
+        {
+          "seed_index": 2,
+          "seed_value": 1236,
+          "test_accuracy": 0.6395,
+          "curve_file": "seed_02.json"
+        },
+        {
+          "seed_index": 3,
+          "seed_value": 1237,
+          "test_accuracy": 0.8595,
+          "curve_file": "seed_03.json"
+        }
+      ],
+      "summary_file": "qconv_quantum/summary.json",
+      "param_count": 128
+    },
+    {
+      "variant": "qconv_classical",
+      "mean_accuracy": 0.8135,
+      "std_accuracy": 0.06379459224730569,
+      "seeds": [
+        {
+          "seed_index": 1,
+          "seed_value": 1235,
+          "test_accuracy": 0.761,
+          "curve_file": "seed_01.json"
+        },
+        {
+          "seed_index": 2,
+          "seed_value": 1236,
+          "test_accuracy": 0.795,
+          "curve_file": "seed_02.json"
+        },
+        {
+          "seed_index": 3,
+          "seed_value": 1237,
+          "test_accuracy": 0.8845,
+          "curve_file": "seed_03.json"
+        }
+      ],
+      "summary_file": "qconv_classical/summary.json",
+      "param_count": 32
+    }
+  ],
+  "convolution_logs": [
+    "quantum: 3 kernels \u2192 18 dims",
+    "classical: 3 kernels \u2192 9 dims"
+  ]
+}
