@@ -114,7 +114,7 @@ class QConvModel(nn.Module):
             # Quantum mode: we receive a pre-built list of QuantumPatchKernel modules.
             if kernel_modules is None or len(kernel_modules) != n_kernels:
                 raise ValueError("kernel_modules must contain one module per kernel.")
-            self.kernel_modules = nn.Modulelist(kernel_modules)
+            self.kernel_modules = nn.ModuleList(kernel_modules)
             self.space_dim = len(self.kernel_modules[0].output_keys)
             if self.amplitudes_encoding and self.space_dim == 0:
                 raise ValueError(
