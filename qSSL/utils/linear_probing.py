@@ -8,9 +8,11 @@ import os
 import re
 import sys
 from pathlib import Path
+from typing import Optional, Tuple
 
 import torch
 import torch.nn as nn
+from huggingface_hub import hf_hub_download
 from torchsummary import summary
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -20,6 +22,11 @@ if str(PROJECT_ROOT) not in sys.path:
 from lib.data_utils import load_finetuning_data  # noqa: E402
 from lib.model import QSSL  # noqa: E402
 from lib.training_utils import linear_evaluation  # noqa: E402
+
+DEFAULT_HF_REPO = "Quandela/ReproducedPapersQML"
+DEFAULT_HF_PREFIX = "qSSL"
+DEFAULT_HF_REVISION = "main"
+DEFAULT_HF_MODEL_PATH = "merlin/20250827_181840/model-cl-5-epoch-5.pth"
 
 # Command-line argument parser for configuring the experiment
 parser = argparse.ArgumentParser(description="PyTorch Quantum self-sup training")
@@ -32,8 +39,11 @@ parser.add_argument(
     "-p",
     "--pretrained",
     type=str,
-    default="./outdir/run_example",
-    help="path to folder with trained models",
+    default=DEFAULT_HF_MODEL_PATH,
+    help=(
+        "Path to trained model. Accepts local directory/file, full Hugging Face URL, or"
+        " a repo-relative path that will be resolved under --hf-prefix."
+    ),
 )
 # ========== Training Configuration ==========
 parser.add_argument(
@@ -65,6 +75,60 @@ parser.add_argument(
     default="sim_circ_14_half",
     help="Variational ansatz method (default: sim_circ_14_half)",
 )
+
+parser.add_argument(
+    "--hf-repo",
+    type=str,
+    default=DEFAULT_HF_REPO,
+    help="Hugging Face repo that hosts checkpoints (default: Quandela/ReproducedPapersQML).",
+)
+parser.add_argument(
+    "--hf-prefix",
+    type=str,
+    default=DEFAULT_HF_PREFIX,
+    help="Subdirectory inside the repo containing qSSL runs (default: qSSL).",
+)
+parser.add_argument(
+    "--hf-revision",
+    type=str,
+    default=DEFAULT_HF_REVISION,
+    help="Repo revision/branch/commit used when downloading (default: main).",
+)
+
+
+def _parse_hf_reference(reference: str) -> Optional[Tuple[str, str, str]]:
+    """Return (repo_id, revision, file_path) if reference is a HF URL."""
+
+    # Support huggingface.co links that use blob/resolve style paths
+    pattern = re.compile(
+        r"^https://huggingface\.co/(?P<repo>[^/]+/[^/]+)/(?:blob|resolve)/"
+        r"(?P<revision>[^/]+)/(?P<filepath>.+)$"
+    )
+    match = pattern.match(reference)
+    if match:
+        return (
+            match.group("repo"),
+            match.group("revision"),
+            match.group("filepath"),
+        )
+
+    return None
+
+
+def _download_hf_checkpoint(
+    repo_id: str, revision: str, file_path: str
+) -> tuple[Path, Path]:
+    """Download checkpoint + args.json from Hugging Face."""
+
+    model_path = Path(
+        hf_hub_download(repo_id=repo_id, revision=revision, filename=file_path)
+    )
+
+    args_rel = Path(file_path).with_name("args.json")
+    args_path = Path(
+        hf_hub_download(repo_id=repo_id, revision=revision, filename=str(args_rel))
+    )
+    return model_path, args_path
 
 
 def list_pth_files_pathlib(directory_path):
@@ -165,15 +229,52 @@ class FactorMultiplication(nn.Module):
 if __name__ == "__main__":
     args = parser.parse_args()
 
-    # define if we have a directory or a file
-    pretrained_path = Path(args.pretrained)
-    pretrained_model_file = True if os.path.isfile(pretrained_path) else False
+    args_json_override = None
+    remote_spec = _parse_hf_reference(args.pretrained)
+    pretrained_model_file = False
+
+    if not remote_spec:
+        candidate_path = Path(args.pretrained)
+        if candidate_path.exists():
+            pretrained_path = candidate_path
+            pretrained_model_file = candidate_path.is_file()
+        else:
+            relative_path = Path(args.pretrained.lstrip("/"))
+            if args.hf_prefix:
+                prefix_path = Path(args.hf_prefix.lstrip("/"))
+                prefix_posix = prefix_path.as_posix()
+                rel_posix = relative_path.as_posix()
+                if not (
+                    rel_posix == prefix_posix
+                    or rel_posix.startswith(f"{prefix_posix}/")
+                ):
+                    relative_path = prefix_path / relative_path
+            remote_spec = (
+                args.hf_repo,
+                args.hf_revision,
+                relative_path.as_posix(),
+            )
+
+    if remote_spec:
+        repo_id, revision, file_path = remote_spec
+        print(
+            "Downloading pretrained weights from Hugging Face: "
+            f"{repo_id}@{revision}:{file_path}"
+        )
+        pretrained_path, args_json_override = _download_hf_checkpoint(
+            repo_id, revision, file_path
+        )
+        pretrained_model_file = True
+    else:
+        # define if we have a directory or a file
+        pretrained_path = Path(args.pretrained)
+        pretrained_model_file = pretrained_path.is_file()
 
     if pretrained_model_file:
         # Handle case where pretrained is a specific .pth file
         parent_dir = Path(os.path.dirname(pretrained_path))
         results_dir = parent_dir
-        args_json_path = parent_dir / "args.json"
+        args_json_path = args_json_override or parent_dir / "args.json"
         with open(args_json_path) as f:
             saved_args_dict = json.load(f)
         # Create an argparse.Namespace object from the loaded arguments
