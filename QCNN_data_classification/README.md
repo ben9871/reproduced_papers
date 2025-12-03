@@ -26,7 +26,7 @@ QCNN_data_classification/
 ├── results*/     # Result folders per dataset (created at runtime)
 ├── tests/        # Smoke tests
 ├── utils/        # Helper scripts and QCNN wrappers
-├── implementation.py   # Main CLI for the Merlin reproduction
+├── implementation.py   # Thin wrapper delegating to the repo-wide CLI
 ├── notebook.ipynb      # Exploratory scratchpad
 └── requirements.txt    # Minimal dependencies
 ```
@@ -44,16 +44,16 @@ pip install -r requirements.txt
 
 ### Command-line interface
 
-Main entry point: `implementation.py`
+The project runs through the repository-level CLI located one directory up. While you stay inside `QCNN_data_classification/`, call it via `../implementation.py` and select this project with `--project QCNN_data_classification`:
 
 ```bash
-python implementation.py --help
+python ../implementation.py --project QCNN_data_classification --help
 ```
-You can either un a simple QNN model using --model single or a quantum convolution network using --model qconv. This will implement the following model:
+You can either run a simple QNN model using `--model single` or a quantum convolution network using `--model qconv`. This will implement the following model:
 
 ![QCNN](Photonic_QConv.png)
 
-Key options to run these models (see `implementation.py`, `model/`, and `utils/` for the full list):
+Key options to run these models (see `configs/cli.json`, `model/`, and `utils/` for the full list):
 
 - `--model {qconv,single}` switch between the quantum pseudo-convolution and a single Gaussian interferometer baseline.
 - `--nb_kernels`, `--kernel_size`, `--stride`, `--kernel_modes`: quantum kernel topology.
@@ -67,7 +67,7 @@ Key options to run these models (see `implementation.py`, `model/`, and `utils/`
 Example quantum run:
 
 ```bash
-python implementation.py \
+python ../implementation.py --project QCNN_data_classification \
   --dataset mnist \
   --pca_dim 8 \
   --steps 200 \
@@ -81,7 +81,7 @@ python implementation.py \
 Single-GI baseline:
 
 ```bash
-python implementation.py \
+python ../implementation.py --project QCNN_data_classification \
   --model single \
   --n_modes 8 --n_features 8 \
   --n_photons 4 \
@@ -91,7 +91,7 @@ python implementation.py \
 From JSON:
 
 ```bash
-python implementation.py --config configs/example.json
+python ../implementation.py --project QCNN_data_classification --config configs/example.json
 ```
 
 ### Original QCNN wrappers
