@@ -85,6 +85,17 @@ See `configs/defaults.json` (overrides are described in `configs/cli.json`). Key
 
 You can combine `--config` with CLI overrides. The runner resolves the final configuration and saves it to the results directory (`args.json`).
 
+## Pretrained checkpoints
+- Reference weights are hosted on Hugging Face under `Quandela/ReproducedPapersQML/qSSL`. Each run directory mirrors the layout produced locally (checkpoints plus `args.json`).
+- `qSSL/utils/linear_probing.py` defaults to the MerLin checkpoint at `merlin/20250827_181840/model-cl-5-epoch-5.pth`. When `--pretrained` is a repo-relative path (or a full HF URL) the script automatically downloads the `.pth` file and matching `args.json`.
+- Use `--hf-repo`, `--hf-prefix`, and `--hf-revision` if you need to point to another Hugging Face namespace or branch (defaults are set to `Quandela/ReproducedPapersQML/qSSL`).
+- Example:  
+  ```bash
+  python qSSL/utils/linear_probing.py \
+    --pretrained merlin/20250827_181840/model-cl-5-epoch-5.pth \
+    --hf-repo Quandela/ReproducedPapersQML --hf-prefix qSSL --hf-revision main
+  ```
+
 ## Training pipeline (pedagogical overview)
 
 
@@ -131,11 +142,17 @@ Each invocation writes to `<outdir>/run_YYYYMMDD-HHMMSS/` (default base `outdir/
 ## Linear probing only
 Evaluate pretrained encoders with a frozen representation and train a linear head:
 ```bash
-# Single checkpoint file (run from repo root)
+# Default run (downloads the reference Hugging Face checkpoint)
+python qSSL/utils/linear_probing.py
+
+# Evaluate all checkpoints from a local run directory
+python qSSL/utils/linear_probing.py --pretrained ./outdir/run_<timestamp>/
+
+# Evaluate a specific local checkpoint file
 python qSSL/utils/linear_probing.py --pretrained ./outdir/run_<timestamp>/model-cl-5-epoch-5.pth
 
-# Or point to a run directory (evaluates every checkpoint)
-python qSSL/utils/linear_probing.py --pretrained ./outdir/run_<timestamp>/
+# Evaluate any other Hugging Face checkpoint via repo-relative path
+python qSSL/utils/linear_probing.py --pretrained merlin/<run_id>/model-cl-5-epoch-5.pth
 ```
 
 ## Acknowledgments
