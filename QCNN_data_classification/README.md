@@ -111,10 +111,10 @@ Results are stored in the upstream `QCNN/Result/` tree.
 
 ## Output Directory and Artifacts
 
-The Merlin CLI writes dataset-specific folders such as `results-mnist/` or `results-fashionmnist/`. Each run creates a timestamped subdirectory:
+The Merlin CLI writes dataset-specific folders such as `results/results-mnist/` or `results/results-fashionmnist/`. Each run creates a timestamped subdirectory:
 
 ```
-results-<dataset>/run_YYYYMMDD-HHMMSS/
+results/results-<dataset>/run_YYYYMMDD-HHMMSS/
 ├── config_snapshot.json   # Fully resolved CLI/config arguments
 ├── run_summary.json       # Aggregated metrics (per seed and variant)
 └── checkpoints / figures  # Optional artefacts produced by the run
@@ -166,8 +166,8 @@ Below, you can observe the training losses and accuracies for trainings done on 
 
 | | |
 | --- | --- |
-| ![Acc-M](./results-mnist/run_20251202-114828/figures/accuracy_curves.png) | ![Loss-M](./results-mnist/run_20251202-114828/figures/loss_curves.png) |
-| ![Acc-FM](./results-fashionmnist/run_20251202-125818/figures/accuracy_curves.png) | ![Loss-FM](./results-fashionmnist/run_20251202-125818/figures/loss_curves.png) |
+| ![Acc-M](./results/results-mnist/run_20251202-114828/figures/accuracy_curves.png) | ![Loss-M](./results/results-mnist/run_20251202-114828/figures/loss_curves.png) |
+| ![Acc-FM](./results/results-fashionmnist/run_20251202-125818/figures/accuracy_curves.png) | ![Loss-FM](./results/results-fashionmnist/run_20251202-125818/figures/loss_curves.png) |
 
 Here, we use 6 kernel modes, 3 kernels, and a kernel size of 3 and a stride of 2 with amplitude encoding
 - Quantum convolution (128 and 176 parameters)
@@ -180,8 +180,8 @@ Here, we use 6 kernel modes, 3 kernels, and a kernel size of 3 and a stride of 2
 We can observe the training curves for trainings done on 8 PCA components for MNIST and FashionMNIST
 | | |
 | --- | --- |
-| ![Acc-M](./results-mnist/run_20251202-151552/figures/accuracy_curves.png) | ![Loss-M](./results-mnist/run_20251202-151552/figures/loss_curves.png) |
-| ![Acc-FM](./results-fashionmnist/run_20251202-151926/figures/accuracy_curves.png) | ![Loss-FM](./results-fashionmnist/run_20251202-151926/figures/loss_curves.png) |
+| ![Acc-M](./results/results-mnist/run_20251202-151552/figures/accuracy_curves.png) | ![Loss-M](./results/results-mnist/run_20251202-151552/figures/loss_curves.png) |
+| ![Acc-FM](./results/results-fashionmnist/run_20251202-151926/figures/accuracy_curves.png) | ![Loss-FM](./results/results-fashionmnist/run_20251202-151926/figures/loss_curves.png) |
 
 |  | 8 PCA components | 16 PCA components |
 | ----------- | ----------- | ----------- |
@@ -196,7 +196,7 @@ We can observe the training curves for trainings done on 8 PCA components for MN
 ## Reproducibility Notes
 
 - Control randomness via `--seeds`; `train_once` sets deterministic PyTorch seeds per run.
-- Merlin/Perceval versions are pinned in `requirements.txt`; capture exact environments with `pip freeze > results-*/requirements.txt`.
+- Merlin/Perceval versions are pinned in `requirements.txt`; capture exact environments with `pip freeze > results/results-*/requirements.txt`.
 - Keep PCA preprocessing consistent (`data/make_pca` handles caching).
 - Virtual environments (`.venv/`) can live at repo root; git ignores them by default.
 

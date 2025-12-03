@@ -1,134 +1,31 @@
-"""Main entry point for the QCNN data classification reproduction."""
-
 from __future__ import annotations
 
-import argparse
-import datetime
 import json
+import logging
 import statistics
 from pathlib import Path
-from typing import Callable
+from types import SimpleNamespace
+from typing import Any, Callable
 
 import numpy as np
+import torch
 import torch.nn as nn
+
 from data import make_pca
 from model import QConvModel, SingleGI, build_quantum_kernels
 from utils.circuit import required_input_params
 from utils.training import train_once
 
 
-def _parse_configured_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(
-        description="Parallel-columns GI on 0vs1 classification (PCA-8 everywhere)"
-    )
-    # General training parameters
-    parser.add_argument(
-        "--config", type=str, help="Optional JSON file with CLI arguments"
-    )
-    parser.add_argument(
-        "--steps", type=int, default=200, help="optimizer steps (not epochs)"
-    )
-    parser.add_argument("--batch", type=int, default=25)
-    parser.add_argument("--seeds", type=int, default=3)
-    parser.add_argument("--opt", choices=["adam", "sgd"], default="adam")
-    parser.add_argument("--lr", type=float, default=1e-3)
-    parser.add_argument("--momentum", type=float, default=0.9)
-    parser.add_argument(
-        "--angle_scale",
-        choices=["none", "pi", "2pi"],
-        default="none",
-        help="map [0,1] → unchanged, [0,π], or [0,2π]",
-    )
-    # Dataset and PCA parameters
-    parser.add_argument(
-        "--dataset",
-        choices=["mnist", "fashionmnist", "kmnist"],
-        default="mnist",
-        help="Choose which torchvision dataset to use for the 0 vs 1 split.",
-    )
-    parser.add_argument("--pca_dim", type=int, default=8)
+def setup_seed(seed: int) -> None:
+    logging.getLogger(__name__).info("Setting global seed to %d", seed)
+    import random
 
-    parser.add_argument("--model", choices=["qconv", "single"], default="qconv")
-    # Single GI parameters
-    parser.add_argument("--n_modes", type=int, default=8)
-    parser.add_argument("--n_features", type=int, default=8)
-    parser.add_argument("--reservoir_mode", action="store_true")
-    parser.add_argument(
-        "--state_pattern",
-        choices=["default", "spaced", "sequential", "periodic"],
-        default="default",
-    )
-    parser.add_argument("--n_photons", type=int, default=4)
-
-    # QCNN parameters
-    parser.add_argument(
-        "--nb_kernels",
-        type=int,
-        default=4,
-        help="Number of quantum convolutional kernels.",
-    )
-    parser.add_argument(
-        "--kernel_size",
-        type=int,
-        default=2,
-        help="Size of each quantum convolutional kernel.",
-    )
-    parser.add_argument(
-        "--stride",
-        type=int,
-        default=1,
-        help="Stride for the quantum convolutional kernels.",
-    )
-    parser.add_argument(
-        "--kernel_modes",
-        type=int,
-        default=8,
-        help="Number of modes in each quantum convolutional kernel.",
-    )
-    parser.add_argument(
-        "--conv_classical",
-        action="store_true",
-        help="Use classical kernels instead of quantum.",
-    )
-    parser.add_argument(
-        "--compare_classical",
-        action="store_true",
-        help="Also include classical kernel variant for comparison.",
-    )
-    parser.add_argument(
-        "--amplitude",
-        action="store_true",
-        help="Use amplitude encoding in quantum kernels.",
-    )
-    parser.add_argument(
-        "--figures",
-        action="store_true",
-        help="Save loss/accuracy curves per run inside the results directory.",
-    )
-
-    prelim_args, remaining = parser.parse_known_args()
-
-    # If no config file was provided, return the already-parsed args so
-    # command-line options (like --dataset) are preserved.
-    if not prelim_args.config:
-        return prelim_args
-
-    config_args: list[str] = []
-    with open(prelim_args.config, encoding="utf-8") as fh:
-        config_data = json.load(fh)
-    for key, value in config_data.items():
-        flag = f"--{key}"
-        if isinstance(value, bool):
-            if value:
-                config_args.append(flag)
-        elif isinstance(value, list):
-            config_args.append(flag)
-            config_args.extend(str(item) for item in value)
-        else:
-            config_args.extend([flag, str(value)])
-
-    args = parser.parse_args(config_args + remaining)
-    return args
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    if torch.cuda.is_available():
+        torch.cuda.manual_seed_all(seed)
 
 
 def _angle_factor(scale: str) -> float:
@@ -140,7 +37,7 @@ def _angle_factor(scale: str) -> float:
 
 
 def _prepare_models(
-    args: argparse.Namespace,
+    args: SimpleNamespace,
     input_dim: int,
     required_inputs: int,
 ) -> tuple[list[tuple[str, Callable[[], nn.Module]]], list[str]]:
@@ -243,10 +140,12 @@ def _plot_training_figures(
         matplotlib.use("Agg")
         import matplotlib.pyplot as plt
     except Exception as exc:  # pragma: no cover - matplotlib optional
-        print(f"[figures] Could not import matplotlib ({exc}); skipping figure export.")
+        logging.warning(
+            "[figures] Could not import matplotlib (%s); skipping figure export.", exc
+        )
         return
 
-    def _save_metric(metric_key: str, ylabel: str, title: str, filename: str) -> None:
+    def _save_metric(metric_key: str, ylabel: str, title: str, filename: Path) -> None:
         metric_curves: dict[str, list[list[float]]] = {}
         for variant, histories in variant_histories.items():
             curves: list[list[float]] = []
@@ -290,7 +189,7 @@ def _plot_training_figures(
         filename.parent.mkdir(parents=True, exist_ok=True)
         plt.savefig(filename, dpi=300, bbox_inches="tight")
         plt.close()
-        print(f"[figures] Saved {filename.relative_to(run_dir)}")
+        logging.info("[figures] Saved %s", filename.relative_to(run_dir))
 
     figures_dir = run_dir / "figures"
     _save_metric(
@@ -304,8 +203,13 @@ def _plot_training_figures(
     )
 
 
-def main() -> None:
-    args = _parse_configured_args()
+def _to_namespace(cfg: dict[str, Any]) -> SimpleNamespace:
+    # Keep config structure flexible; attributes map directly to keys.
+    return SimpleNamespace(**cfg)
+
+
+def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
+    args = _to_namespace(cfg)
 
     angle_factor = _angle_factor(args.angle_scale)
     required_inputs = required_input_params(args.n_modes, args.n_features)
@@ -334,19 +238,10 @@ def main() -> None:
             print(f"  - {log_entry}")
 
     comparison_results = []
-    # store per-variant per-seed training curves for saving
     variant_seed_details = {}
     variant_histories: dict[str, list[dict[str, list[float]]]] = {}
 
-    # Prepare results directories
-    results_root = Path(__file__).resolve().parent / f"results/results-{args.dataset}"
-    timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
-    run_dir = results_root / f"run_{timestamp}"
-    run_dir.mkdir(parents=True, exist_ok=True)
-    # snapshot config
     config_snapshot_path = run_dir / "config_snapshot.json"
-    with open(config_snapshot_path, "w", encoding="utf-8") as fh:
-        json.dump(vars(args), fh, indent=2)
     variant_param_counts: dict[str, int] = {}
     for name, builder in builders:
         print(
@@ -378,7 +273,6 @@ def main() -> None:
             )
             print(f"  Test accuracy: {acc * 100:.2f}%")
             variant_accs.append(acc)
-            # save per-seed JSON into variant folder
             variant_dir = run_dir / name
             variant_dir.mkdir(parents=True, exist_ok=True)
             seed_index = s + 1
@@ -412,7 +306,6 @@ def main() -> None:
         mean = statistics.mean(variant_accs)
         std = statistics.stdev(variant_accs) if len(variant_accs) > 1 else 0.0
         print(f"→ Summary for {name}: mean {mean * 100:.2f}% ± {std * 100:.2f}%")
-        # write variant summary.json
         variant_dir = run_dir / name
         summary = {
             "variant": name,
@@ -428,12 +321,14 @@ def main() -> None:
         comparison_results.append((name, variant_accs, mean, std))
         variant_seed_details[name] = seed_records
 
-    # write run_summary.json at top-level of run_dir
     run_summary = {
-        "timestamp": timestamp,
+        "run_dir": str(run_dir),
+        "timestamp": run_dir.name,
         "model": args.model,
         "pca_dim": args.pca_dim,
-        "config_snapshot": config_snapshot_path.name,
+        "config_snapshot": config_snapshot_path.name
+        if config_snapshot_path.exists()
+        else None,
         "variants": [],
         "convolution_logs": conv_logs,
     }
@@ -467,5 +362,4 @@ def main() -> None:
         print(f"Mean ± Std: {mean * 100:.2f}% ± {std * 100:.2f}%")
 
 
-if __name__ == "__main__":
-    main()
+__all__ = ["train_and_evaluate", "setup_seed"]

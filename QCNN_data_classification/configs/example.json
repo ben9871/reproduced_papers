@@ -1,0 +1,13 @@
+{
+  "description": "Example QCNN configuration mirroring the original script defaults",
+  "dataset": "mnist",
+  "pca_dim": 8,
+  "seeds": 3,
+  "model": "qconv",
+  "nb_kernels": 3,
+  "kernel_size": 3,
+  "stride": 2,
+  "kernel_modes": 12,
+  "compare_classical": true,
+  "figures": true
+}
