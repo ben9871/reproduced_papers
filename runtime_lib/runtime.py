@@ -30,6 +30,13 @@ _GLOBAL_DEFAULTS: dict[str, Any] = {
 }
 
 
+def _log_run_banner(project_dir: Path, cfg: dict[str, Any]) -> None:
+    logger = logging.getLogger("runtime")
+    project_name = project_dir.name
+    logger.info("Starting %s run", project_name)
+    logger.debug("Resolved config: %s", json.dumps(cfg, indent=2))
+
+
 def _purge_project_modules() -> None:
     for name in list(sys.modules):
         if name == "lib" or name.startswith("lib."):
@@ -103,6 +110,7 @@ def run_from_project(project_dir: Path, argv: list[str] | None = None) -> Path:
     snapshot_path = run_dir / "config_snapshot.json"
     snapshot_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 
+    _log_run_banner(project_dir, cfg)
     runner_fn = import_callable(meta["runner_callable"])
     runner_fn(cfg, run_dir)
 

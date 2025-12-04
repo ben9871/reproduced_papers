@@ -26,8 +26,6 @@ def setup_seed(seed: int) -> None:
 
 def train_and_evaluate(cfg, run_dir: Path) -> None:
     logger = logging.getLogger(__name__)
-    logger.info("Starting training")
-    logger.debug("Resolved config: %s", json.dumps(cfg, indent=2))
     artifact = run_dir / "done.txt"
     artifact.write_text(
         "Training placeholder complete. Replace with actual implementation.\n",

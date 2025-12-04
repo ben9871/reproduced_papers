@@ -139,8 +139,6 @@ def run_tau_alpha_benchmark(cfg: dict[str, Any], run_dir: Path) -> None:
 def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
     """Main entry point that routes to the appropriate experiment."""
     logger = logging.getLogger(__name__)
-    logger.info("Starting experiment")
-    logger.debug("Resolved config: %s", json.dumps(cfg, indent=2))
 
     experiment_type = cfg.get("experiment", {}).get("type", "figure_5")
 

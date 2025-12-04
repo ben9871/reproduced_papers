@@ -56,8 +56,6 @@ def setup_seed(seed: int) -> None:
 
 def train_and_evaluate(cfg, run_dir: Path) -> None:
     log = logging.getLogger(__name__)
-    log.info("Starting training")
-    log.debug("Resolved config: %s", json.dumps(cfg, indent=2))
 
     exp = cfg["experiment"]
     model_cfg = cfg["model"]

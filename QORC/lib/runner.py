@@ -19,8 +19,6 @@ def _as_list(value):
 
 def train_and_evaluate(cfg, run_dir: Path) -> None:
     logger = logging.getLogger(__name__)
-    logger.info("Starting training")
-    logger.debug("Resolved config: %s", json.dumps(cfg, indent=2))
 
     xp_type = cfg["xp_type"].lower()
     if xp_type == "qorc":
