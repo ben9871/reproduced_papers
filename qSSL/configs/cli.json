@@ -2,20 +2,6 @@
   "description": "CLI schema for the Quantum Self-Supervised Learning reproduction.",
   "arguments": [
     {
-      "flags": ["-c", "--config"],
-      "help": "Path to a JSON config file to merge with defaults",
-      "type": "path",
-      "default": null,
-      "apply": {"kind": "config_file"}
-    },
-    {
-      "flags": ["--outdir"],
-      "help": "Base directory for runtime artifacts",
-      "type": "path",
-      "default": null,
-      "apply": {"kind": "config_path", "path": "outdir"}
-    },
-    {
       "flags": ["-d", "--datadir"],
       "help": "Dataset root directory",
       "type": "path",

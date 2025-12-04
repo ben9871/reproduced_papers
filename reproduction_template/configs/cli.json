@@ -2,21 +2,6 @@
   "description": "Paper reproduction runner",
   "arguments": [
     {
-      "flags": ["-c", "--config"],
-      "help": "Path to JSON config file to merge with defaults",
-      "type": "path",
-      "dest": "config",
-      "default": null,
-      "apply": {"kind": "config_file"}
-    },
-    {
-      "flags": ["--outdir"],
-      "help": "Base output directory",
-      "type": "path",
-      "default": null,
-      "apply": {"kind": "config_path", "path": "outdir"}
-    },
-    {
       "flags": ["--epochs"],
       "help": "Override number of training epochs",
       "type": "int",

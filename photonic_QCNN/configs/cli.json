@@ -2,14 +2,6 @@
   "description": "CLI schema for Photonic QCNN reproduction experiments.",
   "arguments": [
     {
-      "flags": ["-c", "--config"],
-      "help": "Path to JSON config file to merge with defaults",
-      "type": "path",
-      "dest": "config",
-      "default": null,
-      "apply": {"kind": "config_file"}
-    },
-    {
       "flags": ["--datasets"],
       "help": "Subset of datasets to run",
       "type": "str",
@@ -17,13 +9,6 @@
       "nargs": "+",
       "default": null,
       "apply": {"kind": "config_path", "path": "datasets"}
-    },
-    {
-      "flags": ["--outdir"],
-      "help": "Base output directory",
-      "type": "path",
-      "default": null,
-      "apply": {"kind": "config_path", "path": "outdir"}
     },
     {
       "flags": ["--epochs"],

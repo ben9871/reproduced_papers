@@ -2,18 +2,6 @@
   "description": "CLI schema for HQNN spiral reproduction experiments",
   "arguments": [
     {
-      "flags": ["-c", "--config"],
-      "help": "Path to an extra JSON config to merge",
-      "type": "path",
-      "apply": {"kind": "config_file"}
-    },
-    {
-      "flags": ["--outdir"],
-      "help": "Base output directory for run artifacts",
-      "type": "path",
-      "apply": {"kind": "config_path", "path": "outdir"}
-    },
-    {
       "flags": ["--epochs"],
       "help": "Override training epochs",
       "type": "int",

@@ -10,13 +10,13 @@
     "name": "spiral",
     "num_instances": 1875,
     "num_classes": 3,
-    "feature_grid": [5, 10],
+    "feature_grid": [5],
     "test_size": 0.2,
     "batch_size": 64
   },
   "model": {
     "accuracy_threshold": 90.0,
-    "repetitions": 5,
+    "repetitions": 2,
     "binning": "linear",
     "embedding": "learned",
     "init": "none"
@@ -27,7 +27,7 @@
   },
   "results": {
     "filename": "HQNN_MM_bs{batch_size}_lr{lr}.json",
-    "make_threshold_figure": false,
+    "make_threshold_figure": true,
     "threshold_figure_name": "threshold_params.png"
   }
 }
