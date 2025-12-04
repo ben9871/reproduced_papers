@@ -1,0 +1,175 @@
+{
+  "description": "QCNN data classification runner",
+  "arguments": [
+    {
+      "flags": ["-c", "--config"],
+      "help": "Path to JSON config file to merge with defaults",
+      "type": "path",
+      "default": null,
+      "apply": {"kind": "config_file"}
+    },
+    {
+      "flags": ["--outdir"],
+      "help": "Base output directory for runs",
+      "type": "path",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "outdir"}
+    },
+    {
+      "flags": ["--dataset"],
+      "help": "Torchvision dataset to use (0 vs 1 split)",
+      "choices": ["mnist", "fashionmnist", "kmnist"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "dataset"}
+    },
+    {
+      "flags": ["--pca_dim"],
+      "help": "Number of PCA components kept for encoding",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "pca_dim"}
+    },
+    {
+      "flags": ["--model"],
+      "help": "Choose between single GI layer or QCNN",
+      "choices": ["qconv", "single"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model"}
+    },
+    {
+      "flags": ["--steps"],
+      "help": "Optimizer steps (not epochs)",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "steps"}
+    },
+    {
+      "flags": ["--batch"],
+      "help": "Mini-batch size",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "batch"}
+    },
+    {
+      "flags": ["--seeds"],
+      "help": "Number of random seeds to evaluate",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "seeds"}
+    },
+    {
+      "flags": ["--opt"],
+      "help": "Optimizer choice",
+      "choices": ["adam", "sgd"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "opt"}
+    },
+    {
+      "flags": ["--lr"],
+      "help": "Learning rate",
+      "type": "float",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "lr"}
+    },
+    {
+      "flags": ["--momentum"],
+      "help": "Momentum (for SGD)",
+      "type": "float",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "momentum"}
+    },
+    {
+      "flags": ["--angle_scale"],
+      "help": "Map inputs to angular range",
+      "choices": ["none", "pi", "2pi"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "angle_scale"}
+    },
+    {
+      "flags": ["--n_modes"],
+      "help": "Number of optical modes",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "n_modes"}
+    },
+    {
+      "flags": ["--n_features"],
+      "help": "Number of feature injections per layer",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "n_features"}
+    },
+    {
+      "flags": ["--reservoir_mode"],
+      "help": "Use random interferometer per layer (reservoir mode)",
+      "action": "store_true",
+      "apply": {"kind": "config_path", "path": "reservoir_mode"}
+    },
+    {
+      "flags": ["--state_pattern"],
+      "help": "Photon placement pattern",
+      "choices": ["default", "spaced", "sequential", "periodic"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "state_pattern"}
+    },
+    {
+      "flags": ["--n_photons"],
+      "help": "Number of photons injected",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "n_photons"}
+    },
+    {
+      "flags": ["--nb_kernels"],
+      "help": "Number of quantum convolution kernels",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "nb_kernels"}
+    },
+    {
+      "flags": ["--kernel_size"],
+      "help": "Size of each quantum convolution kernel",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "kernel_size"}
+    },
+    {
+      "flags": ["--stride"],
+      "help": "Stride for convolution kernels",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "stride"}
+    },
+    {
+      "flags": ["--kernel_modes"],
+      "help": "Number of modes inside each kernel",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "kernel_modes"}
+    },
+    {
+      "flags": ["--conv_classical"],
+      "help": "Use only classical convolution kernels",
+      "action": "store_true",
+      "apply": {"kind": "config_path", "path": "conv_classical"}
+    },
+    {
+      "flags": ["--compare_classical"],
+      "help": "Add a classical variant alongside the quantum one",
+      "action": "store_true",
+      "apply": {"kind": "config_path", "path": "compare_classical"}
+    },
+    {
+      "flags": ["--amplitude"],
+      "help": "Activate amplitude encoding inside kernels",
+      "action": "store_true",
+      "apply": {"kind": "config_path", "path": "amplitude"}
+    },
+    {
+      "flags": ["--figures"],
+      "help": "Store per-step loss/accuracy curves",
+      "action": "store_true",
+      "apply": {"kind": "config_path", "path": "figures"}
+    }
+  ]
+}
