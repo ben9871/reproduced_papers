@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
-import random
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import torch
 from data.fourier_series import generate_dataset
 from utils.plotting import plot_learned_functions, plot_training_curves
@@ -17,12 +15,6 @@ from lib.training import summarize_results, train_models_multiple_runs
 from lib.vqc import VQCFactory
 
 LOGGER = logging.getLogger(__name__)
-
-
-def setup_seed(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
 
 
 def _serialize_metrics(results: dict[str, Any]) -> dict[str, Any]:
@@ -37,7 +29,6 @@ def _serialize_metrics(results: dict[str, Any]) -> dict[str, Any]:
 
 
 def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
-    setup_seed(int(cfg.get("seed", 1337)))
     device = torch.device(cfg.get("device", "cpu"))
 
     dataset = generate_dataset(cfg.get("data", {}))
@@ -91,4 +82,4 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
     LOGGER.info("Artifacts saved to %s", run_dir.resolve())
 
 
-__all__ = ["setup_seed", "train_and_evaluate"]
+__all__ = ["train_and_evaluate"]

@@ -8,24 +8,11 @@ from types import SimpleNamespace
 from typing import Any, Callable
 
 import numpy as np
-import torch
 import torch.nn as nn
-
 from data import make_pca
 from model import QConvModel, SingleGI, build_quantum_kernels
 from utils.circuit import required_input_params
 from utils.training import train_once
-
-
-def setup_seed(seed: int) -> None:
-    logging.getLogger(__name__).info("Setting global seed to %d", seed)
-    import random
-
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
 
 
 def _angle_factor(scale: str) -> float:
@@ -362,4 +349,4 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
         print(f"Mean ± Std: {mean * 100:.2f}% ± {std * 100:.2f}%")
 
 
-__all__ = ["train_and_evaluate", "setup_seed"]
+__all__ = ["train_and_evaluate"]

@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
-import random
 import shutil
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import torch
 from data.datasets import build_gaussian_grid, prepare_classification_data
 from utils.plotting import (
@@ -41,12 +39,6 @@ def _resolve_project_path(path_value: str | Path | None) -> Path | None:
 def _ensure_dir(path: Path) -> Path:
     path.mkdir(parents=True, exist_ok=True)
     return path
-
-
-def setup_seed(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
 
 
 def save_checkpoints(
@@ -250,7 +242,6 @@ def run_classification_task(
 
 
 def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
-    setup_seed(int(cfg.get("seed", 1337)))
     device = torch.device(cfg.get("device", "cpu"))
 
     task = cfg.get("experiment", {}).get("task", "sampler")
@@ -267,7 +258,6 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
 
 
 __all__ = [
-    "setup_seed",
     "train_and_evaluate",
     "run_sampler_task",
     "run_classification_task",

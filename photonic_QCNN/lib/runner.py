@@ -5,16 +5,12 @@ from __future__ import annotations
 import copy
 import json
 import os
-import random
 import runpy
 import sys
 import time
 from datetime import datetime
 from pathlib import Path
 from typing import Any
-
-import numpy as np
-import torch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 REPO_ROOT = PROJECT_ROOT.parent
@@ -53,14 +49,6 @@ def load_config(config_path: Path | None) -> dict[str, Any]:
         user_cfg = read_json(config_path)
         config = deep_update(config, user_cfg)
     return config
-
-
-def set_global_seeds(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
 
 
 def _resolve_outdir(config: dict[str, Any]) -> str:
@@ -342,8 +330,6 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
     config.setdefault("seed", 42)
     config["outdir"] = str(run_dir)
 
-    set_global_seeds(int(config["seed"]))
-
     summary_path = run_dir / "summary.json"
     if figure12:
         summary = run_simulation_pipeline(str(run_dir))
@@ -376,7 +362,6 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
 __all__ = [
     "DATASET_CHOICES",
     "train_and_evaluate",
-    "set_global_seeds",
     "run_merlin_pipeline",
     "run_paper_pipeline",
     "run_readout_pipeline",

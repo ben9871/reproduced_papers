@@ -8,7 +8,7 @@ import os
 import re
 import sys
 from pathlib import Path
-from typing import Optional, Tuple
+from typing import Optional
 
 import torch
 import torch.nn as nn
@@ -96,7 +96,7 @@ parser.add_argument(
 )
 
 
-def _parse_hf_reference(reference: str) -> Optional[Tuple[str, str, str]]:
+def _parse_hf_reference(reference: str) -> Optional[tuple[str, str, str]]:
     """Return (repo_id, revision, file_path) if reference is a HF URL."""
 
     # Support huggingface.co links that use blob/resolve style paths

@@ -4,13 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
-import random
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any
 
-import numpy as np
-import torch
 import torch.nn as nn
 from torch.utils.data import DataLoader
 from torchsummary import summary
@@ -24,19 +21,6 @@ from lib.training_utils import (
 )
 
 LOGGER = logging.getLogger(__name__)
-
-
-def setup_seed(seed: int) -> None:
-    """Seed Python, NumPy, and PyTorch RNGs for reproducibility."""
-
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():  # pragma: no cover - optional GPU path
-        torch.cuda.manual_seed_all(seed)
-    if hasattr(torch.backends, "cudnn"):
-        torch.backends.cudnn.deterministic = True
-        torch.backends.cudnn.benchmark = False
 
 
 def _as_str(value: Any) -> str:
@@ -154,4 +138,4 @@ def run_qssl_experiment(cfg: dict[str, Any], run_dir: Path) -> None:
     LOGGER.info("Finished qSSL experiment. Artifacts available under %s", run_dir)
 
 
-__all__ = ["run_qssl_experiment", "setup_seed"]
+__all__ = ["run_qssl_experiment"]

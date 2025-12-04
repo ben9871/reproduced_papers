@@ -12,6 +12,7 @@ from typing import Any
 from .cli import apply_cli_overrides, build_cli_parser
 from .config import deep_update, load_config
 from .logging_utils import configure_logging
+from .seed import seed_everything
 from .utils import import_callable
 
 
@@ -87,8 +88,11 @@ def run_from_project(project_dir: Path, argv: list[str] | None = None) -> Path:
 
     seed_callable_path = meta.get("seed_callable")
     seed_value = cfg.get("seed")
-    if seed_callable_path and seed_value is not None:
-        seed_fn = import_callable(seed_callable_path)
+    if seed_value is not None:
+        if seed_callable_path:
+            seed_fn = import_callable(seed_callable_path)
+        else:
+            seed_fn = seed_everything
         seed_fn(seed_value)  # type: ignore[arg-type]
 
     timestamp_format = meta.get("timestamp_format", "%Y%m%d-%H%M%S")

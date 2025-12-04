@@ -1,27 +1,7 @@
 from __future__ import annotations
 
-import json
 import logging
-import random
 from pathlib import Path
-
-
-def setup_seed(seed: int) -> None:
-    random.seed(seed)
-    try:
-        import numpy as np  # type: ignore
-
-        np.random.seed(seed)
-    except Exception:  # pragma: no cover - optional dependency
-        pass
-    try:
-        import torch  # type: ignore
-
-        torch.manual_seed(seed)
-        if getattr(torch.cuda, "is_available", lambda: False)():
-            torch.cuda.manual_seed_all(seed)
-    except Exception:  # pragma: no cover - optional dependency
-        pass
 
 
 def train_and_evaluate(cfg, run_dir: Path) -> None:

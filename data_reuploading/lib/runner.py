@@ -4,11 +4,8 @@ from __future__ import annotations
 
 import json
 import logging
-import random
 from pathlib import Path
 from typing import Any
-
-import numpy as np
 
 from ..utils.utils import plot_figure_5
 from .architecture_grid_run import run_architecture_grid
@@ -20,15 +17,6 @@ from .paper_datasets import (
 )
 from .reuploading_experiment import MerlinReuploadingClassifier
 from .tau_alpha_grid_run import run_tau_alpha_grid
-
-
-def setup_seed(seed: int) -> None:
-    """Seed Python's RNG and NumPy for reproducibility."""
-    random.seed(seed)
-    try:
-        np.random.seed(seed)
-    except Exception:
-        pass
 
 
 def reproduce_figure_5(cfg: dict[str, Any], run_dir: Path) -> None:
@@ -155,7 +143,6 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
 
 
 __all__ = [
-    "setup_seed",
     "train_and_evaluate",
     "reproduce_figure_5",
     "run_design_benchmark",

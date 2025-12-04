@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import json
 import logging
-import random
 from pathlib import Path
 
 import numpy as np
@@ -44,14 +42,6 @@ def _resolve_model_dtype(requested, model_type: str) -> torch.dtype:
         f"Unsupported dtype '{requested}' for model_type '{model_type}'. "
         f"Allowed values: {sorted(DTYPE_ALIASES)} plus 'auto'."
     )
-
-
-def setup_seed(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():  # pragma: no cover
-        torch.cuda.manual_seed_all(seed)
 
 
 def train_and_evaluate(cfg, run_dir: Path) -> None:

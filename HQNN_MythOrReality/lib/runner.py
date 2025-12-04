@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import random
 from pathlib import Path
 from typing import Any
 
@@ -13,14 +12,6 @@ from models.hqnn import ArchitectureSpec, build_hqnn_model, enumerate_architectu
 from torch.utils.data import DataLoader, TensorDataset
 from utils.io import save_experiment_results
 from utils.training import count_parameters, train_model
-
-
-def setup_seed(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    if torch.cuda.is_available():
-        torch.cuda.manual_seed_all(seed)
 
 
 def _spiral_config(
@@ -259,4 +250,4 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> dict[str, Any]:
     return summary
 
 
-__all__ = ["train_and_evaluate", "setup_seed", "plot_threshold_params"]
+__all__ = ["train_and_evaluate", "plot_threshold_params"]

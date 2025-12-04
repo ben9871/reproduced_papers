@@ -4,11 +4,9 @@ from __future__ import annotations
 
 import json
 import logging
-import random
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 import torch
 from data.datasets import DATASET_ORDER, prepare_datasets
 from utils.plotting import (
@@ -25,12 +23,6 @@ MODEL_TYPE_PRESETS: dict[str, tuple[str, list[int]]] = {
     "vqc_100": ("vqc", [1, 0, 0]),
     "vqc_111": ("vqc", [1, 1, 1]),
 }
-
-
-def setup_seed(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
 
 
 def _normalize_model_type(label: str) -> tuple[str, list[int] | None]:
@@ -94,7 +86,6 @@ def _visualize_datasets(
 
 
 def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
-    setup_seed(int(cfg.get("seed", 1337)))
     figures_dir = run_dir / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
 
@@ -144,4 +135,4 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
     LOGGER.info("Artifacts saved to %s", run_dir.resolve())
 
 
-__all__ = ["setup_seed", "train_and_evaluate", "build_args"]
+__all__ = ["train_and_evaluate", "build_args"]

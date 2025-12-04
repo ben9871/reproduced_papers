@@ -1,7 +1,9 @@
 from pathlib import Path
 
 from lib.config import deep_update, load_config
-from lib.runner import setup_seed, train_and_evaluate
+from lib.runner import train_and_evaluate
+
+from runtime_lib.seed import seed_everything
 
 
 def test_figure6_lstm_sine_smoke(tmp_path):
@@ -12,7 +14,7 @@ def test_figure6_lstm_sine_smoke(tmp_path):
     cfg = deep_update(defaults, load_config(cfg_path))
     cfg["training"]["epochs"] = 1
     cfg["training"]["batch_size"] = max(2, cfg["training"].get("batch_size", 2))
-    setup_seed(cfg["seed"])
+    seed_everything(cfg["seed"])
     run_dir = tmp_path / "run"
     run_dir.mkdir()
     train_and_evaluate(cfg, run_dir)

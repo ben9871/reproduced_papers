@@ -4,12 +4,10 @@ from __future__ import annotations
 
 import json
 import logging
-import random
 from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-import numpy as np
 from data.datasets import load_moons
 from utils.visualization import (
     plot_accuracy_heatmap,
@@ -22,11 +20,6 @@ from lib.training import run_rks_experiments
 
 DEFAULT_GAMMAS = list(range(1, 11))
 LOGGER = logging.getLogger(__name__)
-
-
-def setup_seed(seed: int) -> None:
-    random.seed(seed)
-    np.random.seed(seed)
 
 
 def summarize_results(
@@ -54,8 +47,6 @@ def summarize_results(
 
 
 def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
-    setup_seed(int(cfg.get("seed", 1337)))
-
     figures_dir = run_dir / "figures"
     figures_dir.mkdir(parents=True, exist_ok=True)
 
@@ -162,4 +153,4 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
     LOGGER.info("Artifacts saved to %s", run_dir.resolve())
 
 
-__all__ = ["setup_seed", "train_and_evaluate", "summarize_results"]
+__all__ = ["train_and_evaluate", "summarize_results"]
