@@ -31,7 +31,7 @@ Legend:
 Overall, we reproduced the results highlighted in the paper and we have a photonic implementantion of it, using MerLin, that is faster and more accurate (but has more trainable parameters).
 
 ## Project structure
-- `lib/runtime_entry.py` — runtime entry point consumed by the repo-level runner
+- `lib/runner.py` — runtime entry point consumed by the repo-level runner
 - `lib/` — core library modules used by scripts
   - `data_utils.py` — datasets, transforms (SSL and linear eval)
   - `model.py` — backbone, representation networks (MerLin/Qiskit/Classical), projection head

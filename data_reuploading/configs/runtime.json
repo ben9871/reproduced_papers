@@ -2,8 +2,8 @@
   "description": "Runtime metadata for Data Re-uploading experiments",
   "defaults_path": "configs/defaults.json",
   "cli_schema_path": "configs/cli.json",
-  "runner_callable": "data_reuploading.lib.runtime_entry.train_and_evaluate",
-  "seed_callable": "data_reuploading.lib.runtime_entry.setup_seed",
+  "runner_callable": "lib.runner.train_and_evaluate",
+  "seed_callable": "lib.runner.setup_seed",
   "timestamp_format": "%Y%m%d-%H%M%S",
   "run_dir_pattern": "run_{timestamp}"
 }

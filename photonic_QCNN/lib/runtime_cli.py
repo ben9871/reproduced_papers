@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .runtime_entry import DATASET_CHOICES
+from .runner import DATASET_CHOICES
 
 
 def _apply_to_runs(cfg: dict[str, Any], key: str, value: int) -> dict[str, Any]:
