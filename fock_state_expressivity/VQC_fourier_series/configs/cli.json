@@ -1,0 +1,12 @@
+{
+  "description": "CLI schema for VQC Fourier-series experiments.",
+  "arguments": [
+    {
+      "flags": ["--show-plots"],
+      "help": "Display plots interactively in addition to saving them",
+      "action": "store_true",
+      "default": false,
+      "apply": {"kind": "config_path", "path": "plotting.show", "value": true}
+    }
+  ]
+}

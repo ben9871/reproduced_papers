@@ -1,81 +1,36 @@
-# Reproduction of [Fock state-enhanced expressivity of quantum machine learning models](https://arxiv.org/abs/2107.05224)
-By Beng Yee Gan, Daniel Leykam, Dimitris G. Angelakis
-## Description
-This paper proposes a data encoding scheme for photonic quantum circuits. It elaborates on the theory behind its choice and present a small experiment to validate it. In addition, it presents three binary classification algorithms that utilize the presented encoding. This reproduction focuses on the four experiments displayed in this paper:
-1. Theory validation experiment: Expressivity of variational quantum circuit (VQC) on a Fourier series fitting task
-2. Algorithm 1: Linear quantum photonic circuits as variational quantum classifiers
-3. Algorithm 2: Linear quantum photonic circuits as Gaussian kernel samplers
-4. Algorithm 3: Quantum-enhanced random kitchen sinks
+# Fock State-Enhanced Expressivity of Quantum Machine Learning Models
 
-All our reproductions are separated by section in their respective folders:
-1. ./VQC_fourier_series/
-2. ./VQC_classif/
-3. ./q_gaussian_kernel/
-4. ./q_rand_kitchen_sinks/
+## Reference and Attribution
+- Paper: *Fock state-enhanced expressivity of quantum machine learning models* (2022)
+- Authors: Beng Yee Gan, Daniel Leykam, Dimitris G. Angelakis
+- DOI/ArXiv: https://arxiv.org/abs/2107.05224
+- Original repository: not released; experiment reconstructed from the manuscript
+- License & attribution: research reproduction for educational purposes. Cite both the paper and this repo when reusing the code.
 
-The frameworks used for reproduction were [Perceval](https://perceval.quandela.net) and [MerLin](https://merlinquantum.ai). 
+Each subsection below is a self-contained template-compliant project dedicated to one experiment from the paper.
 
-Perceval is a Python API that provides all the tools for creating and manipulating circuits from linear
-optical components. That makes Perceval an ideal companion for developing photonic circuits, running
-simulations and even accessing quantum hardwares.
+| Folder | Experiment | Description | Entry Point |
+| --- | --- | --- | --- |
+| `VQC_fourier_series` | Theory validation | Photonic VQC fits Fourier-series targets with increasing photon numbers to verify expressivity claims. | `python implementation.py` |
+| `VQC_classif` | Algorithm 1 | Linear photonic classifiers vs classical baselines on linear/circular/moon datasets. | `python implementation.py` |
+| `q_gaussian_kernel` | Algorithm 2 | Photonic circuits learn Gaussian kernels and feed them to SVMs. Supports sampler/classify tasks. | `python implementation.py --task {sampler,classify}` |
+| `q_random_kitchen_sinks` | Algorithm 3 | Quantum-enhanced random kitchen sinks compared to classical RKS across `R`/`γ` grids. | `python implementation.py` |
 
-MerLin is a framework which allows to define derivable quantum layers to use and optimize in the exact
-same manner as any classical layer with PyTorch. This integration of
-quantum components into machine learning is very intuitive and it was optimized for GPU simulations
-on the cuda level too.
+## Install Dependencies (once)
+```bash
+python -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-## Paper overview and results
-The most important result from this paper, that is validated from three of the four experiments conducted, is that with the proposed data encoding scheme, increasing the number of photons that go through the circuit increases its expressivity.
+## How to Use This Hub
+1. Activate the virtual environment you created above.
+2. `cd` into the desired experiment folder and follow its README for configuration, CLI options, outputs, and testing.
+3. All runs write artifacts to `results/run_YYYYMMDD-HHMMSS/` to keep workflows isolated and reproducible.
 
-The paper does not conclude much on the three algorithms it presents. Instead, the authors thought that these algorithms would serve as inspiration or as a base to develop other quantum machine learning (QML) algorithms that possess quantum advantage.
+## Reference
+- Paper: *Fock state-enhanced expressivity of quantum machine learning models* (PRX Quantum, 2022)
+- Authors: Beng Yee Gan, Daniel Leykam, Dimitris G. Angelakis
+- DOI: [10.1103/PRXQuantum.3.030341](https://arxiv.org/abs/2107.05224)
 
-Here are some more specific results, presented in figures that we have reproduced accurately, for the most part.
-
-1. Fitting of VQC on Fourier series
-
-Theirs:
-
-![VQC_fourier_series_to_reproduce](./VQC_fourier_series/results/Fitting_example_and_DOF.png)
-
-Ours:
-
-![VQC_fourier_series_reproduced](./VQC_fourier_series/results/expressive_power_of_the_VQC.png)
-
-2. Algo 1: VQC for classification
-
-Theirs:
-
-![VQC_classif_to_reproduce](./VQC_classif/results/variational_classification.png)
-
-Ours:
-
-![VQC_classif_reproduced](./VQC_classif/results/combined_decision_boundaries.png)
-
-3. Algo 2: Quantum Gaussian kernel sampler
-
-Theirs:
-
-![q_gauss_kernel_to_reproduce](./q_gaussian_kernel/results/Gaussian_kernel-kernel_methods.png)
-
-Ours:
-
-![q_gauss_kernel_reproduced](./q_gaussian_kernel/results/learned_gauss_kernels_best_hps.png)
-
-4. Algo 4: Quantum random kitchen sinks
-
-Theirs:
-
-![q_gauss_kernel_to_reproduce](./q_random_kitchen_sinks/results/Classification-RKS.png)
-
-Ours:
-
-![q_gauss_kernel_reproduced](./q_random_kitchen_sinks/results/q_rand_kitchen_sinks_overall_example.png)
-
-## Usage
-For usage, refer to the README inside of every section folder for information on its respective content.
-
-## Roadmap
-In the future, one goal for this reproduction would be to explain why are our Gaussian kernel fits are less accurate than the ones presented in the paper (Algo 2: Quantum Gaussian kernel sampler) and fix this issue.
-
-## Further content
-For anyone interested, a complete report about this implementation was conducted and is available [here](https://files.quandela.com/index.php/s/kDTGmaF5HijSRxs).
+Please cite both the PRX Quantum article and the relevant subfolder when reusing these reproductions.

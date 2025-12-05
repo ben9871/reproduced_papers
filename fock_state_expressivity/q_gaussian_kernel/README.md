@@ -1,16 +1,19 @@
-# Algorithm 2: Quantum Gaussian kernel sampler
+# Quantum Gaussian Kernel
 
-This experiment implements quantum photonic circuits to learn and approximate Gaussian kernels for machine learning applications, comparing different circuit architectures and photon configurations.
+Reproduction of Algorithm 2 (“Linear quantum photonic circuits as Gaussian kernel samplers”) from *Fock state-enhanced expressivity of quantum machine learning models* (2022) by Gan, Leykam, and Angelakis.
+
+## Reference and Attribution
+- Paper: *Fock state-enhanced expressivity of quantum machine learning models* (2022)
+- Authors: Beng Yee Gan, Daniel Leykam, Dimitris G. Angelakis
+- DOI/ArXiv: https://arxiv.org/abs/2107.05224
+- Original repository: not available; implementation recreated from the manuscript and Quandela demos
+- License & attribution: cite both the article and this repository when reusing the code/figures
 
 ## Overview
-
-The implementation explores quantum kernel methods by:
-- **Multiple circuit architectures**: MZI, general interferometers, spiral, phase shifter-based, and beam splitter-based circuits
-- **Photon number studies**: Testing different photon numbers (2, 4, 6, 8, 10) to analyze expressivity
-- **Kernel learning**: Training quantum circuits to approximate target Gaussian kernel functions
-- **Performance evaluation**: Comparing learned kernels with classical Gaussian kernels using SVM
-
-## Key Results
+- Trains photonic quantum circuits to approximate Gaussian kernels of varying standard deviations by minimizing MSE between learned kernels and analytical targets. This reproduces Figure 5 from the reference paper.
+- Exports the best-performing kernel models (for photon counts `{2,4,6,8,10}`) and reuses them to build precomputed kernels for SVM classification on circular, moon, and blob datasets.
+- Compares quantum kernel SVMs against classical RBF-SVM baselines.
+- CLI task system (`implementation.py --task {sampler,classify}`) orchestrates both phases with JSON-configured hyperparameters.
 
 The experiments demonstrate that quantum circuits can learn to approximate Gaussian kernels, with performance varying based on:
 - **Circuit architecture**: Different interferometer designs show varying approximation capabilities
@@ -18,38 +21,48 @@ The experiments demonstrate that quantum circuits can learn to approximate Gauss
 - **Training dynamics**: Quantum kernel learning presents unique optimization challenges compared to classical methods
 - **Approximation accuracy**: Our Gaussian kernel fits are less accurate than those presented in the reference paper
 
-## Files Structure
+## How to Run
 
-- `model.py` - Core quantum circuit architectures and quantum layer implementations
-- `data.py` - Dataset generation and preprocessing utilities
-- `training.py` - Training loops and kernel learning algorithms
-- `hyperparameters.py` - Configuration management for experiments
-- `run_gaussian_sampler.py` - Main execution script for kernel learning
-- `use_q_gauss_kernel.py` - Utilities for applying learned quantum kernels
-- `q_gaussian_kernel.ipynb` - Interactive notebook with detailed analysis
+### CLI workflow
+1. **Train Gaussian kernel samplers** (stores checkpoints + learned function plots):
+   ```bash
+   python implementation.py --task sampler
+   ```
+2. **Evaluate saved kernels on classification datasets** (uses manifest from step 1 by default):
+   ```bash
+   python implementation.py --task classify
+   ```
 
-## Usage
-You should edit the following python files according to your usage:
-- run_gaussian_sampler.py
-- use_q_gauss_kernel.py
-### Quick Start
+Common flags:
+- `--config PATH` select another JSON config (default `configs/defaults.json`).
+- `--seed INT`, `--outdir DIR`, `--device STR` override reproducibility and device (default outdir `results/`).
+- `--num-runs INT` override the sampler’s `training.num_runs` value (number of restarts per `(σ, n)` pair); defaults to 5 in the base config.
+- `--manifest PATH` manually point to a checkpoint manifest for classification runs.
 
-Run the main kernel learning experiment:
-```bash
-python run_gaussian_sampler.py
+Each execution creates `results/run_YYYYMMDD-HHMMSS/` (or `<outdir>/...` if overridden) containing:
 ```
-**Afterward**, you can use the Gaussian kernel samplers that were saved in ./models on 3 classification tasks by using:
-```bash
-python use_q_gauss_kernel.py
-```
-### Interactive Analysis
-
-Open the Jupyter notebook for detailed exploration:
-```bash
-jupyter notebook q_gaussian_kernel.ipynb
+summary.txt               # Human-readable metrics
+metrics.json              # Raw loss/accuracy traces
+config_snapshot.json      # Resolved config (after CLI overrides)
+figures/                  # Learned kernels, dataset previews, accuracy charts
+models/                   # Kernel checkpoints (sampler task)
+models_manifest.json      # Metadata for checkpoints (sampler task)
 ```
 
-## Results
+## Configuration
+Configs follow the template structure (`configs/`):
+- `experiment.task`: `"sampler"` or `"classify"` (can be overridden via CLI).
+- `model`: circuit architecture (`general`, `mzi`, etc.), scaling layer type, trainable interferometer flag, bunching toggle.
+- `training`: optimizer settings, number of restarts, epochs, batch size, shuffle toggle.
+- `sampler`: photon counts, Gaussian grid definition (span/step/σ list), optional `export_dir` for checkpoint artifacts.
+- `classification`: dataset generation parameters (noise, scaling) and manifest path reused for evaluation.
+- `outputs`: toggle learned-function plots, dataset scatter plots, and accuracy bar charts.
+
+Modify/duplicate `configs/defaults.json` (sampler) or `configs/classify.json` (classification) to explore other circuits, photon sets, or datasets.
+
+## Results and Analysis
+- **Sampler task**: `summary.txt` reports mean/min/max training MSE for each `(σ, n)` pair; `figures/learned_vs_target.png` overlays learned kernels with analytical Gaussians, showing better fits as photon number increases.
+- **Classification task**: `figures/svm_accuracy.png` compares quantum precomputed kernels against RBF-SVMs. For small σ, high-photon circuits close the gap with classical baselines but optimization becomes harder, mirroring the paper’s finding.
 
 The experiment generates several outputs:
 - **Kernel approximation plots**: Visual comparison of learned vs target kernels
@@ -57,20 +70,18 @@ The experiment generates several outputs:
 - **Circuit diagrams**: Visual representation of different quantum architectures
 - **Training dynamics**: Loss curves and convergence analysis
 
+The paper's results are the follow:
+
+![q_gauss_kernel_to_reproduce](./results/Gaussian_kernel-kernel_methods.png)
+
+Ours:
+
+![q_gauss_kernel_reproduced](./results/learned_gauss_kernels_best_hps.png)
+
 Key findings include:
 - Quantum circuits can successfully approximate Gaussian kernel functions
 - Circuits with more photons have a tendency for better fits on Gaussians with smaller standard deviation
 - Our implementation could not fit the Gaussians as accurately as seen in the reference paper, requiring further investigation
-
-## Dependencies
-
-- Python 3.8+
-- PyTorch
-- Perceval (quantum photonic simulation)
-- MerLin (quantum machine learning framework)
-- scikit-learn (classical ML baselines and kernel methods)
-- matplotlib (visualization)
-- wandb (experiment tracking)
 
 ## Hyperparameters
 
@@ -101,7 +112,17 @@ Key findings include:
   - "bs_based": Beam splitter-based circuit
 - **`no_bunching`** (False): Whether to prevent multiple photons in the same mode
 
-## Configuration
+## Reproducibility Notes
+- Seeds propagate to `random`, `numpy`, and `torch`; dataset caches under `data/cache/` ensure deterministic reuse unless `force_regenerate` is set.
+- Checkpoints are saved both inside each run directory and (optionally) under `models/gaussian_kernels/` for cross-run reuse.
+- GPU execution depends on Perceval/MerLin CUDA builds; defaults run on CPU.
 
-Key parameters can be adjusted in `run_gaussian_sampler.py`. The hyperparameter search function `run_q_gaussian_sampler_hp_search()` performs grid search across optimizer configurations.
+## Testing
+```bash
+pytest -q
+```
+Current tests cover Gaussian grid and dataset preparation. Extend with regression tests (e.g., MSE/accuracy thresholds) as needed.
 
+## Additional Material
+- `notebook.ipynb` preserves the exploratory workflow prior to the scripted refactor.
+- `results/` houses the static figures reproduced from the paper for documentation.

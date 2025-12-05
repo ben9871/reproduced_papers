@@ -1,0 +1,66 @@
+{
+  "timestamp": "20251202-151552",
+  "model": "qconv",
+  "pca_dim": 8,
+  "config_snapshot": "config_snapshot.json",
+  "variants": [
+    {
+      "variant": "qconv_quantum",
+      "mean_accuracy": 0.7350669818754925,
+      "std_accuracy": 0.14074462343867775,
+      "seeds": [
+        {
+          "seed_index": 1,
+          "seed_value": 1235,
+          "test_accuracy": 0.8137115839243498,
+          "curve_file": "seed_01.json"
+        },
+        {
+          "seed_index": 2,
+          "seed_value": 1236,
+          "test_accuracy": 0.8189125295508274,
+          "curve_file": "seed_02.json"
+        },
+        {
+          "seed_index": 3,
+          "seed_value": 1237,
+          "test_accuracy": 0.5725768321513003,
+          "curve_file": "seed_03.json"
+        }
+      ],
+      "summary_file": "qconv_quantum/summary.json",
+      "param_count": 128
+    },
+    {
+      "variant": "qconv_classical",
+      "mean_accuracy": 0.7678486997635934,
+      "std_accuracy": 0.11160495854958251,
+      "seeds": [
+        {
+          "seed_index": 1,
+          "seed_value": 1235,
+          "test_accuracy": 0.8108747044917257,
+          "curve_file": "seed_01.json"
+        },
+        {
+          "seed_index": 2,
+          "seed_value": 1236,
+          "test_accuracy": 0.6411347517730497,
+          "curve_file": "seed_02.json"
+        },
+        {
+          "seed_index": 3,
+          "seed_value": 1237,
+          "test_accuracy": 0.8515366430260047,
+          "curve_file": "seed_03.json"
+        }
+      ],
+      "summary_file": "qconv_classical/summary.json",
+      "param_count": 32
+    }
+  ],
+  "convolution_logs": [
+    "quantum: 3 kernels \u2192 18 dims",
+    "classical: 3 kernels \u2192 9 dims"
+  ]
+}

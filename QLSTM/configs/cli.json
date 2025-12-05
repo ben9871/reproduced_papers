@@ -1,0 +1,119 @@
+{
+  "description": "QLSTM reproduction runner",
+  "arguments": [
+    {
+      "flags": ["--epochs"],
+      "help": "Override number of training epochs",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.epochs"}
+    },
+    {
+      "flags": ["--batch-size"],
+      "help": "Override training batch size",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.batch_size"}
+    },
+    {
+      "flags": ["--lr"],
+      "help": "Override learning rate",
+      "type": "float",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.lr"}
+    },
+    {
+      "flags": ["--model"],
+      "help": "Model type",
+      "type": "str",
+      "choices": ["qlstm", "lstm", "qlstm_photonic"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.type"}
+    },
+    {
+      "flags": ["--generator"],
+      "help": "Dataset generator key (sin|damped_shm|logsine|ma_noise|csv)",
+      "type": "str",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "experiment.generator"}
+    },
+    {
+      "flags": ["--csv-path"],
+      "help": "CSV path for generator=csv",
+      "type": "path",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "experiment.csv_path"}
+    },
+    {
+      "flags": ["--seq-length"],
+      "help": "Sequence length for training windows",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "experiment.seq_length"}
+    },
+    {
+      "flags": ["--hidden-size"],
+      "help": "Hidden size of the (Q)LSTM",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.hidden_size"}
+    },
+    {
+      "flags": ["--vqc-depth"],
+      "help": "Depth of the VQC block",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.vqc_depth"}
+    },
+    {
+      "flags": ["--use-preencoders"],
+      "help": "Enable classical pre-encoders",
+      "action": "store_true",
+      "default": false,
+      "apply": {"kind": "config_path", "path": "model.use_preencoders", "value": true}
+    },
+    {
+      "flags": ["--train-split"],
+      "help": "Training split ratio (0-1)",
+      "type": "float",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "experiment.train_split"}
+    },
+    {
+      "flags": ["--fmt"],
+      "help": "Figure format",
+      "type": "str",
+      "choices": ["png", "pdf"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "experiment.fmt"}
+    },
+    {
+      "flags": ["--snapshot-epochs"],
+      "help": "Comma-separated epochs for simulation snapshots",
+      "type": "csv_int_list",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "experiment.snapshot_epochs"}
+    },
+    {
+      "flags": ["--plot-width"],
+      "help": "Width in inches for simulation plots",
+      "type": "float",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "experiment.plot_width"}
+    },
+    {
+      "flags": ["--shots"],
+      "help": "Number of measurement shots (for photonic head)",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "model.shots"}
+    },
+    {
+      "flags": ["--use-photonic-head"],
+      "help": "Enable photonic readout head",
+      "action": "store_true",
+      "default": false,
+      "apply": {"kind": "config_path", "path": "model.use_photonic_head", "value": true}
+    }
+  ]
+}

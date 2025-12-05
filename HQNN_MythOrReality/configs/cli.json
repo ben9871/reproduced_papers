@@ -1,0 +1,47 @@
+{
+  "description": "CLI schema for HQNN spiral reproduction experiments",
+  "arguments": [
+    {
+      "flags": ["--epochs"],
+      "help": "Override training epochs",
+      "type": "int",
+      "apply": {"kind": "config_path", "path": "training.epochs"}
+    },
+    {
+      "flags": ["--batch-size"],
+      "help": "Override dataset batch size",
+      "type": "int",
+      "apply": {"kind": "config_path", "path": "dataset.batch_size"}
+    },
+    {
+      "flags": ["--lr"],
+      "help": "Override learning rate",
+      "type": "float",
+      "apply": {"kind": "config_path", "path": "training.lr"}
+    },
+    {
+      "flags": ["--feature-grid"],
+      "help": "Comma-separated list of feature counts to evaluate",
+      "type": "csv_int_list",
+      "apply": {"kind": "config_path", "path": "dataset.feature_grid"}
+    },
+    {
+      "flags": ["--accuracy-threshold"],
+      "help": "Stop the sweep once a validation accuracy threshold is reached",
+      "type": "float",
+      "apply": {"kind": "config_path", "path": "model.accuracy_threshold"}
+    },
+    {
+      "flags": ["--repetitions"],
+      "help": "Number of repetitions per architecture",
+      "type": "int",
+      "apply": {"kind": "config_path", "path": "model.repetitions"}
+    },
+    {
+      "flags": ["--figure"],
+      "help": "Generate parameter-count plots for threshold-achieving HQNNs",
+      "action": "store_true",
+      "apply": {"kind": "config_path", "path": "results.make_threshold_figure"}
+    }
+  ]
+}
