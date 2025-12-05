@@ -99,7 +99,7 @@ def _generate_centroids(
     max_attempts: int = 10000,
 ) -> np.ndarray:
     """Generate centroids with minimum pairwise distance constraint."""
-    centroids = []
+    centroids: list[np.ndarray] = []
     attempts = 0
 
     while len(centroids) < n_clusters and attempts < max_attempts:
