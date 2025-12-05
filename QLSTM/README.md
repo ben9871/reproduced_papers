@@ -48,7 +48,7 @@ Stack: PyTorch, PennyLane, MerLin, NumPy/SciPy, scikit‑learn, matplotlib.
 - `lib/model.py` — Classical LSTM, QLSTM (gate VQCs), sequence wrapper
 - `lib/dataset.py` — Synthetic generators + CSV loader
 - `lib/rendering.py` — Plotting and pickle helpers
-- `configs/` — JSON configs (`defaults.json`, dataset presets, `cli.json`, `runtime.json`)
+- `configs/` — JSON configs (`defaults.json`, dataset presets, `cli.json`)
 - `data/` — Input datasets (CSV, etc.)
 - `outdir/` — Output base directory (ignored by Git), contains timestamped runs
 - `results/` — Collected figures from helper scripts (e.g., `utils/run_all_configs.sh`)
@@ -134,7 +134,7 @@ Place JSON files in `configs/`.
 - `defaults.json` is the base experiment (sine generator with QLSTM).
 - Dataset/model presets (e.g., `sine_qlstm.json`) can be layered via `--config`.
 - `cli.json` defines every CLI argument, its type, and the config key it overrides.
-- `runtime.json` tells the generic runner where to find defaults, CLI schema, and the callable (`lib/runner.py::train_and_evaluate`).
+- The shared runtime automatically reads `configs/defaults.json`, `configs/cli.json`, and imports `lib/runner.py::train_and_evaluate`.
 - Keys follow the same structure as before: `experiment`, `model`, `training`, `logging`, etc. CLI overrides mutate these dictionaries via the dot-paths defined in `cli.json`.
 
 ## Available Generators

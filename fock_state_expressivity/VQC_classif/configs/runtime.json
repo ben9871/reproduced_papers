@@ -1,8 +1,0 @@
-{
-  "description": "Runtime metadata for VQC classification experiments",
-  "defaults_path": "configs/defaults.json",
-  "cli_schema_path": "configs/cli.json",
-  "runner_callable": "lib.runner.train_and_evaluate",
-  "timestamp_format": "%Y%m%d-%H%M%S",
-  "run_dir_pattern": "run_{timestamp}"
-}

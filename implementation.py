@@ -29,7 +29,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--list-projects",
         action="store_true",
-        help="List available project folders that contain configs/runtime.json",
+        help="List available project folders that contain configs/defaults.json",
     )
     known, remaining = parser.parse_known_args(argv)
 
@@ -38,8 +38,14 @@ def main(argv: list[str] | None = None) -> int:
         for path in sorted(repo_root.iterdir()):
             if not path.is_dir():
                 continue
-            runtime_file = path / "configs" / "runtime.json"
-            if runtime_file.exists():
+            configs_dir = path / "configs"
+            runner_file = path / "lib" / "runner.py"
+            if (
+                configs_dir.is_dir()
+                and (configs_dir / "defaults.json").exists()
+                and (configs_dir / "cli.json").exists()
+                and runner_file.exists()
+            ):
                 rel = path.relative_to(repo_root)
                 print(rel)
         return 0

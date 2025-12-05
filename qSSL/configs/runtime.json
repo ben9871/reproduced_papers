@@ -1,8 +1,0 @@
-{
-  "description": "Runtime metadata for the Quantum Self-Supervised Learning reproduction.",
-  "defaults_path": "configs/defaults.json",
-  "cli_schema_path": "configs/cli.json",
-  "runner_callable": "lib.runner.run_qssl_experiment",
-  "timestamp_format": "%Y%m%d-%H%M%S",
-  "run_dir_pattern": "run_{timestamp}"
-}

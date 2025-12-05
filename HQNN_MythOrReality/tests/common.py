@@ -19,10 +19,12 @@ def _prepare_paths() -> tuple[pathlib.Path, pathlib.Path]:
 
 
 _PROJECT_ROOT, _REPO_ROOT = _prepare_paths()
+_CONFIG_DIR = _PROJECT_ROOT / "configs"
+_CLI_SCHEMA_PATH = _CONFIG_DIR / "cli.json"
+_DEFAULTS_PATH = _CONFIG_DIR / "defaults.json"
 
 from runtime_lib.cli import build_cli_parser  # noqa: E402
 from runtime_lib.config import load_config  # noqa: E402
-from runtime_lib.runtime import load_runtime_meta  # noqa: E402
 
 
 def project_root() -> pathlib.Path:
@@ -33,14 +35,8 @@ def repo_root() -> pathlib.Path:
     return _REPO_ROOT
 
 
-def load_runtime_metadata() -> dict[str, Any]:
-    return load_runtime_meta(_PROJECT_ROOT)
-
-
 def build_project_parser() -> tuple[Any, list[dict[str, Any]]]:
-    meta = load_runtime_metadata()
-    cli_schema_path = project_root() / meta["cli_schema_path"]
-    cli_schema = json.loads(cli_schema_path.read_text())
+    cli_schema = json.loads(_CLI_SCHEMA_PATH.read_text())
     global_cli = json.loads(
         (repo_root() / "runtime_lib" / "global_cli.json").read_text()
     )
@@ -51,6 +47,5 @@ def build_project_parser() -> tuple[Any, list[dict[str, Any]]]:
 
 
 def load_defaults_copy() -> dict[str, Any]:
-    meta = load_runtime_metadata()
-    defaults = load_config(project_root() / meta["defaults_path"])
+    defaults = load_config(_DEFAULTS_PATH)
     return copy.deepcopy(defaults)

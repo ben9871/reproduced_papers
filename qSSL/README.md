@@ -37,8 +37,8 @@ Overall, we reproduced the results highlighted in the paper and we have a photon
   - `model.py` — backbone, representation networks (MerLin/Qiskit/Classical), projection head
   - `training_utils.py` — InfoNCE, training loops, metrics and results I/O
   - `defaults.py` — helper to expose `configs/defaults.json` to notebooks/tests
-- `configs/` — runtime descriptors + default config consumed by the shared runner
-  - `defaults.json`, `cli.json`, `runtime.json`
+- `configs/` — default configs + CLI schema consumed by the shared runner
+  - `defaults.json`, `cli.json`
 - Other
   - `utils/linear_probing.py` — evaluate frozen features with a linear head. Pretrained models live under `outdir/`
   - `requirements.txt` — Python dependencies

@@ -19,7 +19,7 @@ The paper investigates whether hybrid quantum neural networks (HQNNs) can surpas
 ## Project Layout
 
 - Repository root `implementation.py`: shared CLI that dispatches to every paper folder via `--project`
-- `configs/`: JSON configuration files (`defaults.json`, `cli.json`, `runtime.json`)
+- `configs/`: JSON configuration files (`defaults.json`, `cli.json`)
 - `models/`: HQNN and classical baseline model definitions
 - `utils/`: shared helpers for data loading, training, and result persistence
 - `tests/`: lightweight sanity tests for the CLI and architecture enumeration
@@ -46,7 +46,7 @@ The paper investigates whether hybrid quantum neural networks (HQNNs) can surpas
 
 ## Configuration
 
-- JSON files under `configs/` encode feature grids, training regimes, and HQNN search bounds; `configs/defaults.json` mirrors the paper’s setup, `configs/cli.json` defines exposed overrides, and `configs/runtime.json` wires the project into the shared runner.
+- JSON files under `configs/` encode feature grids, training regimes, and HQNN search bounds; `configs/defaults.json` mirrors the paper’s setup, `configs/cli.json` defines exposed overrides, and the shared runtime automatically calls `lib/runner.train_and_evaluate`.
 - CLI overrides (`--lr`, `--feature-grid`, `--accuracy-threshold`, etc.) merge with the JSON defaults via the runtime layer and are recorded with each run.
 
 ## Dataset

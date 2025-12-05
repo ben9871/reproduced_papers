@@ -138,4 +138,10 @@ def run_qssl_experiment(cfg: dict[str, Any], run_dir: Path) -> None:
     LOGGER.info("Finished qSSL experiment. Artifacts available under %s", run_dir)
 
 
-__all__ = ["run_qssl_experiment"]
+def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
+    """Adapter required by the shared runtime."""
+
+    run_qssl_experiment(cfg, run_dir)
+
+
+__all__ = ["run_qssl_experiment", "train_and_evaluate"]

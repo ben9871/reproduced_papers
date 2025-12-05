@@ -8,7 +8,7 @@ from .cli import (
 )
 from .config import deep_update, load_config
 from .logging_utils import configure_logging
-from .runtime import load_runtime_meta, run_from_project
+from .runtime import run_from_project
 
 __all__ = [
     "TYPE_FACTORIES",
@@ -16,7 +16,6 @@ __all__ = [
     "configure_logging",
     "build_cli_parser",
     "apply_cli_overrides",
-    "load_runtime_meta",
     "run_from_project",
     "load_config",
     "deep_update",

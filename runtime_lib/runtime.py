@@ -29,6 +29,11 @@ _GLOBAL_DEFAULTS: dict[str, Any] = {
     "device": "cpu",
     "logging": {"level": "info"},
 }
+_PROJECT_DEFAULTS_REL = Path("configs") / "defaults.json"
+_PROJECT_CLI_SCHEMA_REL = Path("configs") / "cli.json"
+_DEFAULT_RUNNER_CALLABLE = "lib.runner.train_and_evaluate"
+_DEFAULT_TIMESTAMP_FORMAT = "%Y%m%d-%H%M%S"
+_DEFAULT_RUN_PATTERN = "run_{timestamp}"
 
 
 def _log_run_banner(project_dir: Path, cfg: dict[str, Any]) -> None:
@@ -51,18 +56,6 @@ def _ensure_project_on_path(project_dir: Path) -> None:
     _purge_project_modules()
 
 
-def load_runtime_meta(project_dir: Path) -> dict[str, Any]:
-    meta_path = project_dir / "configs" / "runtime.json"
-    if not meta_path.exists():
-        raise FileNotFoundError(f"Missing runtime descriptor: {meta_path}")
-    meta = _load_json(meta_path)
-    required = {"defaults_path", "cli_schema_path", "runner_callable"}
-    missing = sorted(required - meta.keys())
-    if missing:
-        raise KeyError(f"runtime.json missing keys: {', '.join(missing)}")
-    return meta
-
-
 def run_from_project(project_dir: Path, argv: list[str] | None = None) -> Path:
     project_dir = project_dir.resolve()
     invocation_dir = Path.cwd().resolve()
@@ -72,8 +65,10 @@ def run_from_project(project_dir: Path, argv: list[str] | None = None) -> Path:
         os.chdir(project_dir)
     _ensure_project_on_path(project_dir)
 
-    meta = load_runtime_meta(project_dir)
-    cli_schema = _load_json(project_dir / meta["cli_schema_path"])
+    cli_schema_path = project_dir / _PROJECT_CLI_SCHEMA_REL
+    if not cli_schema_path.exists():
+        raise FileNotFoundError(f"Missing CLI schema: {cli_schema_path}")
+    cli_schema = _load_json(cli_schema_path)
     cli_schema.setdefault("arguments", [])
     cli_schema["arguments"].extend(
         copy.deepcopy(_GLOBAL_CLI_SCHEMA.get("arguments", []))
@@ -81,24 +76,19 @@ def run_from_project(project_dir: Path, argv: list[str] | None = None) -> Path:
     parser, arg_defs = build_cli_parser(cli_schema)
     args = parser.parse_args(argv)
 
-    defaults_path = project_dir / meta["defaults_path"]
+    defaults_path = project_dir / _PROJECT_DEFAULTS_REL
+    if not defaults_path.exists():
+        raise FileNotFoundError(f"Missing defaults config: {defaults_path}")
     project_defaults = load_config(defaults_path)
     cfg = deep_update(copy.deepcopy(_GLOBAL_DEFAULTS), project_defaults)
     cfg = apply_cli_overrides(cfg, args, arg_defs, project_dir, invocation_dir)
 
-    seed_callable_path = meta.get("seed_callable")
     seed_value = cfg.get("seed")
     if seed_value is not None:
-        if seed_callable_path:
-            seed_fn = import_callable(seed_callable_path)
-        else:
-            seed_fn = seed_everything
-        seed_fn(seed_value)  # type: ignore[arg-type]
+        seed_everything(seed_value)  # type: ignore[arg-type]
 
-    timestamp_format = meta.get("timestamp_format", "%Y%m%d-%H%M%S")
-    timestamp = dt.datetime.now().strftime(timestamp_format)
-    run_pattern = meta.get("run_dir_pattern", "run_{timestamp}")
-    run_name = run_pattern.format(timestamp=timestamp)
+    timestamp = dt.datetime.now().strftime(_DEFAULT_TIMESTAMP_FORMAT)
+    run_name = _DEFAULT_RUN_PATTERN.format(timestamp=timestamp)
 
     base_out = Path(cfg.get("outdir", "outdir"))
     run_dir = base_out / run_name
@@ -115,11 +105,11 @@ def run_from_project(project_dir: Path, argv: list[str] | None = None) -> Path:
     snapshot_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 
     _log_run_banner(project_dir, cfg)
-    runner_fn = import_callable(meta["runner_callable"])
+    runner_fn = import_callable(_DEFAULT_RUNNER_CALLABLE)
     runner_fn(cfg, run_dir)
 
     logging.info("Finished. Artifacts in: %s", run_dir)
     return run_dir
 
 
-__all__ = ["run_from_project", "load_runtime_meta"]
+__all__ = ["run_from_project"]
