@@ -1,0 +1,5 @@
+{
+  "runner_callable": "lib.runner.main",
+  "defaults_path": "configs/example.json",
+  "seed_callable": "lib.runner.set_seed"
+}

@@ -1,0 +1,35 @@
+{
+  "seed": 42,
+  "outdir": "outdir",
+  "logging": {
+    "level": "info"
+  },
+  "dataset": {
+    "name": "mnist",
+    "root": "data",
+    "n_components": 8
+  },
+  "training": {
+    "n_shots": 1000,
+    "test_size": 0.5,
+    "n_repeats": 10
+  },
+  "experiments": [
+    {
+      "classes": [
+        0,
+        1
+      ],
+      "max_samples": 80,
+      "description": "digits 0 vs 1 (80 samples -> 40 train / 40 test)"
+    },
+    {
+      "classes": [
+        2,
+        7
+      ],
+      "max_samples": 80,
+      "description": "digits 2 vs 7 (80 samples -> 40 train / 40 test)"
+    }
+  ]
+}

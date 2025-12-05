@@ -1,0 +1,33 @@
+{
+  "seed": 123,
+  "device": "cpu",
+  "outdir": "./runs_iris",
+  "dataset": {
+    "name": "iris",
+    "n_components": 4
+  },
+  "training": {
+    "n_repeats": 10,
+    "test_size": 0.5
+  },
+  "experiments": [
+    {
+      "classes": [0, 1, 2],
+      "n_shots": 100,
+      "max_samples": 150,
+      "description": "Paper Fig 9: Nq=4, Nc=3, Ns=100 (all 150 points, 75 train / 75 test)"
+    },
+    {
+      "classes": [0, 1, 2],
+      "n_shots": 500,
+      "max_samples": 150,
+      "description": "Paper Fig 9: Nq=4, Nc=3, Ns=500"
+    },
+    {
+      "classes": [0, 1, 2],
+      "n_shots": 1000,
+      "max_samples": 150,
+      "description": "Paper Fig 9: Nq=4, Nc=3, Ns=1000"
+    }
+  ]
+}

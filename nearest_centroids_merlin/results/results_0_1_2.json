@@ -1,0 +1,27 @@
+{
+  "classes": [
+    0,
+    1,
+    2
+  ],
+  "n_available": 150,
+  "max_samples": 150,
+  "n_used": 150,
+  "n_train": 75,
+  "n_test": 75,
+  "n_components": 4,
+  "n_shots": 1000,
+  "n_repeats": 10,
+  "acc_mean": 0.924,
+  "acc_std": 0.03158058475287204,
+  "ml_acc_mean": 0.9199999999999999,
+  "ml_acc_std": 0.03577708763999663,
+  "c_acc_mean": 0.9346666666666665,
+  "c_acc_std": 0.031240998703626625,
+  "dist_ratios_cirq": [
+    1.0
+  ],
+  "dist_ratios_merlin": [
+    1.0
+  ]
+}

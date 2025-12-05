@@ -1,0 +1,23 @@
+{
+  "description": "Nearest-centroid QML reproduction specific CLI options.",
+  "options": [
+    {
+      "name": "--dataset-name",
+      "type": "str",
+      "config_path": "dataset.name",
+      "help": "Dataset name (mnist or iris)."
+    },
+    {
+      "name": "--n-components",
+      "type": "int",
+      "config_path": "dataset.n_components",
+      "help": "Number of PCA components (PCA dimensionality)."
+    },
+    {
+      "name": "--n-repeats",
+      "type": "int",
+      "config_path": "training.n_repeats",
+      "help": "Number of repeated subset experiments per configuration."
+    }
+  ]
+}

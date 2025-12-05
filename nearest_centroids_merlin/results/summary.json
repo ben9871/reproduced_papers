@@ -1,0 +1,79 @@
+{
+  "synthetic": [
+    {
+      "n_components": 4,
+      "n_classes": 2,
+      "n_shots": 100,
+      "classical": "100.0%",
+      "cirq": "100.0%",
+      "merlin": "100.0%"
+    },
+    {
+      "n_components": 4,
+      "n_classes": 4,
+      "n_shots": 500,
+      "classical": "95.0%",
+      "cirq": "90.5%",
+      "merlin": "93.0%"
+    },
+    {
+      "n_components": 8,
+      "n_classes": 2,
+      "n_shots": 1000,
+      "classical": "86.0%",
+      "cirq": "83.0%",
+      "merlin": "83.0%"
+    },
+    {
+      "n_components": 8,
+      "n_classes": 4,
+      "n_shots": 1000,
+      "classical": "94.0%",
+      "cirq": "93.5%",
+      "merlin": "93.0%"
+    }
+  ],
+  "iris": [
+    {
+      "n_shots": 100,
+      "classical": "90.5%",
+      "cirq": "89.3%",
+      "merlin": "89.9%"
+    },
+    {
+      "n_shots": 500,
+      "classical": "90.5%",
+      "cirq": "89.2%",
+      "merlin": "89.2%"
+    },
+    {
+      "n_shots": 1000,
+      "classical": "90.5%",
+      "cirq": "89.5%",
+      "merlin": "89.2%"
+    }
+  ],
+  "mnist": [
+    {
+      "description": "digits 0 vs 1",
+      "n_samples": 80,
+      "classical": "99.5%",
+      "cirq": "99.8%",
+      "merlin": "99.8%"
+    },
+    {
+      "description": "digits 2 vs 7",
+      "n_samples": 80,
+      "classical": "96.5%",
+      "cirq": "96.2%",
+      "merlin": "96.5%"
+    },
+    {
+      "description": "digits 0-3",
+      "n_samples": 160,
+      "classical": "87.8%",
+      "cirq": "86.9%",
+      "merlin": "87.9%"
+    }
+  ]
+}
