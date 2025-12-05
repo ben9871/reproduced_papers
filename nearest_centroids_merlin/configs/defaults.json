@@ -1,0 +1,21 @@
+{
+  "description": "Default parameters for Nearest Centroid Classification",
+  "seed": 42,
+  "outdir": "results",
+  "device": "cpu",
+  "dataset": {
+    "name": "mnist",
+    "root": "data"
+  },
+  "training": {
+    "n_components": 8,
+    "n_shots": 1000,
+    "n_repeats": 10,
+    "test_size": 0.5,
+    "max_samples": null
+  },
+  "logging": {
+    "level": "info",
+    "save_config_snapshot": true
+  }
+}

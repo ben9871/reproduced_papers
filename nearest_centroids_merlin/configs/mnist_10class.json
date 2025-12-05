@@ -1,6 +1,7 @@
 {
+  "description": "Mnist 10Class configuration",
   "seed": 42,
-  "outdir": "outdir",
+  "outdir": "results",
   "logging": {
     "level": "info"
   },

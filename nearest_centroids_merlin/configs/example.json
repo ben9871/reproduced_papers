@@ -1,7 +1,8 @@
 {
+  "description": "Example configuration",
   "seed": 123,
   "device": "cpu",
-  "outdir": "./runs_mnist",
+  "outdir": "results",
   "dataset": {
     "name": "mnist",
     "n_components": 8
@@ -11,11 +12,17 @@
   },
   "experiments": [
     {
-      "classes": [0, 1],
+      "classes": [
+        0,
+        1
+      ],
       "n_samples": 40
     },
     {
-      "classes": [2, 7],
+      "classes": [
+        2,
+        7
+      ],
       "n_samples": 40
     }
   ]

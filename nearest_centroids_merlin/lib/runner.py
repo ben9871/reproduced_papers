@@ -442,19 +442,23 @@ def generate_visualizations(
     logger.info("Figures saved to: %s", figures_dir)
 
 
-def main(config: dict[str, Any]) -> str:
+def main(config: dict[str, Any], run_dir: Path | str | None = None) -> str:
     """Entry point expected by the MerLin shared runner."""
     cfg: dict[str, Any] = dict(config)
 
     seed = int(cfg.get("seed", 42))
     set_seed(seed)
 
-    base_out = Path(cfg.get("outdir", "outdir")).resolve()
-    base_out.mkdir(parents=True, exist_ok=True)
+    # Use provided run_dir or create one
+    if run_dir is not None:
+        run_dir = Path(run_dir)
+    else:
+        base_out = Path(cfg.get("outdir", "results")).resolve()
+        base_out.mkdir(parents=True, exist_ok=True)
+        timestamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+        run_dir = base_out / f"run_{timestamp}"
 
-    timestamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
-    run_dir = base_out / f"run_{timestamp}"
-    run_dir.mkdir(parents=False, exist_ok=False)
+    run_dir.mkdir(parents=True, exist_ok=True)
 
     logging_cfg = cfg.get("logging", {})
     level = logging_cfg.get("level", "info")

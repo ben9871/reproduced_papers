@@ -2,17 +2,11 @@
 """
 Local convenience CLI for the nearest_centroids reproduction.
 
-This is *not* the MerLin shared runner. In the full MerLin repo, you typically run:
-
-    python implementation.py --project nearest_centroids --config nearest_centroids/configs/example.json
-
-from the *repository root*.
-
-This file just lets you do:
-
+This can be run standalone:
     python implementation.py --config configs/example.json
 
-from inside the nearest_centroids folder, which is handy for local dev.
+Or via the parent MerLin runner:
+    python ../implementation.py --project nearest_centroids_merlin --config configs/example.json
 """
 
 from __future__ import annotations
@@ -21,10 +15,6 @@ import argparse
 import json
 from pathlib import Path
 from typing import Any
-
-# This is the MerLin entrypoint your configs/runtime.json should point to:
-#     "runner_callable": "lib.runner.main"
-from lib.runner import main as run_experiment
 
 
 def _here() -> Path:
@@ -45,6 +35,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "Defaults to configs/example.json"
         ),
     )
+    parser.add_argument(
+        "--seed",
+        type=int,
+        default=None,
+        help="Override the random seed from config",
+    )
     return parser
 
 
@@ -57,6 +53,9 @@ def load_config(path: Path) -> dict[str, Any]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Import here to avoid circular imports when used as a module
+    from lib.runner import main as run_experiment
+
     parser = build_arg_parser()
     args = parser.parse_args(argv)
 
@@ -68,6 +67,10 @@ def main(argv: list[str] | None = None) -> int:
         cfg_path = project_root / cfg_path
 
     cfg = load_config(cfg_path)
+
+    # Override seed if provided via CLI
+    if args.seed is not None:
+        cfg["seed"] = args.seed
 
     # Delegate to the MerLin-style runner
     run_experiment(cfg)

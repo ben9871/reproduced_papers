@@ -1,7 +1,8 @@
 {
+  "description": "Synthetic All configuration",
   "seed": 123,
-  "device": "cpu", 
-  "outdir": "./runs_synthetic_all",
+  "device": "cpu",
+  "outdir": "results",
   "dataset": {
     "name": "synthetic",
     "n_components": 4,
@@ -18,12 +19,20 @@
   },
   "experiments": [
     {
-      "classes": [0, 1],
+      "classes": [
+        0,
+        1
+      ],
       "n_shots": 100,
       "description": "Nc=2, Ns=100"
     },
     {
-      "classes": [0, 1, 2, 3],
+      "classes": [
+        0,
+        1,
+        2,
+        3
+      ],
       "n_shots": 500,
       "description": "Nc=4, Ns=500"
     }

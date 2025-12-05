@@ -1,7 +1,8 @@
 {
+  "description": "Synthetic 4Q 4C configuration",
   "seed": 123,
   "device": "cpu",
-  "outdir": "./runs_synthetic",
+  "outdir": "results",
   "dataset": {
     "name": "synthetic",
     "n_components": 4,
@@ -18,7 +19,12 @@
   },
   "experiments": [
     {
-      "classes": [0, 1, 2, 3],
+      "classes": [
+        0,
+        1,
+        2,
+        3
+      ],
       "description": "Paper Fig 8: Nq=4, Nc=4, Ns=500 (40 points total, 20 train / 20 test)"
     }
   ]

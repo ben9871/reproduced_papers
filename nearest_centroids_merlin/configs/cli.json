@@ -1,23 +1,53 @@
 {
-  "description": "Nearest-centroid QML reproduction specific CLI options.",
-  "options": [
+  "description": "Nearest Centroid Classification runner",
+  "arguments": [
     {
-      "name": "--dataset-name",
-      "type": "str",
-      "config_path": "dataset.name",
-      "help": "Dataset name (mnist or iris)."
+      "flags": [
+        "--n-components"
+      ],
+      "help": "Number of PCA components (must be power of 2: 4, 8, 16...)",
+      "type": "int",
+      "default": null,
+      "apply": {
+        "kind": "config_path",
+        "path": "training.n_components"
+      }
     },
     {
-      "name": "--n-components",
+      "flags": [
+        "--n-shots"
+      ],
+      "help": "Number of measurement shots for quantum simulation",
       "type": "int",
-      "config_path": "dataset.n_components",
-      "help": "Number of PCA components (PCA dimensionality)."
+      "default": null,
+      "apply": {
+        "kind": "config_path",
+        "path": "training.n_shots"
+      }
     },
     {
-      "name": "--n-repeats",
+      "flags": [
+        "--n-repeats"
+      ],
+      "help": "Number of repeated experiments for statistics",
       "type": "int",
-      "config_path": "training.n_repeats",
-      "help": "Number of repeated subset experiments per configuration."
+      "default": null,
+      "apply": {
+        "kind": "config_path",
+        "path": "training.n_repeats"
+      }
+    },
+    {
+      "flags": [
+        "--max-samples"
+      ],
+      "help": "Maximum samples to use from dataset",
+      "type": "int",
+      "default": null,
+      "apply": {
+        "kind": "config_path",
+        "path": "training.max_samples"
+      }
     }
   ]
 }
