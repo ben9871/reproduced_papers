@@ -6,7 +6,6 @@ import torch
 from .gates import VectorLoader
 from .noise import GateNoise, MeasurementNoise
 from .utils import create_circuit, get_angles
-from merlin import QuantumLayer, MeasurementStrategy
 
 
 def quantum_inner(
@@ -144,7 +143,5 @@ def _quantum_inner(x, y, repetitions=1000):
 def _quantum_distance(x, y, repetitions=1000):
     norm_x = np.linalg.norm(x)
     norm_y = np.linalg.norm(y)
-    dist = np.sqrt(
-        norm_x**2 + norm_y**2 - 2 * norm_x * norm_y * quantum_inner(x, y)
-    )
+    dist = np.sqrt(norm_x**2 + norm_y**2 - 2 * norm_x * norm_y * quantum_inner(x, y))
     return dist

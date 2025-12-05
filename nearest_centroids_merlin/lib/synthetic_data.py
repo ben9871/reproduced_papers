@@ -10,8 +10,9 @@ Generates synthetic datasets matching Section III.B.a of the paper:
 - Points distributed within sphere of radius 1
 """
 
+from typing import Optional
+
 import numpy as np
-from typing import Tuple, Optional
 
 
 def generate_synthetic_data(
@@ -22,7 +23,7 @@ def generate_synthetic_data(
     gaussian_variance: float = 0.05,
     sphere_radius: float = 1.0,
     seed: Optional[int] = None,
-) -> Tuple[np.ndarray, np.ndarray, np.ndarray]:
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
     """
     Generate synthetic clustered data as described in the paper.
 
@@ -71,7 +72,7 @@ def generate_synthetic_data(
         noise = np.random.normal(
             loc=0.0,
             scale=np.sqrt(gaussian_variance),
-            size=(n_points_per_cluster, n_dimensions)
+            size=(n_points_per_cluster, n_dimensions),
         )
         points = centroid + noise
 
@@ -95,7 +96,7 @@ def _generate_centroids(
     n_dimensions: int,
     min_distance: float,
     sphere_radius: float,
-    max_attempts: int = 10000
+    max_attempts: int = 10000,
 ) -> np.ndarray:
     """Generate centroids with minimum pairwise distance constraint."""
     centroids = []
@@ -105,7 +106,9 @@ def _generate_centroids(
         # Generate random point within sphere
         point = np.random.randn(n_dimensions)
         point = point / np.linalg.norm(point)  # Unit vector
-        r = np.random.uniform(0, sphere_radius) ** (1.0 / n_dimensions)  # Uniform in volume
+        r = np.random.uniform(0, sphere_radius) ** (
+            1.0 / n_dimensions
+        )  # Uniform in volume
         point = point * r * sphere_radius
 
         # Check minimum distance to existing centroids
@@ -156,7 +159,7 @@ def generate_paper_datasets():
         )
         datasets[cfg["label"]] = {
             "X": X,
-            "y": y, 
+            "y": y,
             "centroids": centroids,
             "n_dimensions": cfg["n_dimensions"],
             "n_clusters": cfg["n_clusters"],

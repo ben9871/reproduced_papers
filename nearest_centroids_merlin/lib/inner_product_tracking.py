@@ -5,9 +5,10 @@ This module provides functions to collect inner product values during
 classification for noise model validation (Figure 13 in paper).
 """
 
-import numpy as np
+from typing import Any
+
 import cirq
-from typing import List, Tuple, Dict, Any
+import numpy as np
 
 from .gates import VectorLoader
 from .noise import GateNoise, MeasurementNoise
@@ -18,7 +19,7 @@ def compute_inner_products_with_tracking(
     centroids: np.ndarray,
     repetitions: int = 1000,
     error_rate: float = 0.0,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Compute inner products and track both simulated and experimental values.
 
@@ -56,18 +57,22 @@ def compute_inner_products_with_tracking(
             norm_x = np.linalg.norm(x)
             norm_c = np.linalg.norm(centroid)
 
-            dist_sim = np.sqrt(norm_x**2 + norm_c**2 - 2 * norm_x * norm_c * np.sqrt(c_sim))
-            dist_exp = np.sqrt(norm_x**2 + norm_c**2 - 2 * norm_x * norm_c * np.sqrt(max(0, c_exp_mit)))
+            dist_sim = np.sqrt(
+                norm_x**2 + norm_c**2 - 2 * norm_x * norm_c * np.sqrt(c_sim)
+            )
+            dist_exp = np.sqrt(
+                norm_x**2 + norm_c**2 - 2 * norm_x * norm_c * np.sqrt(max(0, c_exp_mit))
+            )
 
             distances_sim.append(dist_sim)
             distances_exp.append(dist_exp)
 
     return {
-        'c_sim': np.array(c_sim_list),
-        'c_exp_no_mit': np.array(c_exp_no_mit_list),
-        'c_exp_mit': np.array(c_exp_mit_list),
-        'distances_sim': np.array(distances_sim),
-        'distances_exp': np.array(distances_exp),
+        "c_sim": np.array(c_sim_list),
+        "c_exp_no_mit": np.array(c_exp_no_mit_list),
+        "c_exp_mit": np.array(c_exp_mit_list),
+        "distances_sim": np.array(distances_sim),
+        "distances_exp": np.array(distances_exp),
     }
 
 
@@ -76,7 +81,7 @@ def _measure_inner_product(
     y: np.ndarray,
     repetitions: int,
     error_rate: float,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """
     Measure inner product with and without error mitigation.
 

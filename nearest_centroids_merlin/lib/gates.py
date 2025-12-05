@@ -73,9 +73,7 @@ class MatrixLoader(cirq.Gate):
         assert is_power_of_two(len(matrix)), "matrix size is not power of two"
         self.matrix = matrix
         self.x_flip = x_flip
-        self.thetas_rows, self.wires_rows = get_angles(
-            np.linalg.norm(matrix, axis=1)
-        )
+        self.thetas_rows, self.wires_rows = get_angles(np.linalg.norm(matrix, axis=1))
         self.thetas_columns, self.wires_columns = get_angles(matrix)
 
     def _num_qubits_(self):

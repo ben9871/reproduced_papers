@@ -1,9 +1,8 @@
+from merlin import ComputationSpace, MeasurementStrategy, QuantumLayer
 from sklearn.neighbors import NearestCentroid
 
 from .functions import quantum_distance, quantum_distance_ml
 from .utils import create_circuit
-from merlin import QuantumLayer, MeasurementStrategy
-from merlin import ComputationSpace
 
 
 class MLQuantumNearestCentroid(NearestCentroid):

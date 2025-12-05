@@ -20,7 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any
 
 # This is the MerLin entrypoint your configs/runtime.json should point to:
 #     "runner_callable": "lib.runner.main"
@@ -48,7 +48,7 @@ def build_arg_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def load_config(path: Path) -> Dict[str, Any]:
+def load_config(path: Path) -> dict[str, Any]:
     """Load a JSON config file into a dict."""
     if not path.is_file():
         raise FileNotFoundError(f"Config file not found: {path}")

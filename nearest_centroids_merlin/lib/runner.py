@@ -4,8 +4,9 @@ import datetime as dt
 import json
 import logging
 import random
+from collections.abc import Sequence
 from pathlib import Path
-from typing import Any, Dict, List, Sequence, Tuple
+from typing import Any
 
 import numpy as np
 import torch
@@ -17,8 +18,8 @@ from sklearn.neighbors import NearestCentroid
 from sklearn.preprocessing import MinMaxScaler
 from torchvision import transforms
 
-from .synthetic_data import generate_synthetic_data
 from .classifier import MLQuantumNearestCentroid, QuantumNearestCentroid
+from .synthetic_data import generate_synthetic_data
 from .visualization import (
     create_label_comparison_table,
     plot_combined_figure,
@@ -28,7 +29,7 @@ from .visualization import (
 logger = logging.getLogger(__name__)
 
 
-DATASETS: Dict[str, Dict[str, Any]] = {
+DATASETS: dict[str, dict[str, Any]] = {
     "mnist": {
         "description": "MNIST handwritten digits dataset (10 classes, 28x28).",
         "n_classes": 10,
@@ -87,9 +88,9 @@ def configure_logging(level: str = "info", log_file: Path | None = None) -> None
 
 def compute_classical_distances(
     X_test: np.ndarray, centroids: np.ndarray
-) -> List[float]:
+) -> list[float]:
     """Compute classical Euclidean distances for comparison."""
-    distances: List[float] = []
+    distances: list[float] = []
     for x in X_test:
         for c in centroids:
             distances.append(float(np.linalg.norm(x - c)))
@@ -107,7 +108,7 @@ def run_subset_experiment(
     n_shots: int = 1000,
     run_dir: Path | None = None,
     collect_predictions: bool = False,
-) -> Dict[str, Any]:
+) -> dict[str, Any]:
     """
     Run repeated classification experiments with PCA & classical/quantum classifiers.
 
@@ -141,17 +142,17 @@ def run_subset_experiment(
     -------
     Dict with accuracy statistics and optionally predictions
     """
-    accs: List[float] = []
-    ml_accs: List[float] = []
-    c_accs: List[float] = []
+    accs: list[float] = []
+    ml_accs: list[float] = []
+    c_accs: list[float] = []
 
-    all_y_true: List[int] = []
-    all_y_pred_classical: List[int] = []
-    all_y_pred_cirq: List[int] = []
-    all_y_pred_merlin: List[int] = []
+    all_y_true: list[int] = []
+    all_y_pred_classical: list[int] = []
+    all_y_pred_cirq: list[int] = []
+    all_y_pred_merlin: list[int] = []
 
-    dist_ratios_cirq: List[float] = []
-    dist_ratios_merlin: List[float] = []
+    dist_ratios_cirq: list[float] = []
+    dist_ratios_merlin: list[float] = []
 
     # Filter to selected classes
     mask = np.isin(y, classes)
@@ -178,10 +179,11 @@ def run_subset_experiment(
         # Subsample if max_samples is set
         if max_samples is not None and max_samples < n_available:
             X_sub, _, y_sub, _ = train_test_split(
-                X_filtered, y_filtered,
+                X_filtered,
+                y_filtered,
                 train_size=max_samples,
                 stratify=y_filtered,
-                random_state=r
+                random_state=r,
             )
         else:
             X_sub, y_sub = X_filtered, y_filtered
@@ -231,7 +233,7 @@ def run_subset_experiment(
             all_y_pred_cirq = clf_q.predict(X_test_scaled).tolist()
             all_y_pred_merlin = clf_ml.predict(X_test_scaled).tolist()
 
-    result: Dict[str, Any] = {
+    result: dict[str, Any] = {
         "classes": list(classes),
         "n_available": n_available,
         "max_samples": max_samples,
@@ -267,8 +269,8 @@ def run_subset_experiment(
 
 
 def _load_dataset(
-    dataset_name: str, data_root: Path, cfg: Dict[str, Any] = None
-) -> Tuple[np.ndarray, np.ndarray]:
+    dataset_name: str, data_root: Path, cfg: dict[str, Any] = None
+) -> tuple[np.ndarray, np.ndarray]:
     """Load dataset by name."""
     name = dataset_name.lower()
 
@@ -306,7 +308,7 @@ def _load_dataset(
     raise ValueError(f"Unsupported dataset: {dataset_name}")
 
 
-def train_and_evaluate(cfg: Dict[str, Any], run_dir: Path) -> None:
+def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
     """Main training and evaluation loop."""
     logger.info("Starting experiment with dataset: %s", cfg["dataset"]["name"])
 
@@ -316,10 +318,10 @@ def train_and_evaluate(cfg: Dict[str, Any], run_dir: Path) -> None:
     n_shots = cfg["training"].get("n_shots", 1000)
     test_size = cfg["training"].get("test_size", 0.5)
     default_max_samples = cfg["training"].get("max_samples", None)
-    experiments: List[Dict[str, Any]] = list(cfg.get("experiments", []))
+    experiments: list[dict[str, Any]] = list(cfg.get("experiments", []))
 
     if not experiments:
-        raise ValueError(f"No experiments specified in config")
+        raise ValueError("No experiments specified in config")
 
     data_root = Path(cfg.get("dataset", {}).get("root", "data"))
     data_root.mkdir(parents=True, exist_ok=True)
@@ -328,7 +330,7 @@ def train_and_evaluate(cfg: Dict[str, Any], run_dir: Path) -> None:
 
     logger.info(f"Loaded {len(X)} samples with {X.shape[1]} features")
 
-    all_results: List[Dict[str, Any]] = []
+    all_results: list[dict[str, Any]] = []
 
     for i, exp in enumerate(experiments):
         collect_predictions = i == len(experiments) - 1
@@ -369,7 +371,7 @@ def train_and_evaluate(cfg: Dict[str, Any], run_dir: Path) -> None:
 
 
 def generate_visualizations(
-    all_results: List[Dict[str, Any]],
+    all_results: list[dict[str, Any]],
     dataset_name: str,
     n_components: int,
     run_dir: Path,
@@ -380,7 +382,7 @@ def generate_visualizations(
 
     logger.info("Generating visualisations...")
 
-    formatted_results: List[Dict[str, Any]] = []
+    formatted_results: list[dict[str, Any]] = []
     for r in all_results:
         n_classes = len(r["classes"])
         n_shots = r.get("n_shots", 1000)
@@ -440,9 +442,9 @@ def generate_visualizations(
     logger.info("Figures saved to: %s", figures_dir)
 
 
-def main(config: Dict[str, Any]) -> str:
+def main(config: dict[str, Any]) -> str:
     """Entry point expected by the MerLin shared runner."""
-    cfg: Dict[str, Any] = dict(config)
+    cfg: dict[str, Any] = dict(config)
 
     seed = int(cfg.get("seed", 42))
     set_seed(seed)
@@ -465,8 +467,6 @@ def main(config: Dict[str, Any]) -> str:
 
     train_and_evaluate(cfg, run_dir)
 
-    (run_dir / "done.txt").write_text(
-        f"Completed at {dt.datetime.now().isoformat()}"
-    )
+    (run_dir / "done.txt").write_text(f"Completed at {dt.datetime.now().isoformat()}")
     logger.info("Finished. Artifacts in: %s", run_dir)
     return str(run_dir)
