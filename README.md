@@ -105,6 +105,7 @@ Then edit the placeholders in:
 - `README.md` — paper reference/authors, reproduction details, CLI options, results analysis
 - `configs/example.json` — dataset/model/training defaults (extend or add more configs)
 - `configs/defaults.json` + `configs/cli.json` — default parameters plus the CLI schema consumed by the shared runner (every project must expose `lib.runner.train_and_evaluate`, which the runtime imports automatically)
+- Any `dtype` entries in those configs (top-level or nested) are normalized at runtime into `(label, torch.dtype)` pairs via `runtime_lib.dtypes`, so projects can rely on validated torch dtypes without re-implementing alias logic.
 - `lib/runner.py` and supporting modules inside `lib/` — dataset/model/training logic invoked by the shared runner
 - `runtime_lib.config.load_config` / `.deep_update` handle JSON loading and overrides globally; the template already wires `lib.config` to these helpers so you must not add a custom `lib/config.py` (JSON is the only supported format).
 

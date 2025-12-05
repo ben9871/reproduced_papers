@@ -11,6 +11,7 @@ from typing import Any
 
 from .cli import apply_cli_overrides, build_cli_parser
 from .config import deep_update, load_config
+from .dtypes import resolve_config_dtypes
 from .logging_utils import configure_logging
 from .seed import seed_everything
 from .utils import import_callable
@@ -54,6 +55,12 @@ def _ensure_project_on_path(project_dir: Path) -> None:
     if str(project_dir) not in sys.path:
         sys.path.insert(0, str(project_dir))
     _purge_project_modules()
+
+
+def _prepare_runner_config(cfg: dict[str, Any]) -> dict[str, Any]:
+    runtime_cfg = copy.deepcopy(cfg)
+    resolve_config_dtypes(runtime_cfg)
+    return runtime_cfg
 
 
 def run_from_project(project_dir: Path, argv: list[str] | None = None) -> Path:
@@ -104,9 +111,11 @@ def run_from_project(project_dir: Path, argv: list[str] | None = None) -> Path:
     snapshot_path = run_dir / "config_snapshot.json"
     snapshot_path.write_text(json.dumps(cfg, indent=2), encoding="utf-8")
 
+    runtime_cfg = _prepare_runner_config(cfg)
+
     _log_run_banner(project_dir, cfg)
     runner_fn = import_callable(_DEFAULT_RUNNER_CALLABLE)
-    runner_fn(cfg, run_dir)
+    runner_fn(runtime_cfg, run_dir)
 
     logging.info("Finished. Artifacts in: %s", run_dir)
     return run_dir

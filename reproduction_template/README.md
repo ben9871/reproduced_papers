@@ -81,6 +81,7 @@ Place configuration files in `configs/`.
 - `defaults.json` defines the default parameter values.
 - `cli.json` declares the CLI arguments, their types, and the config keys they mutate.
 - The shared runtime automatically loads `configs/defaults.json`, `configs/cli.json`, and calls `lib/runner.py::train_and_evaluate`, so keep that entry point in every project.
+- Any config value named `dtype` is normalized into a `(label, torch.dtype)` pair at runtime via `runtime_lib.dtypes`, so you can inspect both the requested string and the resolved `torch.dtype` without duplicating conversion logic.
 - `example.json` shows the structure for a specific experiment.
 - Keys typically include: dataset, model, training, evaluation, logging.
 - Precision control: add a top-level `"dtype"` entry (mirrors `"seed"`) to force the entire pipeline (datasets + models) to run in a specific torch dtype; individual models may still expose a `model.dtype` override if required.
