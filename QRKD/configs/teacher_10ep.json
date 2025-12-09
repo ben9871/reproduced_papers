@@ -1,0 +1,7 @@
+{
+  "description": "Train only the teacher for 10 epochs",
+  "training": {
+    "epochs": 10,
+    "tasks": ["teacher"]
+  }
+}

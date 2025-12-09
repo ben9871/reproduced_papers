@@ -1,0 +1,41 @@
+{
+  "description": "Paper reproduction runner",
+  "arguments": [
+    {
+      "flags": ["--epochs"],
+      "help": "Override number of training epochs",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.epochs"}
+    },
+    {
+      "flags": ["--batch-size"],
+      "help": "Override dataset batch size",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "dataset.batch_size"}
+    },
+    {
+      "flags": ["--lr"],
+      "help": "Override learning rate",
+      "type": "float",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.optimizer.lr"}
+    },
+    {
+      "flags": ["--dataset"],
+      "help": "Dataset name (mnist)",
+      "type": "str",
+      "choices": ["mnist"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "dataset.name"}
+    },
+    {
+      "flags": ["--tasks"],
+      "help": "Comma-separated tasks to run (teacher,student_kd,student_rkd,student_scratch,student_qrkd)",
+      "type": "str",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.tasks"}
+    }
+  ]
+}

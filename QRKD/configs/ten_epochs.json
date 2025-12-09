@@ -1,0 +1,7 @@
+{
+  "description": "Full 10-epoch MNIST run for teacher, KD, and RKD students",
+  "training": {
+    "epochs": 10,
+    "tasks": ["teacher", "student_kd", "student_rkd", "student_scratch"]
+  }
+}

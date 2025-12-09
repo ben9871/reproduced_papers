@@ -14,7 +14,7 @@ from .config import deep_update, load_config
 from .dtypes import resolve_config_dtypes
 from .logging_utils import configure_logging
 from .seed import seed_everything
-from .utils import import_callable
+from .utils import ensure_no_placeholders, import_callable
 
 
 def _load_json(path: Path) -> dict[str, Any]:
@@ -89,6 +89,7 @@ def run_from_project(project_dir: Path, argv: list[str] | None = None) -> Path:
     project_defaults = load_config(defaults_path)
     cfg = deep_update(copy.deepcopy(_GLOBAL_DEFAULTS), project_defaults)
     cfg = apply_cli_overrides(cfg, args, arg_defs, project_dir, invocation_dir)
+    ensure_no_placeholders(cfg)
 
     seed_value = cfg.get("seed")
     if seed_value is not None:

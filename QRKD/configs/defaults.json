@@ -1,0 +1,31 @@
+{
+  "description": "MNIST classical baselines for QRKD (teacher/KD/RKD)",
+  "seed": 42,
+  "dtype": "float32",
+  "outdir": "outdir",
+  "device": "cpu",
+  "dataset": {
+    "name": "mnist",
+    "root": "data",
+    "batch_size": 64,
+    "num_workers": 0
+  },
+  "training": {
+    "epochs": 1,
+    "tasks": ["teacher", "student_kd", "student_rkd", "student_scratch"],
+    "optimizer": {
+      "lr": 1e-3,
+      "weight_decay": 0.0
+    },
+    "temperature": 4.0,
+    "kd_alpha": 0.5,
+    "kd_weight": 0.5,
+    "gamma_distance": 0.1,
+    "gamma_angle": 0.1,
+    "teacher_path": null
+  },
+  "logging": {
+    "level": "info",
+    "save_config_snapshot": true
+  }
+}
