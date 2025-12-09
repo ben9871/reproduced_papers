@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import sys
 from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
@@ -61,9 +62,16 @@ def train_teacher(
         total_loss = 0.0
         n_batches = 0
         model.train()
-        iterator = train_loader
         if cfg.verbose:
-            iterator = tqdm(train_loader, desc=f"Epoch {epoch + 1}/{cfg.epochs}", leave=False)
+            iterator = tqdm(
+                train_loader,
+                desc=f"Epoch {epoch + 1}/{cfg.epochs}",
+                leave=False,
+                dynamic_ncols=True,
+                file=sys.stderr,
+            )
+        else:
+            iterator = train_loader
         for batch_idx, (x, y) in enumerate(iterator, 1):
             x, y = x.to(device), y.to(device)
             logits, _ = model(x)
@@ -108,7 +116,9 @@ def train_teacher(
                     extra = f", train_acc: {train_acc:.2f}%, test_acc: {history_test_acc[-1]:.2f}%"
                 else:
                     extra = f", train_acc: {train_acc:.2f}%"
-                print(f"[Teacher] Epoch {epoch + 1}/{cfg.epochs} - loss: {avg:.4f}{extra}")
+                tqdm.write(f"[Teacher] Epoch {epoch + 1}/{cfg.epochs} - loss: {avg:.4f}{extra}", file=sys.stdout)
+        if isinstance(iterator, tqdm):
+            iterator.close()
 
     model.eval()
     return model, {"loss": history_loss, "train_acc": history_train_acc, "test_acc": history_test_acc}
@@ -135,9 +145,9 @@ def train_student(
     if cfg.verbose:
         name = f"{student_name} " if student_name else ""
         if teacher is not None:
-            print(f"[Student] {name}Params: {count_parameters(student):,} | Teacher Params: {count_parameters(teacher):,}")
+            print(f"[Student] {name} Params: {count_parameters(student):,} | Teacher Params: {count_parameters(teacher):,}")
         else:
-            print(f"[Student] {name}Params: {count_parameters(student):,} | Teacher: None (scratch)")
+            print(f"[Student] {name} Params: {count_parameters(student):,} | Teacher: None (scratch)")
         if cfg.max_batches is not None:
             print(f"[Checkrun] Limiting to {cfg.max_batches} batches per epoch")
 
@@ -166,7 +176,11 @@ def train_student(
         total_loss = total_task = total_rkd = 0.0
         n_batches = 0
         student.train()
-        iterator = tqdm(train_loader, desc=f"Epoch {epoch+1}/{cfg.epochs}", leave=False) if cfg.verbose else train_loader
+        iterator = (
+            tqdm(train_loader, desc=f"Epoch {epoch+1}/{cfg.epochs}", leave=False, dynamic_ncols=True, file=sys.stderr)
+            if cfg.verbose
+            else train_loader
+        )
         for batch_idx, (x, y) in enumerate(iterator, 1):
             x, y = x.to(device), y.to(device)
             if distill_active:
@@ -205,7 +219,7 @@ def train_student(
         hist_train_acc.append(train_acc)
         hist_test_acc.append(test_acc)
         _logger.info(
-            "[Student][%s][Epoch %d/%d] loss=%.4f (task=%.4f, distill=%.4f) train_acc=%.2f%% test_acc=%.2f%%",
+            "[Student][%s] [Epoch %d/%d] loss=%.4f (task=%.4f, distill=%.4f) train_acc=%.2f%% test_acc=%.2f%%",
             student_name or "student",
             epoch + 1,
             cfg.epochs,
@@ -215,10 +229,8 @@ def train_student(
             train_acc,
             test_acc,
         )
-        if cfg.verbose:
-            print(
-                f"Epoch {epoch + 1}/{cfg.epochs} - loss: {avg_loss:.4f} (task: {avg_task:.4f}, distill: {avg_rkd:.4f}), train_acc: {train_acc:.2f}%, test_acc: {test_acc:.2f}%"
-            )
+        if isinstance(iterator, tqdm):
+            iterator.close()
 
     acc = evaluate(student, test_loader)
     return {

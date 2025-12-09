@@ -1,5 +1,5 @@
 {
-  "description": "Train KD student for 10 epochs using the 10-epoch teacher checkpoint",
+  "description": "Train KD student using the provided teacher checkpoint",
   "training": {
     "epochs": 10,
     "tasks": ["student_kd"],

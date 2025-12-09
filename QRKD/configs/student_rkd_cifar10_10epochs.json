@@ -1,0 +1,11 @@
+{
+  "description": "Train RKD student on CIFAR-10 using the provided teacher checkpoint",
+  "dataset": {
+    "name": "cifar10"
+  },
+  "training": {
+    "epochs": 10,
+    "tasks": ["student_rkd"],
+    "teacher_path": "<<TEACHER_PATH>>"
+  }
+}

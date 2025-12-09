@@ -1,0 +1,10 @@
+{
+  "description": "CIFAR-10 student trained from scratch",
+  "dataset": {
+    "name": "cifar10"
+  },
+  "training": {
+    "epochs": 10,
+    "tasks": ["student_scratch"]
+  }
+}

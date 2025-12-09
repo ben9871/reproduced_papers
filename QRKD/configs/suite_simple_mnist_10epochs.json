@@ -1,0 +1,7 @@
+{
+  "description": "Full MNIST run for teacher, KD, RKD, QRKD (simple backend), and scratch students",
+  "training": {
+    "epochs": 10,
+    "tasks": ["teacher", "student_kd", "student_rkd", "student_qrkd", "student_scratch"]
+  }
+}

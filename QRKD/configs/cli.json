@@ -23,10 +23,17 @@
       "apply": {"kind": "config_path", "path": "training.optimizer.lr"}
     },
     {
-      "flags": ["--dataset"],
-      "help": "Dataset name (mnist)",
+      "flags": ["--teacher-path"],
+      "help": "Path to a pretrained teacher checkpoint for student runs",
       "type": "str",
-      "choices": ["mnist"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.teacher_path"}
+    },
+    {
+      "flags": ["--dataset"],
+      "help": "Dataset name (mnist, cifar10)",
+      "type": "str",
+      "choices": ["mnist", "cifar10"],
       "default": null,
       "apply": {"kind": "config_path", "path": "dataset.name"}
     },
@@ -36,6 +43,35 @@
       "type": "str",
       "default": null,
       "apply": {"kind": "config_path", "path": "training.tasks"}
+    },
+    {
+      "flags": ["--qkernel-weight"],
+      "help": "Weight for fidelity quantum kernel loss (QRKD)",
+      "type": "float",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.qkernel_weight"}
+    },
+    {
+      "flags": ["--qkernel-backend"],
+      "help": "Backend for fidelity kernel (simple, merlin, qiskit)",
+      "type": "str",
+      "choices": ["simple", "merlin", "qiskit"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.qkernel_backend"}
+    },
+    {
+      "flags": ["--qkernel-n-modes"],
+      "help": "Override number of modes for merlin fidelity kernel",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.qkernel_n_modes"}
+    },
+    {
+      "flags": ["--qkernel-n-photons"],
+      "help": "Override number of photons for merlin fidelity kernel",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.qkernel_n_photons"}
     }
   ]
 }

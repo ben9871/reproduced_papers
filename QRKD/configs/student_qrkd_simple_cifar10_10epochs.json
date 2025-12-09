@@ -1,0 +1,13 @@
+{
+  "description": "Train QRKD student (KD + RKD + fidelity kernel) on CIFAR-10 using a teacher checkpoint",
+  "dataset": {
+    "name": "cifar10"
+  },
+  "training": {
+    "epochs": 10,
+    "tasks": ["student_qrkd"],
+    "teacher_path": "<<TEACHER_PATH>>",
+    "qkernel_backend": "simple",
+    "qkernel_weight": 0.1
+  }
+}

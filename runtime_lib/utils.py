@@ -36,7 +36,8 @@ def ensure_no_placeholders(cfg: Union[dict, list, tuple]) -> None:
         return
     details = "; ".join(f"{path}={value}" for path, value in placeholders)
     raise ValueError(
-        "Configuration contains unresolved placeholders (replace <<...>> with real values before running): "
+        "Configuration contains unresolved placeholders. Use CLI parameters to define"
+        " these or replace <<...>> in configuration with real values before running: "
         f"{details}"
     )
 

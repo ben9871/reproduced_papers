@@ -1,5 +1,5 @@
 {
-  "description": "MNIST student trained from scratch for 10 epochs (no distillation)",
+  "description": "MNIST student trained from scratch",
   "training": {
     "tasks": ["student_scratch"],
     "epochs": 10,

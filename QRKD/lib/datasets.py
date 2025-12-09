@@ -1,4 +1,4 @@
-"""Datasets and loaders for MNIST (classical baseline)."""
+"""Datasets and loaders for MNIST and CIFAR-10."""
 
 from __future__ import annotations
 
@@ -26,6 +26,25 @@ def mnist_loaders(cfg: DataConfig) -> tuple[DataLoader, DataLoader]:
     data_root = os.path.abspath(os.path.expanduser(cfg.root))
     train = datasets.MNIST(data_root, train=True, download=True, transform=tfm)
     test = datasets.MNIST(data_root, train=False, download=True, transform=tfm)
+    train_loader = DataLoader(
+        train, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers
+    )
+    test_loader = DataLoader(
+        test, batch_size=cfg.batch_size, shuffle=False, num_workers=cfg.num_workers
+    )
+    return train_loader, test_loader
+
+
+def cifar10_loaders(cfg: DataConfig) -> tuple[DataLoader, DataLoader]:
+    tfm = transforms.Compose(
+        [
+            transforms.ToTensor(),
+            transforms.Normalize((0.4914, 0.4822, 0.4465), (0.247, 0.243, 0.261)),
+        ]
+    )
+    data_root = os.path.abspath(os.path.expanduser(cfg.root))
+    train = datasets.CIFAR10(data_root, train=True, download=True, transform=tfm)
+    test = datasets.CIFAR10(data_root, train=False, download=True, transform=tfm)
     train_loader = DataLoader(
         train, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers
     )

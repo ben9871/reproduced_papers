@@ -15,15 +15,17 @@ class BaseCNN12x4x4(nn.Module):
         c1: int,
         c2: int,
         f_hidden: int,
+        in_channels: int = 1,
+        num_classes: int = 10,
     ) -> None:
         super().__init__()
-        self.conv1 = nn.Conv2d(1, c1, 3, padding=1, bias=False)
+        self.conv1 = nn.Conv2d(in_channels, c1, 3, padding=1, bias=False)
         self.conv2 = nn.Conv2d(c1, c2, 3, padding=1, bias=False)
         self.pool = nn.MaxPool2d(2, 2)  # 28 -> 14
         self.down4 = nn.AdaptiveAvgPool2d((4, 4))  # -> 4x4
         self.conv3 = nn.Conv2d(c2, 12, 1, bias=False)
         self.fc1 = nn.Linear(12 * 4 * 4, f_hidden, bias=True)
-        self.head = nn.Linear(f_hidden, 10, bias=True)
+        self.head = nn.Linear(f_hidden, num_classes, bias=True)
         self._init_weights()
 
     def _init_weights(self) -> None:
@@ -51,12 +53,19 @@ class BaseCNN12x4x4(nn.Module):
 
 
 class TeacherCNN(BaseCNN12x4x4):
-    def __init__(self) -> None:
-        # Exact 6,690 params with (c1,c2,F)=(1,18,31)
-        super().__init__(c1=1, c2=18, f_hidden=31)
+    def __init__(self, in_channels: int = 1, num_classes: int = 10) -> None:
+        # Exact 6,690 params with (c1,c2,F)=(1,18,31) for MNIST; CIFAR-10 adds inputs but keeps topology.
+        super().__init__(c1=1, c2=18, f_hidden=31, in_channels=in_channels, num_classes=num_classes)
 
 
 class StudentCNN(BaseCNN12x4x4):
-    def __init__(self, c1: int = 19, c2: int = 4, f_hidden: int = 4) -> None:
+    def __init__(
+        self,
+        c1: int = 19,
+        c2: int = 4,
+        f_hidden: int = 4,
+        in_channels: int = 1,
+        num_classes: int = 10,
+    ) -> None:
         """Reference student (1,725 params) with (c1,c2,f)=(19,4,4)."""
-        super().__init__(c1=c1, c2=c2, f_hidden=f_hidden)
+        super().__init__(c1=c1, c2=c2, f_hidden=f_hidden, in_channels=in_channels, num_classes=num_classes)

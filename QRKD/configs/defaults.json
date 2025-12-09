@@ -1,5 +1,5 @@
 {
-  "description": "MNIST classical baselines for QRKD (teacher/KD/RKD)",
+  "description": "MNIST/CIFAR-10 classical baselines for QRKD (teacher/KD/RKD)",
   "seed": 42,
   "dtype": "float32",
   "outdir": "outdir",
@@ -12,7 +12,7 @@
   },
   "training": {
     "epochs": 1,
-    "tasks": ["teacher", "student_kd", "student_rkd", "student_scratch"],
+    "tasks": ["teacher", "student_kd", "student_rkd", "student_qrkd", "student_scratch"],
     "optimizer": {
       "lr": 1e-3,
       "weight_decay": 0.0
@@ -22,6 +22,10 @@
     "kd_weight": 0.5,
     "gamma_distance": 0.1,
     "gamma_angle": 0.1,
+    "qkernel_weight": 0.1,
+    "qkernel_backend": "simple",
+    "qkernel_n_modes": null,
+    "qkernel_n_photons": null,
     "teacher_path": null
   },
   "logging": {
