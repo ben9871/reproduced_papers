@@ -73,6 +73,18 @@ def simple_fidelity_kernel_loss(
     return f.smooth_l1_loss(ks, kt)
 
 
+def fidelity_kernel_matrix(
+    feat: torch.Tensor,
+    backend: str = "simple",
+    **backend_kwargs,
+) -> torch.Tensor:
+    """Dispatch helper for fidelity-style kernels used in tests and debugging."""
+    backend_name = backend.lower()
+    if backend_name == "simple":
+        return simple_fidelity_kernel_matrix(feat)
+    raise ValueError(f"Unsupported fidelity kernel backend: {backend}")
+
+
 class DistillationLoss(nn.Module):
     """Container for KD + RKD terms (distance/angle) and fidelity-kernel QRKD."""
 

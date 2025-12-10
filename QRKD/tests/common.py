@@ -1,15 +1,49 @@
-import importlib.util
-import pathlib
+from __future__ import annotations
+
+import json
 import sys
+from copy import deepcopy
+from pathlib import Path
+
+from runtime_lib.cli import build_cli_parser
+from runtime_lib.config import load_config
+from runtime_lib.dtypes import resolve_config_dtypes
+
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+REPO_ROOT = PROJECT_DIR.parent
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 
-def _load_impl_module():
-    impl_path = pathlib.Path(__file__).resolve().parents[1] / "implementation.py"
-    assert impl_path.exists(), "implementation.py missing"
-    # Ensure local 'lib' package is importable
-    sys.path.insert(0, str(impl_path.parent))
-    spec = importlib.util.spec_from_file_location("impl", impl_path)
-    assert spec is not None and spec.loader is not None
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    return module
+_CLI_SCHEMA_PATH = PROJECT_DIR / "configs" / "cli.json"
+_DEFAULTS_PATH = PROJECT_DIR / "configs" / "defaults.json"
+
+
+def build_project_cli_parser():
+    """Return the ArgumentParser (and CLI defs) for the QRKD project."""
+
+    schema = json.loads(_CLI_SCHEMA_PATH.read_text())
+    schema.setdefault("arguments", [])
+    return build_cli_parser(schema)
+
+
+def load_project_defaults() -> dict:
+    """Load QRKD's defaults.json into a Python dict."""
+
+    return load_config(_DEFAULTS_PATH)
+
+
+def load_runtime_ready_config() -> dict:
+    """Return a deepcopy of defaults.json with dtype specs resolved."""
+
+    cfg = deepcopy(load_project_defaults())
+    return resolve_config_dtypes(cfg)
+
+
+__all__ = [
+    "PROJECT_DIR",
+    "REPO_ROOT",
+    "build_project_cli_parser",
+    "load_project_defaults",
+    "load_runtime_ready_config",
+]

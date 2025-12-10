@@ -1,33 +1,30 @@
-import pathlib
-import sys
+from __future__ import annotations
 
-# Ensure this tests directory is on sys.path to import shared helper
-_TESTS_DIR = pathlib.Path(__file__).parent
-if str(_TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_TESTS_DIR))
-
-from common import _load_impl_module  # noqa: E402
+import pytest
+from common import build_project_cli_parser, load_runtime_ready_config
 
 
 def test_cli_help_exits_cleanly():
-    impl = _load_impl_module()
-    parser = impl.build_arg_parser()
-    try:
-        parser.parse_args(["--help"])  # argparse triggers SystemExit on --help
-    except SystemExit as e:
-        assert e.code == 0
-    else:
-        raise AssertionError("Expected SystemExit when parsing --help")
+    parser, _ = build_project_cli_parser()
+    with pytest.raises(SystemExit) as exc:
+        parser.parse_args(["--help"])
+    assert exc.value.code == 0
 
 
-def test_train_and_evaluate_writes_artifact(tmp_path):
-    impl = _load_impl_module()
-    parser = impl.build_arg_parser()
-    args = parser.parse_args([])
-    cfg = impl.resolve_config(args)
+def test_train_and_evaluate_writes_artifact(tmp_path, monkeypatch):
+    from data_reuploading.lib import runner as dr_runner
 
-    run_dir = tmp_path / "run"
-    run_dir.mkdir()
-    impl.train_and_evaluate(cfg, run_dir)
+    cfg = load_runtime_ready_config()
+    markers: dict[str, bool] = {}
 
-    assert (run_dir / "done.txt").exists(), "Expected artifact file to be created"
+    def fake_reproduce(cfg_arg, run_dir):
+        markers["figure_5"] = True
+        run_dir.mkdir(parents=True, exist_ok=True)
+        (run_dir / "figure_5_results.json").write_text("{}", encoding="utf-8")
+
+    monkeypatch.setattr(dr_runner, "reproduce_figure_5", fake_reproduce)
+
+    dr_runner.train_and_evaluate(cfg, tmp_path)
+
+    assert markers.get("figure_5") is True
+    assert (tmp_path / "figure_5_results.json").exists()

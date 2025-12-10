@@ -1,14 +1,37 @@
-import pathlib
-import sys
+from __future__ import annotations
 
-from common import _load_impl_module
+import os
+from pathlib import Path
 
-# Ensure this tests directory is on sys.path to import shared helper
-_TESTS_DIR = pathlib.Path(__file__).parent
-if str(_TESTS_DIR) not in sys.path:
-    sys.path.insert(0, str(_TESTS_DIR))
+from common import PROJECT_DIR
+
+import runtime_lib.runtime as runtime_module
+from runtime_lib import run_from_project
 
 
-def test_placeholder():
-    # Basic smoke test to ensure template imports and runs
-    _ = _load_impl_module()
+def test_placeholder(monkeypatch, tmp_path):
+    recorded: dict[str, Path] = {}
+
+    def fake_import_callable(name: str):
+        assert name == "lib.runner.train_and_evaluate"
+
+        def _runner(cfg, run_dir: Path):
+            recorded["run_dir"] = run_dir
+            recorded["cfg"] = cfg
+            run_dir.mkdir(parents=True, exist_ok=True)
+            (run_dir / "marker.txt").write_text("ok", encoding="utf-8")
+
+        return _runner
+
+    monkeypatch.setattr(runtime_module, "import_callable", fake_import_callable)
+    original_cwd = Path.cwd()
+    try:
+        run_dir = run_from_project(
+            PROJECT_DIR,
+            ["--tasks", "teacher", "--epochs", "1", "--outdir", str(tmp_path)],
+        )
+    finally:
+        os.chdir(original_cwd)
+
+    assert recorded.get("run_dir") == run_dir
+    assert (run_dir / "marker.txt").exists()
