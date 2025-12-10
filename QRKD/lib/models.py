@@ -55,7 +55,9 @@ class BaseCNN12x4x4(nn.Module):
 class TeacherCNN(BaseCNN12x4x4):
     def __init__(self, in_channels: int = 1, num_classes: int = 10) -> None:
         # Exact 6,690 params with (c1,c2,F)=(1,18,31) for MNIST; CIFAR-10 adds inputs but keeps topology.
-        super().__init__(c1=1, c2=18, f_hidden=31, in_channels=in_channels, num_classes=num_classes)
+        super().__init__(
+            c1=1, c2=18, f_hidden=31, in_channels=in_channels, num_classes=num_classes
+        )
 
 
 class StudentCNN(BaseCNN12x4x4):
@@ -68,4 +70,10 @@ class StudentCNN(BaseCNN12x4x4):
         num_classes: int = 10,
     ) -> None:
         """Reference student (1,725 params) with (c1,c2,f)=(19,4,4)."""
-        super().__init__(c1=c1, c2=c2, f_hidden=f_hidden, in_channels=in_channels, num_classes=num_classes)
+        super().__init__(
+            c1=c1,
+            c2=c2,
+            f_hidden=f_hidden,
+            in_channels=in_channels,
+            num_classes=num_classes,
+        )

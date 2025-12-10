@@ -73,7 +73,9 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
     _logger.info("Resolved epoch count: %s", cfg["training"].get("epochs"))
 
     dataset_name = cfg["dataset"]["name"].lower()
-    in_channels = 1 if dataset_name == "mnist" else 3 if dataset_name == "cifar10" else 1
+    in_channels = (
+        1 if dataset_name == "mnist" else 3 if dataset_name == "cifar10" else 1
+    )
     train_loader, test_loader = _prepare_loaders(cfg)
 
     teacher = None
@@ -81,7 +83,9 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
 
     if "teacher" in tasks:
         _logger.info("Training teacher")
-        teacher = TeacherCNN(in_channels=in_channels).to(device=device, dtype=torch_dtype)
+        teacher = TeacherCNN(in_channels=in_channels).to(
+            device=device, dtype=torch_dtype
+        )
         tcfg = TrainConfig(
             epochs=int(cfg["training"].get("epochs", 10)),
             lr=float(cfg["training"]["optimizer"].get("lr", 1e-3)),
@@ -98,13 +102,17 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
         if candidate:
             teacher_path = _resolve_project_path(candidate, project_dir)
             _logger.info("Loading teacher from %s", teacher_path)
-            teacher = TeacherCNN(in_channels=in_channels).to(device=device, dtype=torch_dtype)
+            teacher = TeacherCNN(in_channels=in_channels).to(
+                device=device, dtype=torch_dtype
+            )
             teacher.load_state_dict(torch.load(teacher_path, map_location=device))
             teacher.eval()
         else:
             teacher_path = run_dir / "teacher.pt"
             if teacher_path.exists():
-                _logger.info("Loading teacher checkpoint from run dir: %s", teacher_path)
+                _logger.info(
+                    "Loading teacher checkpoint from run dir: %s", teacher_path
+                )
                 teacher = TeacherCNN().to(device=device, dtype=torch_dtype)
                 teacher.load_state_dict(torch.load(teacher_path, map_location=device))
                 teacher.eval()
@@ -118,7 +126,16 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
     qk_n_photons = int(qk_n_photons) if qk_n_photons is not None else None
 
     variants = {
-        "student_scratch": DistillationLoss(kd=0.0, dr=0.0, ar=0.0, qk=0.0, qk_backend=qk_backend, qk_n_modes=qk_n_modes, qk_n_photons=qk_n_photons, temperature=float(cfg["training"].get("temperature", 4.0))),
+        "student_scratch": DistillationLoss(
+            kd=0.0,
+            dr=0.0,
+            ar=0.0,
+            qk=0.0,
+            qk_backend=qk_backend,
+            qk_n_modes=qk_n_modes,
+            qk_n_photons=qk_n_photons,
+            temperature=float(cfg["training"].get("temperature", 4.0)),
+        ),
         "student_kd": DistillationLoss(
             kd=float(cfg["training"].get("kd_weight", 0.5)),
             dr=0.0,
@@ -158,10 +175,14 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
         if task_name not in tasks:
             continue
         if task_name != "student_scratch" and teacher is None:
-            raise RuntimeError(f"Task {task_name} requires a teacher; train or provide --training.teacher_path")
+            raise RuntimeError(
+                f"Task {task_name} requires a teacher; train or provide --training.teacher_path"
+            )
 
         _logger.info("Training %s", task_name)
-        student = StudentCNN(in_channels=in_channels).to(device=device, dtype=torch_dtype)
+        student = StudentCNN(in_channels=in_channels).to(
+            device=device, dtype=torch_dtype
+        )
         scfg = TrainConfig(
             epochs=int(cfg["training"].get("epochs", 10)),
             lr=float(cfg["training"]["optimizer"].get("lr", 1e-3)),
@@ -180,4 +201,6 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
         )
         _save_checkpoint(student, run_dir / f"{task_name}.pt")
         _save_json(run_dir / f"history_{task_name}.json", results["history"])
-        _save_json(run_dir / f"metrics_{task_name}.json", {"test_acc": results["test_acc"]})
+        _save_json(
+            run_dir / f"metrics_{task_name}.json", {"test_acc": results["test_acc"]}
+        )

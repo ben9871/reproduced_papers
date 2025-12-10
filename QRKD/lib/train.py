@@ -5,7 +5,6 @@ from __future__ import annotations
 import logging
 import sys
 from dataclasses import dataclass
-from typing import Dict, List, Tuple
 
 import torch
 import torch.nn as nn
@@ -29,8 +28,11 @@ class TrainConfig:
 
 
 def train_teacher(
-    model: nn.Module, train_loader: DataLoader, cfg: TrainConfig, test_loader: DataLoader | None = None
-) -> Tuple[nn.Module, Dict[str, List[float]]]:
+    model: nn.Module,
+    train_loader: DataLoader,
+    cfg: TrainConfig,
+    test_loader: DataLoader | None = None,
+) -> tuple[nn.Module, dict[str, list[float]]]:
     """Supervised training loop for a standalone model (teacher)."""
     device = torch.device(cfg.device)
     model.to(device)
@@ -41,9 +43,9 @@ def train_teacher(
         if cfg.max_batches is not None:
             print(f"[Checkrun] Limiting to {cfg.max_batches} batches per epoch")
 
-    history_loss: List[float] = []
-    history_train_acc: List[float] = []
-    history_test_acc: List[float] = []
+    history_loss: list[float] = []
+    history_train_acc: list[float] = []
+    history_test_acc: list[float] = []
 
     def _evaluate_acc(m: nn.Module, loader: DataLoader) -> float:
         m.eval()
@@ -116,12 +118,19 @@ def train_teacher(
                     extra = f", train_acc: {train_acc:.2f}%, test_acc: {history_test_acc[-1]:.2f}%"
                 else:
                     extra = f", train_acc: {train_acc:.2f}%"
-                tqdm.write(f"[Teacher] Epoch {epoch + 1}/{cfg.epochs} - loss: {avg:.4f}{extra}", file=sys.stdout)
+                tqdm.write(
+                    f"[Teacher] Epoch {epoch + 1}/{cfg.epochs} - loss: {avg:.4f}{extra}",
+                    file=sys.stdout,
+                )
         if isinstance(iterator, tqdm):
             iterator.close()
 
     model.eval()
-    return model, {"loss": history_loss, "train_acc": history_train_acc, "test_acc": history_test_acc}
+    return model, {
+        "loss": history_loss,
+        "train_acc": history_train_acc,
+        "test_acc": history_test_acc,
+    }
 
 
 def train_student(
@@ -132,11 +141,15 @@ def train_student(
     cfg: TrainConfig,
     weights: DistillationLoss,
     student_name: str | None = None,
-) -> dict[str, float | Dict[str, List[float]]]:
+) -> dict[str, float | dict[str, list[float]]]:
     device = torch.device(cfg.device)
     student.to(device)
     distill_active = bool(
-        (getattr(weights, "kd", 0.0) or getattr(weights, "dr", 0.0) or getattr(weights, "ar", 0.0))
+        (
+            getattr(weights, "kd", 0.0)
+            or getattr(weights, "dr", 0.0)
+            or getattr(weights, "ar", 0.0)
+        )
         and (teacher is not None)
     )
     if teacher is not None:
@@ -145,9 +158,13 @@ def train_student(
     if cfg.verbose:
         name = f"{student_name} " if student_name else ""
         if teacher is not None:
-            print(f"[Student] {name} Params: {count_parameters(student):,} | Teacher Params: {count_parameters(teacher):,}")
+            print(
+                f"[Student] {name} Params: {count_parameters(student):,} | Teacher Params: {count_parameters(teacher):,}"
+            )
         else:
-            print(f"[Student] {name} Params: {count_parameters(student):,} | Teacher: None (scratch)")
+            print(
+                f"[Student] {name} Params: {count_parameters(student):,} | Teacher: None (scratch)"
+            )
         if cfg.max_batches is not None:
             print(f"[Checkrun] Limiting to {cfg.max_batches} batches per epoch")
 
@@ -167,17 +184,23 @@ def train_student(
                 total += y.size(0)
         return correct / total * 100.0
 
-    hist_loss: List[float] = []
-    hist_task: List[float] = []
-    hist_distill: List[float] = []
-    hist_train_acc: List[float] = []
-    hist_test_acc: List[float] = []
+    hist_loss: list[float] = []
+    hist_task: list[float] = []
+    hist_distill: list[float] = []
+    hist_train_acc: list[float] = []
+    hist_test_acc: list[float] = []
     for epoch in range(cfg.epochs):
         total_loss = total_task = total_rkd = 0.0
         n_batches = 0
         student.train()
         iterator = (
-            tqdm(train_loader, desc=f"Epoch {epoch+1}/{cfg.epochs}", leave=False, dynamic_ncols=True, file=sys.stderr)
+            tqdm(
+                train_loader,
+                desc=f"Epoch {epoch + 1}/{cfg.epochs}",
+                leave=False,
+                dynamic_ncols=True,
+                file=sys.stderr,
+            )
             if cfg.verbose
             else train_loader
         )
@@ -189,7 +212,11 @@ def train_student(
                     logits_t, feat_t = teacher(x)
             logits_s, feat_s = student(x)
             loss_task = ce(logits_s, y)
-            loss_rkd = weights(logits_s, logits_t, feat_s, feat_t) if distill_active else torch.zeros((), device=device)
+            loss_rkd = (
+                weights(logits_s, logits_t, feat_s, feat_t)
+                if distill_active
+                else torch.zeros((), device=device)
+            )
             loss = loss_task + loss_rkd
             opt.zero_grad()
             loss.backward()
@@ -200,9 +227,9 @@ def train_student(
             n_batches += 1
             if cfg.verbose:
                 iterator.set_postfix(
-                    loss=f"{total_loss/n_batches:.4f}",
-                    task=f"{total_task/n_batches:.4f}",
-                    distill=f"{total_rkd/n_batches:.4f}",
+                    loss=f"{total_loss / n_batches:.4f}",
+                    task=f"{total_task / n_batches:.4f}",
+                    distill=f"{total_rkd / n_batches:.4f}",
                 )
             if cfg.max_batches is not None and batch_idx >= cfg.max_batches:
                 break

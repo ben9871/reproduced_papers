@@ -5,7 +5,6 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 import torch.nn.functional as f
-from torch import Tensor
 
 
 def kd_loss(
@@ -29,7 +28,9 @@ def pairwise_distances(x: torch.Tensor) -> torch.Tensor:
     return dist2.clamp_min(1e-12).sqrt()
 
 
-def rkd_distance_loss(student_feat: torch.Tensor, teacher_feat: torch.Tensor) -> torch.Tensor:
+def rkd_distance_loss(
+    student_feat: torch.Tensor, teacher_feat: torch.Tensor
+) -> torch.Tensor:
     """Relational KD distance term (matches official RKD: mean over positive distances)."""
     with torch.no_grad():
         td = pairwise_distances(teacher_feat)
@@ -41,7 +42,9 @@ def rkd_distance_loss(student_feat: torch.Tensor, teacher_feat: torch.Tensor) ->
     return f.smooth_l1_loss(sd, td)
 
 
-def rkd_angle_loss(student_feat: torch.Tensor, teacher_feat: torch.Tensor) -> torch.Tensor:
+def rkd_angle_loss(
+    student_feat: torch.Tensor, teacher_feat: torch.Tensor
+) -> torch.Tensor:
     """Relational KD angle term (full pairwise angular relations, as in RKD repo)."""
     with torch.no_grad():
         td = teacher_feat.unsqueeze(0) - teacher_feat.unsqueeze(1)  # (N,N,D)
@@ -60,7 +63,9 @@ def simple_fidelity_kernel_matrix(feat: torch.Tensor) -> torch.Tensor:
     return gram.pow(2)
 
 
-def simple_fidelity_kernel_loss(student_feat: torch.Tensor, teacher_feat: torch.Tensor) -> torch.Tensor:
+def simple_fidelity_kernel_loss(
+    student_feat: torch.Tensor, teacher_feat: torch.Tensor
+) -> torch.Tensor:
     """MSE between teacher/student fidelity kernel matrices."""
     with torch.no_grad():
         kt = simple_fidelity_kernel_matrix(teacher_feat)
@@ -100,7 +105,9 @@ class DistillationLoss(nn.Module):
     def forward(self, logits_s, logits_t, feat_s, feat_t):
         loss = torch.zeros((), device=logits_s.device)
         if self.kd:
-            loss = loss + self.kd * kd_loss(logits_s, logits_t, t=self.temperature, alpha=self.kd_alpha)
+            loss = loss + self.kd * kd_loss(
+                logits_s, logits_t, t=self.temperature, alpha=self.kd_alpha
+            )
         if self.dr:
             loss = loss + self.dr * rkd_distance_loss(feat_s, feat_t)
         if self.ar:
@@ -115,7 +122,11 @@ class DistillationLoss(nn.Module):
                 feat_t_qk = feat_t[:, :target_dim]
             if self.qk_backend.lower() == "merlin":
                 # Build once per feature dimensionality; merlin kernels run on CPU
-                if self._merlin_kernel is None or getattr(self._merlin_kernel, "input_size", None) != feat_s_qk.shape[1]:
+                if (
+                    self._merlin_kernel is None
+                    or getattr(self._merlin_kernel, "input_size", None)
+                    != feat_s_qk.shape[1]
+                ):
                     from merlin.algorithms.kernels import FidelityKernel  # type: ignore
 
                     n_modes = self.qk_n_modes or max(2, min(feat_s_qk.shape[1], 4))
@@ -129,14 +140,23 @@ class DistillationLoss(nn.Module):
                         force_psd=True,
                         shots=0,
                     )
-                ks = self._merlin_kernel(feat_s_qk.detach().to("cpu", dtype=torch.float32)).to(device=feat_s.device, dtype=feat_s.dtype)
+                ks = self._merlin_kernel(
+                    feat_s_qk.detach().to("cpu", dtype=torch.float32)
+                ).to(device=feat_s.device, dtype=feat_s.dtype)
                 with torch.no_grad():
-                    kt = self._merlin_kernel(feat_t_qk.detach().to("cpu", dtype=torch.float32)).to(device=feat_s.device, dtype=feat_s.dtype)
+                    kt = self._merlin_kernel(
+                        feat_t_qk.detach().to("cpu", dtype=torch.float32)
+                    ).to(device=feat_s.device, dtype=feat_s.dtype)
                 loss = loss + self.qk * f.smooth_l1_loss(ks, kt)
             elif self.qk_backend.lower() == "qiskit":
-                if self._qiskit_kernel is None or self._qiskit_dim != feat_s_qk.shape[1]:
+                if (
+                    self._qiskit_kernel is None
+                    or self._qiskit_dim != feat_s_qk.shape[1]
+                ):
                     from qiskit.circuit.library import ZZFeatureMap  # type: ignore
-                    from qiskit_machine_learning.kernels import FidelityQuantumKernel  # type: ignore
+                    from qiskit_machine_learning.kernels import (
+                        FidelityQuantumKernel,  # type: ignore
+                    )
 
                     self._qiskit_dim = int(feat_s_qk.shape[1])
                     fmap = ZZFeatureMap(feature_dimension=self._qiskit_dim)
@@ -149,5 +169,7 @@ class DistillationLoss(nn.Module):
                 kt = torch.as_tensor(kt_np, dtype=feat_s.dtype, device=feat_s.device)
                 loss = loss + self.qk * f.smooth_l1_loss(ks, kt)
             else:
-                loss = loss + self.qk * simple_fidelity_kernel_loss(feat_s_qk, feat_t_qk)
+                loss = loss + self.qk * simple_fidelity_kernel_loss(
+                    feat_s_qk, feat_t_qk
+                )
         return loss
