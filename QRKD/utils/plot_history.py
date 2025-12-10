@@ -79,8 +79,12 @@ def main() -> None:
         }
         if args.qrkd_qiskit:
             runs["QRKD-qiskit"] = (args.qrkd_qiskit, "student_qrkd")
-        plt.figure(figsize=(8, 5))
-        plotted_any = False
+        plt.figure(figsize=(12, 4))
+        plotted_loss = False
+        plotted_acc = False
+        ax_loss = plt.subplot(1, 2, 1)
+        ax_acc = plt.subplot(1, 2, 2)
+        ax_acc2 = ax_acc.twinx()
         for name, (run_dir, stem) in runs.items():
             if run_dir is None:
                 continue
@@ -92,51 +96,135 @@ def main() -> None:
                 )
                 continue
             combined[name] = hist
+            loss = hist.get("loss", [])
             test_acc = hist.get("test_acc", [])
-            if test_acc:
-                plt.plot(
-                    range(1, len(test_acc) + 1),
-                    test_acc,
-                    linestyle="-",
-                    label=f"{name} test",
+            epochs = list(range(1, len(test_acc) + 1))
+            if loss:
+                ax_loss.plot(
+                    range(1, len(loss) + 1),
+                    loss,
+                    label=name,
                     marker="o",
                 )
-                plotted_any = True
-        if not plotted_any:
+                plotted_loss = True
+            if test_acc:
+                if name.lower().startswith("teacher"):
+                    teacher_line = ax_acc2.plot(
+                        epochs,
+                        test_acc,
+                        label="Teacher test",
+                        color="black",
+                        linestyle="-",
+                        marker="s",
+                    )[0]
+                else:
+                    ax_acc.plot(
+                        epochs,
+                        test_acc,
+                        linestyle="-",
+                        label=f"{name} test",
+                        marker="o",
+                    )
+                plotted_acc = True
+        if not (plotted_loss or plotted_acc):
             raise SystemExit(
                 "No history data found to plot. Ensure history_*.json files exist in the provided run directories."
             )
         args.out_json.parent.mkdir(parents=True, exist_ok=True)
         args.out_json.write_text(json.dumps(combined, indent=2), encoding="utf-8")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy (%)")
-        plt.title("QRKD training curves (test accuracy)")
-        plt.legend()
+        if plotted_loss:
+            ax_loss.set_xlabel("Epoch")
+            ax_loss.set_ylabel("Loss")
+            ax_loss.set_title("Student loss")
+            ax_loss.set_xticks(
+                range(1, len(next(iter(combined.values())).get("loss", [])) + 1)
+            )
+            ax_loss.legend()
+            ax_loss.grid(True)
+        if plotted_acc:
+            ax_acc.set_xlabel("Epoch")
+            ax_acc.set_ylabel("Student test acc (%)")
+            ax_acc.set_title("Test accuracy (teacher on secondary axis)")
+            # align ticks to max epochs across test curves
+            max_ep = max(len(v.get("test_acc", [])) for v in combined.values())
+            ax_acc.set_xticks(range(1, max_ep + 1))
+            ax_acc.grid(True)
+            student_lines = ax_acc.get_lines()
+            if "teacher_line" in locals():
+                leg1 = ax_acc.legend(
+                    handles=student_lines, loc="lower right", title="Students"
+                )
+                leg2 = ax_acc2.legend(
+                    handles=[teacher_line], loc="upper left", title="Teacher"
+                )
+            else:
+                ax_acc.legend(loc="lower right")
         args.out_plot.parent.mkdir(parents=True, exist_ok=True)
         plt.tight_layout()
         plt.savefig(args.out_plot)
         plt.close()
 
     if args.from_json:
-        plt.figure(figsize=(8, 5))
-        plotted_any = False
+        plt.figure(figsize=(12, 4))
+        plotted_loss = False
+        plotted_acc = False
+        ax_loss = plt.subplot(1, 2, 1)
+        ax_acc = plt.subplot(1, 2, 2)
+        ax_acc2 = ax_acc.twinx()
         for name, hist in combined.items():
+            loss = hist.get("loss", [])
             test_acc = hist.get("test_acc", [])
+            epochs = list(range(1, len(test_acc) + 1))
+            if loss:
+                ax_loss.plot(range(1, len(loss) + 1), loss, label=name, marker="o")
+                plotted_loss = True
             if test_acc:
-                plt.plot(
-                    range(1, len(test_acc) + 1),
-                    test_acc,
-                    linestyle="-",
-                    label=f"{name} test",
-                    marker="o",
-                )
-                plotted_any = True
-        if not plotted_any:
+                if name.lower().startswith("teacher"):
+                    teacher_line = ax_acc2.plot(
+                        epochs,
+                        test_acc,
+                        label="Teacher test",
+                        color="black",
+                        linestyle="-",
+                        marker="s",
+                    )[0]
+                else:
+                    ax_acc.plot(
+                        epochs,
+                        test_acc,
+                        linestyle="-",
+                        label=f"{name} test",
+                        marker="o",
+                    )
+                plotted_acc = True
+        if not (plotted_loss or plotted_acc):
             raise SystemExit("No history data found in JSON to plot.")
-        plt.xlabel("Epoch")
-        plt.ylabel("Accuracy (%)")
-        plt.title("QRKD training curves (test accuracy)")
-        plt.legend()
+        if plotted_loss:
+            ax_loss.set_xlabel("Epoch")
+            ax_loss.set_ylabel("Loss")
+            ax_loss.set_title("Student loss")
+            ax_loss.set_xticks(
+                range(1, len(next(iter(combined.values())).get("loss", [])) + 1)
+            )
+            ax_loss.legend()
+            ax_loss.grid(True)
+        if plotted_acc:
+            ax_acc.set_xlabel("Epoch")
+            ax_acc.set_ylabel("Student test acc (%)")
+            ax_acc.set_title("Test accuracy (teacher on secondary axis)")
+            max_ep = max(len(v.get("test_acc", [])) for v in combined.values())
+            ax_acc.set_xticks(range(1, max_ep + 1))
+            ax_acc.grid(True)
+            student_lines = ax_acc.get_lines()
+            if "teacher_line" in locals():
+                leg1 = ax_acc.legend(
+                    handles=student_lines, loc="lower right", title="Students"
+                )
+                leg2 = ax_acc2.legend(
+                    handles=[teacher_line], loc="upper left", title="Teacher"
+                )
+            else:
+                ax_acc.legend(loc="lower right")
         args.out_plot.parent.mkdir(parents=True, exist_ok=True)
         plt.tight_layout()
         plt.savefig(args.out_plot)

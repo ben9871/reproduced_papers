@@ -8,10 +8,20 @@
 
 ## Overview
 
-This folder reproduces MNIST and CIFAR-10 baselines for KD, RKD, and QRKD:
+This folder reproduces MNIST and CIFAR-10 baselines for KD, RKD, and QRKD (the original paper also reports text experiments; this repo focuses on the vision side):
 - Teacher CNN, KD student, RKD student, QRKD student (KD + RKD + fidelity kernel), and scratch student.
 - Datasets: MNIST (28x28 grayscale) and CIFAR-10 (32x32 RGB) via `--dataset` and matching configs.
-- QRKD fidelity kernel options: `simple` (|⟨ψ_i|ψ_j⟩|² over normalized features), `merlin` (`FidelityKernel.simple`), `qiskit` (FidelityQuantumKernel + ZZFeatureMap).
+- QRKD fidelity kernel options:
+  - `simple`: classical |⟨ψ_i|ψ_j⟩|² over L2-normalized features (no quantum backend; serves as a baseline fidelity term).
+  - `merlin`: `merlin.algorithms.kernels.FidelityKernel.simple` over features (quantum-inspired kernel library).
+  - `qiskit`: `qiskit_machine_learning.kernels.FidelityQuantumKernel` with a ZZFeatureMap.
+- Architectures (mirroring the paper’s compact CNNs): Teacher is a 3-layer conv stack (1→18 channels, 3×3) with max-pool, adaptive 4×4 downsample, 1×1 conv to 12 channels, then MLP (12·4·4 → 31 → 10); ~6.7K params on MNIST. Student keeps the topology but is narrower (19→4 channels, hidden 4); ~1.7K params. CIFAR-10 variants switch to 3 input channels, same topology.
+
+Loss composition (student):
+`L = L_task + kd * L_KD + dr * L_RKD-distance + ar * L_RKD-angle + qk * L_fidelity`
+- KD: KL on softened logits (temperature, alpha).
+- RKD-distance/angle: pairwise relational alignment of embeddings.
+- Fidelity: kernel alignment between student/teacher normalized features (backend as above).
 
 ## How to Run
 
