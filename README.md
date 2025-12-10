@@ -101,6 +101,8 @@ python implementation.py --project NAME --config NAME/configs/example.json
 
 `--project` (or `--project-dir`) is mandatory so the shared runner knows which reproduction folder to load.
 
+**Placeholder guard:** If any config value still contains a `<<...>>` placeholder (e.g., `"teacher_path": "<<TEACHER_PATH>>"`), the shared runner aborts early with a clear error. Replace these placeholders with real paths/values before launching a run.
+
 Then edit the placeholders in:
 - `README.md` — paper reference/authors, reproduction details, CLI options, results analysis
 - `configs/example.json` — dataset/model/training defaults (extend or add more configs)

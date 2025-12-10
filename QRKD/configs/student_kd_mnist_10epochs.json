@@ -1,0 +1,8 @@
+{
+  "description": "Train KD student using the provided teacher checkpoint",
+  "training": {
+    "epochs": 10,
+    "tasks": ["student_kd"],
+    "teacher_path": "<<TEACHER_PATH>>"
+  }
+}

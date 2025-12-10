@@ -1,0 +1,11 @@
+{
+  "description": "Full CIFAR-10 run for teacher, KD, RKD, QRKD (simple backend), and scratch students",
+  "dataset": {
+    "name": "cifar10"
+  },
+  "training": {
+    "epochs": 10,
+    "tasks": ["teacher", "student_kd", "student_rkd", "student_qrkd", "student_scratch"],
+    "qkernel_backend": "simple"
+  }
+}

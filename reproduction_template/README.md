@@ -86,6 +86,8 @@ Place configuration files in `configs/`.
 - Keys typically include: dataset, model, training, evaluation, logging.
 - Precision control: add a top-level `"dtype"` entry (mirrors `"seed"`) to force the entire pipeline (datasets + models) to run in a specific torch dtype; individual models may still expose a `model.dtype` override if required.
 
+**Placeholder guard:** If any config value still contains a `<<...>>` placeholder (e.g., `"teacher_path": "<<TEACHER_PATH>>"`), the shared runner aborts early with a clear error. Replace these placeholders with real paths/values before launching a run.
+
 ## Results and Analysis
 
 - Where results are stored, how to reproduce key figures/tables

@@ -1,0 +1,10 @@
+{
+  "description": "MNIST student trained from scratch",
+  "training": {
+    "tasks": ["student_scratch"],
+    "epochs": 10,
+    "optimizer": {
+      "lr": 1e-3
+    }
+  }
+}

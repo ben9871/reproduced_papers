@@ -1,0 +1,9 @@
+{
+  "description": "MNIST run with QRKD using Qiskit fidelity kernel backend (ZZFeatureMap)",
+  "training": {
+    "epochs": 10,
+    "tasks": ["teacher", "student_kd", "student_rkd", "student_qrkd", "student_scratch"],
+    "qkernel_backend": "qiskit",
+    "qkernel_weight": 0.1
+  }
+}

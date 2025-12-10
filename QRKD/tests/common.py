@@ -20,16 +20,22 @@ _DEFAULTS_PATH = PROJECT_DIR / "configs" / "defaults.json"
 
 
 def build_project_cli_parser():
+    """Return the ArgumentParser (and CLI defs) for the QRKD project."""
+
     schema = json.loads(_CLI_SCHEMA_PATH.read_text())
     schema.setdefault("arguments", [])
     return build_cli_parser(schema)
 
 
 def load_project_defaults() -> dict:
+    """Load QRKD's defaults.json into a Python dict."""
+
     return load_config(_DEFAULTS_PATH)
 
 
 def load_runtime_ready_config() -> dict:
+    """Return a deepcopy of defaults.json with dtype specs resolved."""
+
     cfg = deepcopy(load_project_defaults())
     return resolve_config_dtypes(cfg)
 

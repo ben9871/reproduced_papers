@@ -1,0 +1,77 @@
+{
+  "description": "Paper reproduction runner",
+  "arguments": [
+    {
+      "flags": ["--epochs"],
+      "help": "Override number of training epochs",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.epochs"}
+    },
+    {
+      "flags": ["--batch-size"],
+      "help": "Override dataset batch size",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "dataset.batch_size"}
+    },
+    {
+      "flags": ["--lr"],
+      "help": "Override learning rate",
+      "type": "float",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.optimizer.lr"}
+    },
+    {
+      "flags": ["--teacher-path"],
+      "help": "Path to a pretrained teacher checkpoint for student runs",
+      "type": "str",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.teacher_path"}
+    },
+    {
+      "flags": ["--dataset"],
+      "help": "Dataset name (mnist, cifar10)",
+      "type": "str",
+      "choices": ["mnist", "cifar10"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "dataset.name"}
+    },
+    {
+      "flags": ["--tasks"],
+      "help": "Comma-separated tasks to run (teacher,student_kd,student_rkd,student_scratch,student_qrkd)",
+      "type": "str",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.tasks"}
+    },
+    {
+      "flags": ["--qkernel-weight"],
+      "help": "Weight for fidelity quantum kernel loss (QRKD)",
+      "type": "float",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.qkernel_weight"}
+    },
+    {
+      "flags": ["--qkernel-backend"],
+      "help": "Backend for fidelity kernel (simple, merlin, qiskit)",
+      "type": "str",
+      "choices": ["simple", "merlin", "qiskit"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.qkernel_backend"}
+    },
+    {
+      "flags": ["--qkernel-n-modes"],
+      "help": "Override number of modes for merlin fidelity kernel",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.qkernel_n_modes"}
+    },
+    {
+      "flags": ["--qkernel-n-photons"],
+      "help": "Override number of photons for merlin fidelity kernel",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "training.qkernel_n_photons"}
+    }
+  ]
+}

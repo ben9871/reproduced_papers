@@ -9,15 +9,15 @@ import runtime_lib.runtime as runtime_module
 from runtime_lib import run_from_project
 
 
-def test_project_runs_via_runtime(monkeypatch, tmp_path):
+def test_placeholder(monkeypatch, tmp_path):
     recorded: dict[str, Path] = {}
 
     def fake_import_callable(name: str):
         assert name == "lib.runner.train_and_evaluate"
 
         def _runner(cfg, run_dir: Path):
-            recorded["cfg"] = cfg
             recorded["run_dir"] = run_dir
+            recorded["cfg"] = cfg
             run_dir.mkdir(parents=True, exist_ok=True)
             (run_dir / "marker.txt").write_text("ok", encoding="utf-8")
 
@@ -28,7 +28,7 @@ def test_project_runs_via_runtime(monkeypatch, tmp_path):
     try:
         run_dir = run_from_project(
             PROJECT_DIR,
-            ["--epochs", "1", "--outdir", str(tmp_path)],
+            ["--tasks", "teacher", "--epochs", "1", "--outdir", str(tmp_path)],
         )
     finally:
         os.chdir(original_cwd)

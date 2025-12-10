@@ -1,0 +1,14 @@
+{
+  "description": "CIFAR-10 run with QRKD using Merlin fidelity kernel backend",
+  "dataset": {
+    "name": "cifar10"
+  },
+  "training": {
+    "epochs": 10,
+    "tasks": ["teacher", "student_kd", "student_rkd", "student_qrkd", "student_scratch"],
+    "qkernel_backend": "merlin",
+    "qkernel_weight": 0.1,
+    "qkernel_n_modes": 10,
+    "qkernel_n_photons": 5
+  }
+}

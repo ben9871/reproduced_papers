@@ -1,0 +1,10 @@
+{
+  "description": "Train QRKD student using Qiskit fidelity kernel backend and a teacher checkpoint",
+  "training": {
+    "epochs": 10,
+    "tasks": ["student_qrkd"],
+    "teacher_path": "<<TEACHER_PATH>>",
+    "qkernel_backend": "qiskit",
+    "qkernel_weight": 0.1
+  }
+}

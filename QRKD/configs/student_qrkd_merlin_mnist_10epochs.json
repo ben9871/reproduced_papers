@@ -1,0 +1,12 @@
+{
+  "description": "Train QRKD student using Merlin fidelity kernel backend and a teacher checkpoint",
+  "training": {
+    "epochs": 10,
+    "tasks": ["student_qrkd"],
+    "teacher_path": "<<TEACHER_PATH>>",
+    "qkernel_backend": "merlin",
+    "qkernel_weight": 0.1,
+    "qkernel_n_modes": 4,
+    "qkernel_n_photons": 4
+  }
+}

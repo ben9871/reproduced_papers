@@ -1,0 +1,10 @@
+{
+  "description": "Train only the teacher on CIFAR-10",
+  "dataset": {
+    "name": "cifar10"
+  },
+  "training": {
+    "epochs": 10,
+    "tasks": ["teacher"]
+  }
+}
