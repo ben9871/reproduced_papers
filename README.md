@@ -36,6 +36,10 @@ Need a quick tour of a project’s knobs? Run `python implementation.py --paper 
 - Default data root is `data/` at the repo root; each paper writes under `data/<NAME>/` to avoid per-venv caches.
 - Override with `DATA_DIR=/abs/path` or `python implementation.py --data-root /abs/path ...` (applies to the current run and is exported to downstream loaders).
 
+Shared data helpers:
+- Common dataset-generation code lives under `papers/shared/<paper>/` when multiple reproductions reuse the same logic. Each paper exposes a thin `lib/data.py` (or equivalent) that simply imports from the shared module.
+- If you add new shared data utilities, place them in `papers/shared/<paper>/` and have paper-local `lib/` importers forward to them so tests and runners stay stable.
+
 Universal CLI flags provided by the shared runner:
 - `--seed INT` Reproducibility seed propagated to Python/NumPy/PyTorch backends.
 - `--dtype STR` Force a global tensor dtype before model-specific overrides.
@@ -62,8 +66,7 @@ papers/NAME/            # Non-ambiguous acronym or fullname of the reproduced pa
 ├── README.md             # Paper overview and results overview
 ├── requirements.txt      # additional requirements for the scripts
 ├── configs/              # defaults + CLI/runtime descriptors consumed by the repo root runner
-├── data/                 # Datasets and preprocessing if any
-├── lib/                  # code used by the shared runner and notebooks - as an integrated library
+├── lib/                  # code used by the shared runner and notebooks - as an integrated library (import shared data helpers from papers/shared/<paper>/)
 ├── models/               # Trained models
 ├── results/              # Selected generated figures, tables, or outputs from trained models
 ├── tests/                # Validation tests
