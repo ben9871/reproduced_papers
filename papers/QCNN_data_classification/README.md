@@ -19,7 +19,7 @@ The repository keeps the standard template layout:
 ```
 QCNN_data_classification/
 ├── configs/      # Ready-to-run JSON presets
-├── data/         # Cached datasets or PCA artefacts
+├── data/         # Cached datasets (now resolved via shared data root)
 ├── lib/          # Legacy scripts (e.g., reference Merlin reproduction)
 ├── model/        # Source modules (QConvModel, SingleGI, helpers, …)
 ├── models/       # Saved checkpoints
@@ -108,6 +108,11 @@ python utils/run_experiment.py --dataset mnist --classes 0,1 --ansatz 7 --encodi
 ```
 
 Results are stored in the upstream `QCNN/Result/` tree.
+
+### Data location
+
+- Datasets download into the shared repo data root (resolved via `paper_data_dir("QCNN_data_classification")`, defaulting to `data/QCNN_data_classification/`).
+- PCA preprocessing (`make_pca`) pulls MNIST-family datasets from that shared root; `DATA_DIR`/`--data-root` overrides are respected by the global resolver.
 
 ## Output Directory and Artifacts
 

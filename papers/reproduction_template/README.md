@@ -67,6 +67,13 @@ python implementation.py --paper reproduction_template --config configs/example.
 
 The script saves a snapshot of the resolved config alongside results and logs.
 
+### Data location and shared code
+
+- The shared data root defaults to `<repo>/data`; each paper is scoped to a subfolder named after the paper (e.g., `data/reproduction_template/`). The runner resolves this via `runtime_lib.data_paths.paper_data_dir`, so you usually just pass `--paper` or set `dataset.root` to `null` and downloads land in the right place.
+- Override the base root with `DATA_DIR=/abs/path` or `--data-root /abs/path` when calling `implementation.py`; the paper subfolder is appended automatically.
+- No datasets are bundled. Download or place assets under the resolved paper-specific subfolder.
+- Reusable helpers can live under `papers/shared/<paper>/...`; import them from your paper code to avoid duplication while keeping code on the Python path (e.g., `from papers.shared.<paper>.module import helper`).
+
 ### Output directory and generated files
 
 At each run, a timestamped folder is created under the base `outdir` (default: `outdir`):

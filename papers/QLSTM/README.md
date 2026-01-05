@@ -46,7 +46,7 @@ Stack: PyTorch, PennyLane, MerLin, NumPy/SciPy, scikit‑learn, matplotlib.
 
 - `../implementation.py --paper QLSTM` — Repository-level CLI entry point powered by this folder's `configs/cli.json`
 - `lib/model.py` — Classical LSTM, QLSTM (gate VQCs), sequence wrapper
-- `lib/dataset.py` — Synthetic generators + CSV loader
+- `lib/dataset.py` — Synthetic generators + CSV loader (delegates to `papers/shared/QLSTM/dataset.py`)
 - `lib/rendering.py` — Plotting and pickle helpers
 - `configs/` — JSON configs (`defaults.json`, dataset presets, `cli.json`)
 - `data/` — Input datasets (CSV, etc.)
@@ -106,6 +106,14 @@ python implementation.py --paper QLSTM --model lstm --generator sin --epochs 2 -
 # Note: this can be slow in simulation; recommended for targeted tests
 python implementation.py --paper QLSTM --model qlstm_photonic --generator sin --epochs 1 --seq-length 4 --hidden-size 2 --device cpu
 ```
+
+### Data location
+
+- Default data root is the shared repo `data/` directory (resolved via `paper_data_dir("QLSTM")`).
+- On first use the loader copies the bundled `data/airline-passengers.csv` from this paper folder into the shared `data/QLSTM/airline-passengers.csv` location if missing.
+- Relative `--csv-path` values are resolved under the shared `data/QLSTM/` folder; absolute paths are honored.
+- Override the base with `DATA_DIR=/abs/path` or `--data-root /abs/path` when invoking `implementation.py`.
+- If the resolver still cannot find the CSV, provide `--csv-path` explicitly or place the file in the chosen data root.
 
 ## Output Directory and Artifacts
 

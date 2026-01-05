@@ -3,7 +3,7 @@
   "arguments": [
     {
       "flags": ["-d", "--datadir"],
-      "help": "Dataset root directory",
+      "help": "Base data directory (paper subfolder is appended)",
       "type": "path",
       "default": null,
       "apply": {"kind": "config_path", "path": "dataset.root"}

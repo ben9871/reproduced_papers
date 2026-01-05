@@ -8,10 +8,7 @@ REPO_ROOT = PROJECT_ROOT.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from q_gaussian_kernel.data.datasets import (
-    build_gaussian_grid,
-    prepare_classification_data,
-)
+from q_gaussian_kernel.lib.data import build_gaussian_grid, prepare_classification_data
 
 
 def test_gaussian_grid_targets_match_sigmas():

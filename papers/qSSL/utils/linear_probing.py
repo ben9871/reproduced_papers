@@ -14,10 +14,14 @@ import torch
 import torch.nn as nn
 from huggingface_hub import hf_hub_download
 from torchsummary import summary
+from runtime_lib.data_paths import paper_data_dir
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
+REPO_ROOT = Path(__file__).resolve().parents[3]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
 
 from lib.data_utils import load_finetuning_data  # noqa: E402
 from lib.model import QSSL  # noqa: E402
@@ -33,7 +37,7 @@ parser = argparse.ArgumentParser(description="PyTorch Quantum self-sup training"
 
 # ========== Dataset Configuration ==========
 parser.add_argument(
-    "-d", "--datadir", metavar="DIR", default="./data", help="path to dataset"
+    "-d", "--datadir", metavar="DIR", default=None, help="Base data directory"
 )
 parser.add_argument(
     "-p",
@@ -228,6 +232,7 @@ class FactorMultiplication(nn.Module):
 
 if __name__ == "__main__":
     args = parser.parse_args()
+    args.datadir = paper_data_dir("qSSL", args.datadir)
 
     args_json_override = None
     remote_spec = _parse_hf_reference(args.pretrained)

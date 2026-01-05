@@ -5,7 +5,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-from data.datasets import target_function
+from .data import target_function
 from sklearn.metrics import accuracy_score
 from sklearn.svm import SVC
 from torch.utils.data import DataLoader, TensorDataset

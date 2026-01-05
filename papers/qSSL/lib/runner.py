@@ -19,6 +19,7 @@ from lib.training_utils import (
     save_results_to_json,
     train,
 )
+from runtime_lib.data_paths import paper_data_dir
 
 LOGGER = logging.getLogger(__name__)
 
@@ -34,8 +35,11 @@ def _build_args(cfg: dict[str, Any]) -> SimpleNamespace:
 
     backend = str(model_cfg.get("backend", "classical")).lower()
 
+    data_root = dataset_cfg.get("root")
+    resolved_data_dir = paper_data_dir("qSSL", data_root)
+
     args_dict: dict[str, Any] = {
-        "datadir": _as_str(dataset_cfg.get("root", "data")),
+        "datadir": resolved_data_dir,
         "classes": int(dataset_cfg.get("classes", 2)),
         "batch_size": int(dataset_cfg.get("batch_size", 128)),
         "epochs": int(training_cfg.get("epochs", 2)),

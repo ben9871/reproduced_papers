@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from data.fourier_series import generate_dataset
+from .data import generate_dataset
 from utils.plotting import plot_learned_functions, plot_training_curves
 
 from lib.training import summarize_results, train_models_multiple_runs

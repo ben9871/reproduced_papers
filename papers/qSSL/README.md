@@ -73,7 +73,8 @@ python implementation.py --paper qSSL --qiskit --classes 5 --epochs 2 --batch_si
 python implementation.py --paper qSSL --classical --classes 5 --epochs 2 --batch_size 256 --ckpt-step 1
 ```
 Need to see every toggle first? Run `python implementation.py --paper qSSL --help` for the auto-generated CLI, including dataset paths, backend switches, and visualization flags.
-Need to see every toggle first? Run `python implementation.py --paper qSSL --help` for the auto-generated CLI, including dataset paths, backend switches, and visualization flags.
+
+Data root: CIFAR10 downloads under `<DATA_DIR>/qSSL` (default `DATA_DIR` env or `<repo>/data`). Override the base root with `--datadir` if needed; the paper subfolder is added automatically.
 
 ## Configuration (JSON)
 See `configs/defaults.json` (overrides are described in `configs/cli.json`). Key fields:

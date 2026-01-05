@@ -9,7 +9,7 @@ from typing import Any, Callable
 
 import numpy as np
 import torch.nn as nn
-from data import make_pca
+from QCNN_data_classification.lib.data import make_pca
 from model import QConvModel, SingleGI, build_quantum_kernels
 from utils.circuit import required_input_params
 from utils.training import train_once

@@ -10,7 +10,7 @@ REPO_ROOT = PROJECT_ROOT.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from VQC_fourier_series.data.fourier_series import generate_dataset
+from VQC_fourier_series.lib.data import generate_dataset
 
 
 def test_fourier_dataset_is_real():

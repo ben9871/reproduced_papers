@@ -44,6 +44,13 @@
       "choices": ["debug", "info", "warning", "error", "critical"],
       "default": null,
       "apply": {"kind": "config_path", "path": "logging.level"}
+    },
+    {
+      "flags": ["--data-root"],
+      "help": "Shared data root for all papers (overrides DATA_DIR)",
+      "type": "path",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "data_root"}
     }
   ]
 }

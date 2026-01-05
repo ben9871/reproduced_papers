@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from data.datasets import build_gaussian_grid, prepare_classification_data
+from .data import build_gaussian_grid, prepare_classification_data
 from utils.plotting import (
     plot_accuracy_bars,
     plot_dataset_examples,

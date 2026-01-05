@@ -31,7 +31,7 @@ if repo_root not in sys.path:
     sys.path.insert(0, repo_root)
 
 
-from photonic_QCNN.data.data import (
+from photonic_QCNN.lib.data import (
     convert_dataset_to_tensor,
     convert_scalar_labels_to_onehot,
     convert_tensor_to_loader,

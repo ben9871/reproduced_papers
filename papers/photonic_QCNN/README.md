@@ -82,6 +82,13 @@ python implementation.py --config configs/example.json --epochs 30 --lr 5e-2
 
 Each MerLin call creates `<outdir>/<dataset>/run_YYYYMMDD/HH-MM-SS/` containing configs, metrics, plots, and summaries. Paper scripts continue to save under `results/*_paper/` following the authors' convention.
 
+### Data location
+
+- Default data root resolves via the shared helper `paper_data_dir("photonic_QCNN")` (repository `data/photonic_QCNN` by default).
+- The bundled `FULL_DATASET_600_samples.bin` (Custom BAS paper split) is automatically copied from this paper folder into the shared data root on first use; place it there yourself if it is missing.
+- Relative dataset paths are resolved against the shared data root; absolute paths are honored.
+- Override the base directory with `DATA_DIR=/abs/path` or `--data-root /abs/path` when invoking `implementation.py`.
+
 ### Output directory and generated files
 
 A typical MerLin run folder contains:

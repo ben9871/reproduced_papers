@@ -138,6 +138,12 @@ python utils/draw_graph_qorc_vs_rff.py
 
 The script saves a snapshot of the resolved config alongside results and logs.
 
+### Data location
+
+- MNIST/K-MNIST/Fashion-MNIST downloads are stored under the shared repo data root by default (`data/QORC/`).
+- Override per run with `DATA_DIR=/abs/path` or `--data-root /abs/path` on the `implementation.py` command; the paper subfolder `QORC` is appended automatically by `runtime_lib.data_paths.paper_data_dir`.
+- Data loaders now live in `papers/shared/QORC/datasets.py` and are imported from there (no code under `data/` and no per-paper data folder is used).
+
 ### Output directory and generated files
 
 At each run, a timestamped folder is created under the base `outdir` (default: `outdir`):

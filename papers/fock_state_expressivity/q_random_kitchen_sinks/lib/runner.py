@@ -8,7 +8,7 @@ from collections.abc import Iterable
 from pathlib import Path
 from typing import Any
 
-from data.datasets import load_moons
+from .data import load_moons
 from utils.visualization import (
     plot_accuracy_heatmap,
     plot_combined_decisions,

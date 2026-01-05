@@ -7,7 +7,7 @@
     "level": "info"
   },
   "dataset": {
-    "root": "data",
+    "root": null,
     "classes": 5,
     "batch_size": 256
   },

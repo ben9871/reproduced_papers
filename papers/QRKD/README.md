@@ -91,6 +91,7 @@ Each run writes to `<outdir>/run_YYYYMMDD-HHMMSS/` with:
 Notes:
 - Change the base output directory with `--outdir` or by editing `configs/defaults.json` (key `outdir`).
 - Placeholder guard: if any config value contains `<<...>>` (e.g. `"<<TEACHER_PATH>>"`), the runner aborts until you provide a real path (or pass `--teacher-path`).
+- Data root: downloads land in `<DATA_DIR>/QRKD` by default (or `<repo>/data/QRKD` if `DATA_DIR` is unset). Override the base root with `--data-root`/`DATA_DIR`; the paper subfolder is appended automatically. Leave `dataset.root` as `null` to use this shared resolver.
 
 ## Configuration
 

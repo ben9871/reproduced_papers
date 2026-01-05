@@ -8,7 +8,7 @@ REPO_ROOT = PROJECT_ROOT.parent
 if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
-from VQC_classif.data.datasets import DATASET_ORDER, prepare_datasets
+from VQC_classif.lib.data import DATASET_ORDER, prepare_datasets
 
 
 def test_prepare_datasets_creates_all_splits(tmp_path, monkeypatch):

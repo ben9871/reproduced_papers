@@ -8,6 +8,13 @@ from .cli import (
 )
 from .config import deep_update, load_config
 from .logging_utils import configure_logging
+from .data_paths import (
+    DEFAULT_DATA_DIRNAME,
+    ENV_DATA_ROOT,
+    find_repo_root,
+    paper_data_dir,
+    resolve_data_root,
+)
 from .runtime import run_from_project
 
 __all__ = [
@@ -19,4 +26,9 @@ __all__ = [
     "run_from_project",
     "load_config",
     "deep_update",
+    "DEFAULT_DATA_DIRNAME",
+    "ENV_DATA_ROOT",
+    "find_repo_root",
+    "paper_data_dir",
+    "resolve_data_root",
 ]

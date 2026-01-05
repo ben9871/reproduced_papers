@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import torch
-from data.datasets import DATASET_ORDER, prepare_datasets
+from .data import DATASET_ORDER, prepare_datasets
 from utils.plotting import (
     plot_dataset_samples,
     plot_decision_boundary,

@@ -13,7 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import torch
 
-from photonic_QCNN.data.data import (
+from photonic_QCNN.lib.data import (
     convert_dataset_to_tensor,
     convert_tensor_to_loader,
     get_dataset,

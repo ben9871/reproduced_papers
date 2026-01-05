@@ -7,6 +7,7 @@ from pathlib import Path
 
 import torch
 
+from runtime_lib.data_paths import paper_data_dir
 from runtime_lib.dtypes import dtype_torch
 
 from .datasets import DataConfig, cifar10_loaders, mnist_loaders
@@ -41,10 +42,15 @@ def _resolve_project_path(candidate: str, project_dir: Path) -> Path:
 
 def _prepare_loaders(cfg: dict) -> tuple[object, object]:
     dataset = cfg["dataset"]["name"].lower()
+    data_root = cfg["dataset"].get("root")
+    if data_root:
+        resolved_root = os.path.abspath(os.path.expanduser(data_root))
+    else:
+        resolved_root = str(paper_data_dir("QRKD"))
     dcfg = DataConfig(
         batch_size=int(cfg["dataset"].get("batch_size", 64)),
         num_workers=int(cfg["dataset"].get("num_workers", 0)),
-        root=os.path.abspath(os.path.expanduser(cfg["dataset"].get("root", "data"))),
+        root=resolved_root,
     )
     if dataset == "mnist":
         return mnist_loaders(dcfg)

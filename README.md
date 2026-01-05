@@ -31,6 +31,11 @@ All logs, checkpoints, and figures land in `papers/<NAME>/outdir/run_YYYYMMDD-HH
 
 Need a quick tour of a project’s knobs? Run `python implementation.py --paper <NAME> --help` to print the runtime-generated CLI for that reproduction (dataset switches, figure toggles, etc.) before launching a full experiment.
 
+### Data location
+
+- Default data root is `data/` at the repo root; each paper writes under `data/<NAME>/` to avoid per-venv caches.
+- Override with `DATA_DIR=/abs/path` or `python implementation.py --data-root /abs/path ...` (applies to the current run and is exported to downstream loaders).
+
 Universal CLI flags provided by the shared runner:
 - `--seed INT` Reproducibility seed propagated to Python/NumPy/PyTorch backends.
 - `--dtype STR` Force a global tensor dtype before model-specific overrides.

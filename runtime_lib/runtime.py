@@ -11,6 +11,7 @@ from typing import Any
 
 from .cli import apply_cli_overrides, build_cli_parser
 from .config import deep_update, load_config
+from .data_paths import ENV_DATA_ROOT, resolve_data_root
 from .dtypes import resolve_config_dtypes
 from .logging_utils import configure_logging
 from .seed import seed_everything
@@ -29,6 +30,7 @@ _GLOBAL_DEFAULTS: dict[str, Any] = {
     "dtype": None,
     "device": "cpu",
     "logging": {"level": "info"},
+    "data_root": None,
 }
 _PROJECT_DEFAULTS_REL = Path("configs") / "defaults.json"
 _PROJECT_CLI_SCHEMA_REL = Path("configs") / "cli.json"
@@ -90,6 +92,10 @@ def run_from_project(project_dir: Path, argv: list[str] | None = None) -> Path:
     cfg = deep_update(copy.deepcopy(_GLOBAL_DEFAULTS), project_defaults)
     cfg = apply_cli_overrides(cfg, args, arg_defs, project_dir, invocation_dir)
     ensure_no_placeholders(cfg)
+
+    resolved_data_root = resolve_data_root(cfg.get("data_root"), project_dir)
+    cfg["data_root"] = str(resolved_data_root)
+    os.environ.setdefault(ENV_DATA_ROOT, str(resolved_data_root))
 
     seed_value = cfg.get("seed")
     if seed_value is not None:
