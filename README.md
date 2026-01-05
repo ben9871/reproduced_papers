@@ -14,22 +14,22 @@ Each paper reproduction is designed to be accessible, well-documented, and easy 
 
 ## Running existing reproductions
 
-- Browse the up-to-date catalogue at [https://merlinquantum.ai/reproduced_papers/index.html](https://merlinquantum.ai/reproduced_papers/index.html) to pick the paper you want to execute. The `<NAME>` you pass to the CLI is simply the folder name under the repo root (e.g., `QLSTM/`, `QORC/`, `reproduction_template/`).
+- Browse the up-to-date catalogue at [https://merlinquantum.ai/reproduced_papers/index.html](https://merlinquantum.ai/reproduced_papers/index.html) to pick the paper you want to execute. Every paper now lives under `papers/<NAME>/`; the `<NAME>` you pass to the CLI is just that folder name (e.g., `QLSTM`, `QORC`, `reproduction_template`).
 
-You can also list available reproductions with `python implementation.py --list-projects`.
+You can also list available reproductions with `python implementation.py --list-papers`.
 
-- `cd` into the chosen folder and install its dependencies: `pip install -r requirements.txt` (each reproduction keeps its own list).
-- Launch training/eval runs through the shared CLI from the repo root:
+- `cd` into `papers/<NAME>` and install its dependencies: `pip install -r requirements.txt` (each reproduction keeps its own list).
+- Launch training/eval runs through the shared CLI from the repo root (the runner will `cd` into the project automatically):
 
 	```bash
-	python implementation.py --project <NAME> --config <NAME>/configs/<config>.json
+	python implementation.py --paper <NAME> --config configs/<config>.json
 	```
 
-- If you prefer running from inside the project directory, reference the parent runner instead: `python ../implementation.py --project <NAME> --config configs/<config>.json`.
+- If you prefer running from inside `papers/<NAME>`, reference the repo-level runner: `python ../../implementation.py --config configs/<config>.json` (no `--paper` flag needed when executed from within the project).
 
-All logs, checkpoints, and figures land in `<NAME>/outdir/run_YYYYMMDD-HHMMSS/` unless the configs specify a different base path.
+All logs, checkpoints, and figures land in `papers/<NAME>/outdir/run_YYYYMMDD-HHMMSS/` unless the configs specify a different base path.
 
-Need a quick tour of a project’s knobs? Run `python implementation.py --project <NAME> --help` to print the runtime-generated CLI for that reproduction (dataset switches, figure toggles, etc.) before launching a full experiment.
+Need a quick tour of a project’s knobs? Run `python implementation.py --paper <NAME> --help` to print the runtime-generated CLI for that reproduction (dataset switches, figure toggles, etc.) before launching a full experiment.
 
 Universal CLI flags provided by the shared runner:
 - `--seed INT` Reproducibility seed propagated to Python/NumPy/PyTorch backends.
@@ -51,7 +51,7 @@ We encourage contributions of new quantum ML paper reproductions. Please follow 
 ### Mandatory structure for a reproduction
 
 ```
-NAME/                     # Non-ambiguous acronym or fullname of the reproduced paper
+papers/NAME/            # Non-ambiguous acronym or fullname of the reproduced paper
 ├── .gitignore            # specific .gitignore rules for clean repository
 ├── notebook.ipynb        # Interactive exploration of key concepts
 ├── README.md             # Paper overview and results overview
@@ -59,7 +59,7 @@ NAME/                     # Non-ambiguous acronym or fullname of the reproduced 
 ├── configs/              # defaults + CLI/runtime descriptors consumed by the repo root runner
 ├── data/                 # Datasets and preprocessing if any
 ├── lib/                  # code used by the shared runner and notebooks - as an integrated library
-├── models/               # Trained models 
+├── models/               # Trained models
 ├── results/              # Selected generated figures, tables, or outputs from trained models
 ├── tests/                # Validation tests
 └── utils/                # additional commandline utilities for visualization, launch of multiple trainings, etc...
@@ -67,15 +67,15 @@ NAME/                     # Non-ambiguous acronym or fullname of the reproduced 
 
 ### Reproduction template (starter kit)
 
-Use the ready-to-go template in `reproduction_template/` to bootstrap a new paper folder that follows the structure above.
+Use the ready-to-go template in `papers/reproduction_template/` to bootstrap a new paper folder that follows the structure above.
 
 Quick start:
 
 ```bash
-# 1) Create your paper folder (replace NAME with a short, unambiguous id)
-cp -R reproduction_template NAME
+# 1) Create your paper folder under papers/ (replace NAME with a short, unambiguous id)
+cp -R papers/reproduction_template papers/NAME
 
-cd NAME
+cd papers/NAME
 
 # 2) Create and activate a virtual environment
 python -m venv .venv
@@ -84,22 +84,22 @@ pip install -r requirements.txt
 # Optional shared deps can go in the repo root, but each project keeps its own requirements.txt.
 
 # 3) Run with the example config (JSON-only) via the repo-level runner
-python ../implementation.py --project NAME --config configs/example.json
+python ../../implementation.py --config configs/example.json
 
 # 4) See outputs (default base outdir is `outdir/` inside NAME/)
 ls outdir
 
-# 5) Run tests (from inside NAME/)
+# 5) Run tests (from inside papers/NAME/)
 pytest -q
 ```
 
 You can also run from the repository root:
 
 ```bash
-python implementation.py --project NAME --config NAME/configs/example.json
+python implementation.py --paper NAME --config configs/example.json
 ```
 
-`--project` (or `--project-dir`) is mandatory so the shared runner knows which reproduction folder to load.
+`--paper` (or `--paper-dir`) is mandatory so the shared runner knows which reproduction folder to load.
 
 **Placeholder guard:** If any config value still contains a `<<...>>` placeholder (e.g., `"teacher_path": "<<TEACHER_PATH>>"`), the shared runner aborts early with a clear error. Replace these placeholders with real paths/values before launching a run.
 
@@ -111,7 +111,7 @@ Then edit the placeholders in:
 - `lib/runner.py` and supporting modules inside `lib/` — dataset/model/training logic invoked by the shared runner
 - `runtime_lib.config.load_config` / `.deep_update` handle JSON loading and overrides globally; the template already wires `lib.config` to these helpers so you must not add a custom `lib/config.py` (JSON is the only supported format).
 
-> **Note:** Every reproduction has its own `requirements.txt`. Install the relevant file before running `implementation.py --project ...` to ensure dependencies are available.
+> **Note:** Every reproduction has its own `requirements.txt`. Install the relevant file before running `implementation.py --paper ...` to ensure dependencies are available.
 
 Notes:
 - Configs are JSON-only in the template.
