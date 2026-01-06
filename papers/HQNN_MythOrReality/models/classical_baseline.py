@@ -7,7 +7,7 @@ from dataclasses import dataclass
 
 import numpy as np
 import torch
-from data.data import SpiralDatasetConfig, load_spiral_dataset
+from lib.data import SpiralDatasetConfig, load_spiral_dataset
 from torch import nn
 from torch.utils.data import DataLoader, TensorDataset
 from utils.training import train_model

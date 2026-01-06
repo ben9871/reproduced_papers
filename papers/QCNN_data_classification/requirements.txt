@@ -12,3 +12,4 @@ merlinquantum
 # Utilities
 matplotlib
 pandas
+pytest

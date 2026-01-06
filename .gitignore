@@ -15,7 +15,8 @@ models/
 !models/.gitkeep
 outdir/
 !outdir/.gitkeep
-
+.smoke_logs/
+.smoke_envs/
 # Temporary files
 tmp_*/
 

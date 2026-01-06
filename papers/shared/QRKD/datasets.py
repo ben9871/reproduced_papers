@@ -33,10 +33,20 @@ class DataConfig:
     batch_size: int = 64
     num_workers: int = 0
     root: Path | str = DEFAULT_DATA_ROOT
+    max_samples: int | None = None
 
 
 def _resolve_root(root: Path | str) -> str:
     return str(Path(root).expanduser())
+
+
+def _maybe_limit(dataset, max_samples: int | None):
+    if max_samples is None:
+        return dataset
+    limit = min(len(dataset), int(max_samples))
+    from torch.utils.data import Subset  # local import to avoid global dependency
+
+    return Subset(dataset, range(limit))
 
 
 def mnist_loaders(cfg: DataConfig) -> tuple[DataLoader, DataLoader]:
@@ -49,6 +59,8 @@ def mnist_loaders(cfg: DataConfig) -> tuple[DataLoader, DataLoader]:
     data_root = _resolve_root(cfg.root)
     train = datasets.MNIST(data_root, train=True, download=True, transform=tfm)
     test = datasets.MNIST(data_root, train=False, download=True, transform=tfm)
+    train = _maybe_limit(train, cfg.max_samples)
+    test = _maybe_limit(test, cfg.max_samples)
     train_loader = DataLoader(
         train, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers
     )
@@ -68,6 +80,8 @@ def cifar10_loaders(cfg: DataConfig) -> tuple[DataLoader, DataLoader]:
     data_root = _resolve_root(cfg.root)
     train = datasets.CIFAR10(data_root, train=True, download=True, transform=tfm)
     test = datasets.CIFAR10(data_root, train=False, download=True, transform=tfm)
+    train = _maybe_limit(train, cfg.max_samples)
+    test = _maybe_limit(test, cfg.max_samples)
     train_loader = DataLoader(
         train, batch_size=cfg.batch_size, shuffle=True, num_workers=cfg.num_workers
     )

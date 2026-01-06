@@ -29,22 +29,29 @@ def _is_project_dir(path: Path) -> bool:
 
 
 def _iter_project_dirs(repo_root: Path) -> list[Path]:
+    """Return all project dirs (configs/defaults.json, configs/cli.json, lib/runner.py).
+
+    Searches recursively under `papers/` (to capture nested subprojects such as
+    fock_state_expressivity/*) and also at the repository root.
+    """
+
     bases = [repo_root / PAPERS_DIRNAME, repo_root]
-    seen: set[str] = set()
+    seen: set[Path] = set()
     found: list[Path] = []
+
     for base in bases:
         if not base.exists():
             continue
-        for child in base.iterdir():
-            if not child.is_dir():
+        # Find any configs/defaults.json and test its parent as a project dir.
+        for defaults_path in base.rglob("configs/defaults.json"):
+            project_dir = defaults_path.parent.parent
+            if project_dir in seen:
                 continue
-            name = child.name
-            if name in seen:
-                continue
-            if _is_project_dir(child):
-                found.append(child)
-                seen.add(name)
-    return sorted(found, key=lambda p: p.name)
+            if _is_project_dir(project_dir):
+                found.append(project_dir)
+                seen.add(project_dir)
+
+    return sorted(found, key=lambda p: p.as_posix())
 
 
 def _find_enclosing_project_dir(start: Path, repo_root: Path) -> Path | None:

@@ -51,6 +51,7 @@ def _prepare_loaders(cfg: dict) -> tuple[object, object]:
         batch_size=int(cfg["dataset"].get("batch_size", 64)),
         num_workers=int(cfg["dataset"].get("num_workers", 0)),
         root=resolved_root,
+        max_samples=cfg["dataset"].get("max_samples"),
     )
     if dataset == "mnist":
         return mnist_loaders(dcfg)

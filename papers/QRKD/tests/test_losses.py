@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import torch
 
-from QRKD.lib.losses import DistillationLoss, fidelity_kernel_matrix
+from lib.losses import DistillationLoss, fidelity_kernel_matrix
 
 
 def test_fidelity_kernel_matrix_simple_backend():

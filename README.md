@@ -47,6 +47,12 @@ Universal CLI flags provided by the shared runner:
 - `--log-level LEVEL` Runtime logging verbosity (`INFO` by default).
 Project-specific `configs/cli.json` files only declare the extra paper knobs; the runner injects the global options automatically.
 
+### Smoke-test all papers quickly
+
+- From repo root, run the portable smoke harness [scripts/smoke_test_all_papers.sh](scripts/smoke_test_all_papers.sh) to install per-paper venvs under `.smoke_envs/`, execute each paper’s default config, and run `pytest`, logging to `.smoke_logs/<paper>.log`.
+- Pass an optional substring to target specific papers (faster dev loop): `scripts/smoke_test_all_papers.sh QRKD` only runs papers whose names contain `QRKD`.
+- Timeout markers appear in logs when a run or test exceeds the limit; rerun after adjusting configs or deps as needed.
+
 ### Precision control (`dtype`)
 
 - Every reproduction accepts an optional top-level `"dtype"` entry in its configs, just like `"seed"`. When present, the shared runner casts input tensors and initializes models in that dtype.

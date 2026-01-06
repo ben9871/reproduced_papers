@@ -5,3 +5,4 @@ tqdm>=4.66
 matplotlib>=3.8
 qiskit-machine-learning>=0.6
 jupyter>=1.0
+pytest

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import torch
 
-from QRKD.lib.models import StudentCNN, TeacherCNN
-from QRKD.lib.utils import count_parameters
+from lib.models import StudentCNN, TeacherCNN
+from lib.utils import count_parameters
 
 
 def test_student_cnn_output_shapes_and_params():
