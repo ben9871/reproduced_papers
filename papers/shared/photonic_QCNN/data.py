@@ -42,7 +42,28 @@ def _ensure_shared_file(filename: str) -> Path:
     return shared_path
 
 
-def get_dataset(dataset_name: str, source: str, random_state: int):
+def _limit_samples(x_train, x_test, y_train, y_test, max_samples, random_state):
+    if max_samples is None:
+        return x_train, x_test, y_train, y_test
+
+    rng = np.random.default_rng(random_state)
+
+    def _sample_split(x, y):
+        x = np.asarray(x)
+        y = np.asarray(y)
+        if len(x) <= max_samples:
+            return x, y
+        indices = rng.permutation(len(x))[:max_samples]
+        return x[indices], y[indices]
+
+    x_train, y_train = _sample_split(x_train, y_train)
+    x_test, y_test = _sample_split(x_test, y_test)
+    return x_train, x_test, y_train, y_test
+
+
+def get_dataset(
+    dataset_name: str, source: str, random_state: int, max_samples: int | None = None
+):
     """
     Load train/test splits for the requested dataset.
 
@@ -50,6 +71,7 @@ def get_dataset(dataset_name: str, source: str, random_state: int):
         dataset_name: One of {"BAS", "Custom BAS", "MNIST"}.
         source: "paper" (original assets) or "scratch" (locally generated).
         random_state: RNG seed for scratch generation.
+        max_samples: Optional cap per split for faster smoke tests.
     """
 
     if dataset_name not in {"BAS", "Custom BAS", "MNIST"}:
@@ -59,19 +81,31 @@ def get_dataset(dataset_name: str, source: str, random_state: int):
 
     if dataset_name == "BAS":
         if source == "paper":
-            return paper.get_bas()
-        return scratch.get_bas(random_state=random_state)
+            x_train, x_test, y_train, y_test = paper.get_bas()
+        else:
+            x_train, x_test, y_train, y_test = scratch.get_bas(
+                random_state=random_state
+            )
+        return _limit_samples(x_train, x_test, y_train, y_test, max_samples, random_state)
 
     if dataset_name == "Custom BAS":
         if source == "paper":
             _ensure_shared_file("FULL_DATASET_600_samples.bin")
-            return paper.get_custom_bas()
-        return scratch.get_custom_bas(random_state=random_state)
+            x_train, x_test, y_train, y_test = paper.get_custom_bas()
+        else:
+            x_train, x_test, y_train, y_test = scratch.get_custom_bas(
+                random_state=random_state
+            )
+        return _limit_samples(x_train, x_test, y_train, y_test, max_samples, random_state)
 
     # MNIST
     if source == "paper":
-        return paper.get_mnist()
-    return scratch.get_mnist(random_state=random_state)
+        x_train, x_test, y_train, y_test = paper.get_mnist()
+    else:
+        x_train, x_test, y_train, y_test = scratch.get_mnist(
+            random_state=random_state
+        )
+    return _limit_samples(x_train, x_test, y_train, y_test, max_samples, random_state)
 
 
 def get_dataset_description(x_train, x_test, y_train, y_test, dataset_name: str) -> str:

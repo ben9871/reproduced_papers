@@ -27,6 +27,7 @@ DEFAULT_RESULTS_DIR = PROJECT_ROOT / "results"
 DEFAULT_MNIST_CONFIG: dict[str, Any] = {
     "n_runs": 5,
     "data_source": "paper",
+    "max_samples": None,
     "conv_circuit": "BS",
     "dense_circuit": "BS",
     "measure_subset": 2,
@@ -81,6 +82,7 @@ def run_experiment(
     random_state: int,
     run_id: int,
     source: str,
+    max_samples: int | None,
     conv_circuit: str,
     dense_circuit: str,
     measure_subset: int,
@@ -102,9 +104,13 @@ def run_experiment(
 
     print("Loading datasets")
     if source == "paper":
-        x_train, x_test, y_train, y_test = get_dataset("MNIST", "paper", random_state)
+        x_train, x_test, y_train, y_test = get_dataset(
+            "MNIST", "paper", random_state, max_samples=max_samples
+        )
     elif source == "scratch":
-        x_train, x_test, y_train, y_test = get_dataset("MNIST", "scratch", random_state)
+        x_train, x_test, y_train, y_test = get_dataset(
+            "MNIST", "scratch", random_state, max_samples=max_samples
+        )
     else:
         raise ValueError(f"Unknown dataset source: {source}")
 
@@ -310,6 +316,7 @@ def run_mnist_experiments(
             random_state,
             i,
             cfg["data_source"],
+            cfg.get("max_samples"),
             cfg["conv_circuit"],
             cfg["dense_circuit"],
             cfg["measure_subset"],
