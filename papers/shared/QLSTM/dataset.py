@@ -42,7 +42,12 @@ class BaseGenerator:
         arr = raw.reshape(-1, 1) if raw.ndim == 1 else raw
         return self.scaler.fit_transform(arr)[:, 0]
 
-    def get_data(self, seq_len: int = 4, target_dim: int = 1):
+    def get_data(
+        self,
+        seq_len: int = 4,
+        target_dim: int = 1,
+        max_samples: int | None = None,
+    ):
         norm = self.normalized()
         xs = []
         ys = []
@@ -52,7 +57,12 @@ class BaseGenerator:
         x = torch.tensor(np.array(xs), dtype=torch.double)
         y = torch.tensor(np.array(ys), dtype=torch.double)
         if target_dim == 1 and y.ndim == 2:  # shape (N,1)
-            return x, y.squeeze(-1)
+            y = y.squeeze(-1)
+        if max_samples is not None and len(x) > max_samples:
+            # Shuffle deterministically with global RNG state seeded by runtime.
+            perm = torch.randperm(len(x))[:max_samples]
+            x = x[perm]
+            y = y[perm]
         return x, y
 
 

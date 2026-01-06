@@ -59,7 +59,9 @@ def train_and_evaluate(cfg, run_dir: Path) -> None:
         exp["train_split"],
     )
 
-    x, y = gen.get_data(exp["seq_length"])  # type: ignore[call-arg]
+    x, y = gen.get_data(
+        seq_len=exp["seq_length"], max_samples=exp.get("max_samples")
+    )
     x = x.to(dtype=model_dtype)
     y = y.to(dtype=model_dtype)
     n_train = int(exp["train_split"] * len(x))
