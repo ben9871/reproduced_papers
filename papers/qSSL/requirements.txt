@@ -4,6 +4,7 @@ torchvision
 tqdm
 matplotlib
 torchsummary
+pytest
 qiskit
 qiskit-aer
 qiskit-ibm-runtime

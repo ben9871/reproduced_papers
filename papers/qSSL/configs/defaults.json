@@ -29,8 +29,10 @@
     "save_dhs": false
   },
   "training": {
-    "epochs": 2,
+    "epochs": 1,
     "ckpt_step": 1,
-    "le_epochs": 100
+    "le_epochs": 1,
+    "max_steps": 1,
+    "le_max_steps": 1
   }
 }

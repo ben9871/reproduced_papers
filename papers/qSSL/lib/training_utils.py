@@ -1,6 +1,7 @@
 import datetime
 import json
 import os
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import torch
@@ -93,10 +94,13 @@ class InfoNCELoss(torch.nn.Module):
         return ((loss_1.mean() + loss_2.mean()) / 2).unsqueeze(0)
 
 
-def training_step(model, train_loader, optimizer):
+def training_step(model, train_loader, optimizer, max_steps=None):
     pbar = tqdm(train_loader)
     total_loss = 0.0
+    steps_run = 0
     for (x1, x2), _target in pbar:
+        if max_steps is not None and steps_run >= max_steps:
+            break
         loss = model(x1, x2)
 
         # Check for NaN/inf loss
@@ -113,9 +117,12 @@ def training_step(model, train_loader, optimizer):
         optimizer.step()
         loss_scalar = loss.item() if loss.dim() == 0 else loss[0].item()
         total_loss += loss_scalar
+        steps_run += 1
         pbar.set_postfix({"Loss": f"{loss_scalar:.4f}"})
 
-    return total_loss / len(train_loader), model
+    if steps_run == 0:
+        return 0.0, model
+    return total_loss / steps_run, model
 
 
 def get_results_dir(args):
@@ -205,7 +212,7 @@ def train(model, train_loader, results_dir, args):
     print(" - Initial model saved - ")
 
     for epoch in range(args.epochs):
-        loss, model = training_step(model, train_loader, optimizer)
+        loss, model = training_step(model, train_loader, optimizer, args.max_steps)
         print(f"epoch: {epoch + 1}/{args.epochs}, training loss: {loss}")
         training_losses.append(loss)
 
@@ -241,7 +248,10 @@ def linear_evaluation(model, train_loader, val_loader, args, results_dir):
         pbar = tqdm(train_loader)
         train_acc = 0
         train_loss_total = 0
+        train_steps_run = 0
         for img, target in pbar:
+            if args.le_max_steps is not None and train_steps_run >= args.le_max_steps:
+                break
             output = model(img)
             loss = criterion(output, target)
             optimizer.zero_grad()
@@ -253,6 +263,7 @@ def linear_evaluation(model, train_loader, val_loader, args, results_dir):
             accuracy = (predicted == target).sum().item() / target.size(0)
             train_acc += accuracy
             train_loss_total += loss.item()
+            train_steps_run += 1
             pbar.set_postfix(
                 {
                     "Training Loss": f"{loss.item():.4f} - Training Accuracy: {accuracy:.4f}"
@@ -265,23 +276,31 @@ def linear_evaluation(model, train_loader, val_loader, args, results_dir):
         val_acc = 0
         val_loss_total = 0
         with torch.no_grad():
+            val_steps_run = 0
             for img, target in pbar:
+                if args.le_max_steps is not None and val_steps_run >= args.le_max_steps:
+                    break
                 output = model(img)
                 loss = criterion(output, target)
                 _, predicted = torch.max(output.data, 1)
                 accuracy = (predicted == target).sum().item() / target.size(0)
                 val_acc += accuracy
                 val_loss_total += loss.item()
+                val_steps_run += 1
                 pbar.set_postfix(
                     {
-                        "Validation Loss": f"{loss.item():.4f} - Validation Accuracy: {accuracy:.4f}"
+                        "Validation Loss": (
+                            f"{loss.item():.4f} - Validation Accuracy: {accuracy:.4f}"
+                        )
                     }
                 )
 
-        avg_train_acc = train_acc / len(train_loader)
-        avg_val_acc = val_acc / len(val_loader)
-        avg_train_loss = train_loss_total / len(train_loader)
-        avg_val_loss = val_loss_total / len(val_loader)
+        train_div = train_steps_run or len(train_loader)
+        val_div = val_steps_run or len(val_loader)
+        avg_train_acc = train_acc / train_div
+        avg_val_acc = val_acc / val_div
+        avg_train_loss = train_loss_total / train_div
+        avg_val_loss = val_loss_total / val_div
 
         train_losses.append(avg_train_loss)
         val_losses.append(avg_val_loss)
@@ -403,7 +422,9 @@ def save_results_to_json(
             "temperature": args.temperature,
             "modes": getattr(args, "modes", None),
             "no_bunching": getattr(args, "no_bunching", None),
-            "datadir": args.datadir,
+            "datadir": str(args.datadir)
+            if isinstance(args.datadir, Path)
+            else args.datadir,
         },
         "ssl_training_losses": ssl_training_losses,
         "linear_evaluation": {

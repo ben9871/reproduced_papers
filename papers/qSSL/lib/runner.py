@@ -45,6 +45,16 @@ def _build_args(cfg: dict[str, Any]) -> SimpleNamespace:
         "epochs": int(training_cfg.get("epochs", 2)),
         "le_epochs": int(training_cfg.get("le_epochs", 100)),
         "ckpt_step": int(training_cfg.get("ckpt_step", 1)),
+        "max_steps": (
+            None
+            if training_cfg.get("max_steps") is None
+            else int(training_cfg.get("max_steps"))
+        ),
+        "le_max_steps": (
+            None
+            if training_cfg.get("le_max_steps") is None
+            else int(training_cfg.get("le_max_steps"))
+        ),
         "width": int(model_cfg.get("width", 8)),
         "loss_dim": int(model_cfg.get("loss_dim", 128)),
         "batch_norm": bool(model_cfg.get("batch_norm", False)),
