@@ -1,8 +1,9 @@
 {
+  "description": "Preset config for Gaussian kernel classification task (uses saved manifest).",
   "experiment": {
     "task": "classify"
   },
-  "outdir": "results",
+  "outdir": "outdir",
   "seed": 1337,
   "device": "cpu",
   "model": {

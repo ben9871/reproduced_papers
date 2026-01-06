@@ -1,5 +1,6 @@
 {
-  "outdir": "results",
+  "description": "Preset config for quantum RKS with hybrid training on generated data.",
+  "outdir": "outdir",
   "seed": 1337,
   "data": {
     "n_samples": 200,

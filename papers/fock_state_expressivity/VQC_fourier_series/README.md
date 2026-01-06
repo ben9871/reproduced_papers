@@ -1,13 +1,6 @@
 # VQC Fourier Series — Expressivity Reproduction
 
-Template-aligned reproduction of the Fourier-series fitting experiment from *Fock state-enhanced expressivity of quantum machine learning models* (2022) by Gan, Leykam and Angelakis.
-
-## Reference and Attribution
-- Paper: *Fock state-enhanced expressivity of quantum machine learning models* (2022)
-- Authors: Beng Yee Gan, Daniel Leykam, Dimitris G. Angelakis
-- DOI/ArXiv: [10.1103/PRXQuantum.3.030341](https://arxiv.org/abs/2107.05224)
-- Original repository: not released; experiment reconstructed from the manuscript
-- License & attribution: research reproduction for educational purposes. Cite both the paper and this repo when reusing the code.
+Template-aligned reproduction of the Fourier-series fitting experiment from the parent paper (see the root README for the citation). Implementation reconstructed from the manuscript.
 
 ## Overview
 - Recreates the Fourier-series regression task used to validate that adding photons to a photonic VQC increases expressivity.

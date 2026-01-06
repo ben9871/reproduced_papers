@@ -3,6 +3,9 @@
 *.png
 *.pdf
 *.txt
+# Keep pinned dependencies
+!requirements.txt
+!*/requirements.txt
 *.DS_Store
 *.pth
 *__pycache__

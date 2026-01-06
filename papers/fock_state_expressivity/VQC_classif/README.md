@@ -1,13 +1,6 @@
 # VQC Classification
 
-Structured reproduction of Algorithm 1 (“Linear quantum photonic circuits as variational quantum classifiers”) from *Fock state-enhanced expressivity of quantum machine learning models* (2022) by Gan, Leykam, and Angelakis.
-
-## Reference and Attribution
-- Paper: *Fock state-enhanced expressivity of quantum machine learning models* (2022)
-- Authors: Beng Yee Gan, Daniel Leykam, Dimitris G. Angelakis
-- DOI/ArXiv: https://arxiv.org/abs/2107.05224
-- Original repository: not released; reproduction based on the manuscript and Quandela demos
-- License & attribution: cite both the paper and this repository when using the code or figures
+Structured reproduction of Algorithm 1 (“Linear quantum photonic circuits as variational quantum classifiers”) from the parent paper (see the root README for citation details). Reproduction based on the manuscript.
 
 ## Overview
 The implementation includes:

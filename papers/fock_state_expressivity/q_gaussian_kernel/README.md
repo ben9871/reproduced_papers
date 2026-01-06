@@ -1,13 +1,6 @@
 # Quantum Gaussian Kernel
 
-Reproduction of Algorithm 2 (“Linear quantum photonic circuits as Gaussian kernel samplers”) from *Fock state-enhanced expressivity of quantum machine learning models* (2022) by Gan, Leykam, and Angelakis.
-
-## Reference and Attribution
-- Paper: *Fock state-enhanced expressivity of quantum machine learning models* (2022)
-- Authors: Beng Yee Gan, Daniel Leykam, Dimitris G. Angelakis
-- DOI/ArXiv: https://arxiv.org/abs/2107.05224
-- Original repository: not available; implementation recreated from the manuscript and Quandela demos
-- License & attribution: cite both the article and this repository when reusing the code/figures
+Reproduction of Algorithm 2 (“Linear quantum photonic circuits as Gaussian kernel samplers”) from the parent paper (see the root README for citation details). Implementation recreated from the manuscript.
 
 ## Overview
 - Trains photonic quantum circuits to approximate Gaussian kernels of varying standard deviations by minimizing MSE between learned kernels and analytical targets. This reproduces Figure 5 from the reference paper.

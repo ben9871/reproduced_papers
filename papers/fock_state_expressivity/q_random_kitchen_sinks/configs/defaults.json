@@ -1,5 +1,6 @@
 {
-  "outdir": "results",
+  "description": "Default config for quantum random kitchen sinks reproduction (Algorithm 3).",
+  "outdir": "outdir",
   "seed": 1337,
   "data": {
     "n_samples": 200,

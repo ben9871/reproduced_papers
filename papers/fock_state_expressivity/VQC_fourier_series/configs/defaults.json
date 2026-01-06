@@ -1,6 +1,5 @@
 {
-  "experiment_name": "vqc_fourier_series_expressivity",
-  "outdir": "results",
+  "description": "Default config for VQC Fourier-series expressivity reproduction.",
   "seed": 1337,
   "device": "cpu",
   "data": {

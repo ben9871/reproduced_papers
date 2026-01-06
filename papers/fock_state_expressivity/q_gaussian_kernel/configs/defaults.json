@@ -1,8 +1,9 @@
 {
+  "description": "Default config for Gaussian kernel sampler/classifier reproduction (Algorithm 2).",
   "experiment": {
     "task": "sampler"
   },
-  "outdir": "results",
+  "outdir": "outdir",
   "seed": 1337,
   "device": "cpu",
   "model": {

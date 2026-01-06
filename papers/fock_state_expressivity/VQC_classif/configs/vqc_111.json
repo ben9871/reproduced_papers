@@ -1,6 +1,6 @@
 {
-  "experiment_name": "photonic_vqc_classifier",
-  "outdir": "results",
+  "description": "Preset config for VQC classification: |1,1,1> state (vqc_111).",
+  "outdir": "outdir",
   "seed": 1337,
   "device": "cpu",
   "experiment": {

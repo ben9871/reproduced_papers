@@ -1,13 +1,6 @@
 # Quantum Random Kitchen Sinks
 
-Template-aligned reproduction of Algorithm 3 (“Quantum-enhanced random kitchen sinks”) from *Fock state-enhanced expressivity of quantum machine learning models* (2022) by Gan, Leykam, and Angelakis.
-
-## Reference and Attribution
-- Paper: *Fock state-enhanced expressivity of quantum machine learning models* (2022)
-- Authors: Beng Yee Gan, Daniel Leykam, Dimitris G. Angelakis
-- DOI/ArXiv: https://arxiv.org/abs/2107.05224
-- Original repository: not released; reproduction built from the manuscript
-- License & attribution: cite the paper and this repo when reusing assets
+Template-aligned reproduction of Algorithm 3 (“Quantum-enhanced random kitchen sinks”) from the parent paper (see the root README for citation details). Reproduction built from the manuscript.
 
 ## Overview
 - Benchmarks classical random kitchen sinks (RKS) and their photonic quantum counterpart on the moons dataset.

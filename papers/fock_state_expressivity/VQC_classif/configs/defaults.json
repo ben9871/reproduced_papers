@@ -1,6 +1,6 @@
 {
-  "experiment_name": "photonic_vqc_classifier",
-  "outdir": "results",
+  "description": "Default config for VQC classification reproduction (Algorithm 1).",
+  "outdir": "outdir",
   "seed": 1337,
   "device": "cpu",
   "experiment": {
