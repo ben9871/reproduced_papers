@@ -5,3 +5,4 @@ torch>=2.1
 tqdm>=4.66
 perceval-quandela>=1
 merlinquantum
+pytest
