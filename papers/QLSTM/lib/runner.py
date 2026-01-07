@@ -10,7 +10,7 @@ import torch.nn as nn
 from lib.dataset import data as data_factory
 from lib.model import build_model
 from lib.rendering import save_losses_plot, save_pickle, save_simulation_plot
-from runtime_lib.dtypes import DtypeSpec, dtype_label, dtype_torch
+from runtime_lib.dtypes import DtypeSpec, coerce_dtype_spec, dtype_label, dtype_torch
 
 
 def _resolve_model_dtype(
@@ -22,11 +22,17 @@ def _resolve_model_dtype(
     resolved = dtype_torch(requested)
     if resolved is not None:
         return resolved
-    label = dtype_label(requested)
-    if label is None or label == "auto":
+
+    # Normalize common representations (e.g. {"label": "float64"}).
+    spec = coerce_dtype_spec(requested)
+    if spec is None or spec.label is None or spec.label == "auto":
         return default
+    if spec.torch is not None:
+        return spec.torch
+
+    # Torch is required to return a torch.dtype.
     raise ValueError(
-        f"Unsupported dtype '{label}' for model_type '{model_type}'. "
+        f"Unsupported dtype '{spec.label}' for model_type '{model_type}'. "
         "Use one of float16/bfloat16/float32/float64 or 'auto'."
     )
 

@@ -141,6 +141,16 @@ def dtype_torch(value: Any) -> Any:
         return value.torch
     if _TORCH_AVAILABLE and isinstance(value, torch.dtype):
         return value
+    if isinstance(value, str):
+        lowered = value.strip().lower()
+        if not lowered or lowered == "auto":
+            return None
+        canonical = _CANONICAL_FROM_ALIAS.get(lowered)
+        if canonical is None:
+            return None
+        if not _TORCH_AVAILABLE:
+            return None
+        return _TORCH_FROM_CANONICAL[canonical]
     return None
 
 
