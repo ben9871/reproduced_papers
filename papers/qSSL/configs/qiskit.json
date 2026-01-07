@@ -1,5 +1,5 @@
 {
-  "description": "Default configuration for the Quantum Self-Supervised Learning reproduction.",
+  "description": "Qiskit backend configuration for the Quantum Self-Supervised Learning reproduction.",
   "seed": 42,
   "device": "cpu",
   "outdir": "outdir",
@@ -12,7 +12,7 @@
     "batch_size": 256
   },
   "model": {
-    "backend": "merlin",
+    "backend": "qiskit",
     "width": 8,
     "loss_dim": 128,
     "batch_norm": false,
@@ -29,10 +29,8 @@
     "save_dhs": false
   },
   "training": {
-    "epochs": 1,
+    "epochs": 2,
     "ckpt_step": 1,
-    "le_epochs": 1,
-    "max_steps": 1,
-    "le_max_steps": 1
+    "le_epochs": 100
   }
 }
