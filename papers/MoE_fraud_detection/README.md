@@ -76,8 +76,7 @@ generation), `results/` (curated statistics + figures, tracked — see
 ## Install and How to Run
 
 ```bash
-source /opt/venv/bin/activate  # or your own venv; see requirements.txt
-pip install -r requirements.txt
+pip install -r papers/MoE_fraud_detection/requirements.txt
 ```
 
 ```bash
@@ -124,9 +123,15 @@ ULB European Credit Card Fraud dataset (284,807 transactions, 492 fraud /
 requires a login/API key; we instead fetched the identical dataset from
 OpenML (`sklearn.datasets.fetch_openml(data_id=1597)`, no login required)
 and verified the instance/class counts match the paper's reported 0.172%
-fraud rate exactly. Stored at `data/MoE_fraud_detection/creditcard.csv`
-(~142 MB). See `LOG.md`'s "Data Acquisition Log" for the exact re-download
-command.
+fraud rate exactly. The file is not committed (~142 MB). Download it once,
+from the repository root:
+
+```bash
+python -c "from sklearn.datasets import fetch_openml; fetch_openml(data_id=1597, as_frame=True).frame.to_csv('data/MoE_fraud_detection/creditcard.csv', index=False)"
+```
+
+The runner reads `data/MoE_fraud_detection/creditcard.csv` (or the same path
+under `--data-root` / `DATA_DIR`).
 
 Preprocessing (per paper Section 3.2): drop `Time` (not present in this
 mirror), `MinMaxScaler` fit on each fold's training pool only, 50/50

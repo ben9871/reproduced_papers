@@ -50,8 +50,9 @@ def load_raw_data(
     csv_path = resolve_dataset_path(cfg)
     if not csv_path.exists():
         raise FileNotFoundError(
-            f"creditcard.csv not found at {csv_path}. See LOG.md 'Data "
-            "Acquisition Log' for how to (re)download it."
+            f"creditcard.csv not found at {csv_path}. Download it with "
+            "sklearn.datasets.fetch_openml(data_id=1597, as_frame=True) and save "
+            "the frame there as CSV (see README 'Data')."
         )
     df = pd.read_csv(csv_path)
     if "Time" in df.columns:
