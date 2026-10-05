@@ -1,8 +1,7 @@
 """Data loading, preprocessing, and CV-split generation for the MoE fraud
 detection reproduction.
 
-Implements the paper's evaluation protocol (Section 3.3-ish, as summarized in
-LOG.md):
+Implements the paper's evaluation protocol (Section 3.3):
 
 1. Repeated stratified 5-fold CV over the full ULB credit-card dataset.
 2. For each fold: the sklearn "train" indices become the model-training pool;
