@@ -278,8 +278,8 @@ XGBoost hyperparameters). At n=100:
   0.05 at γ=0.5-0.8 in both configs, and `moe_gate_tuned_xgboost_powered`'s
   worst-fold severity is essentially unchanged (-0.47 to -0.49 either way)
   — evidence the temperature floor was not that config's dominant problem.
-  This points at the still-unfixed Youden's-J bug as the more consequential
-  of the two known issues.
+  (An interim reading that the Youden's-J bug was therefore the dominant
+  driver was ruled out by the exact impact bound above.)
 - **Bottom line**: with both implementation issues resolved (calibration
   floor fixed; Youden's-J bug fixed and its influence exactly bounded to
   ≤0.003 AUCPR with no verdict change), the honest read at n=100 is:
@@ -405,31 +405,26 @@ possible backend/version differences, none confirmed). Run:
   not a general claim that no photonic circuit could preserve the MoE
   benefit. A trainable-readout variant was tried at n=100 and performed
   worse, not better (see the powered-re-run subsection above).
-- The n=100 statistically-powered re-run's significantly-negative headline
-  result is entangled with two implementation issues (a partially-mitigated
-  calibration-floor instability and an unfixed Youden's-J degenerate-
-  threshold bug — see `LOG.md`) and should not yet be read as a clean,
-  bug-free refutation of the paper's claim.
-- No notebook was built for this reproduction (Phase 7 in
-  `PAPER_REPRODUCTION_INSTRUCTIONS.md` marks notebooks as optional for
-  "low-confidence partial reproductions," which this is) — an intentional
-  scope decision, not an oversight; `notebook.ipynb` remains the unmodified
-  template stub.
+- The n=100 significantly-negative headline result was checked against two
+  implementation issues. The Youden's-J degenerate-threshold bug is fixed and
+  its effect is bounded exactly (at most 0.003 AUCPR, no verdict change). The
+  calibration-floor instability is mitigated (floor `1e-3` → `0.1`) but not
+  eliminated, and rare calibration-collapse folds still drive the negative
+  mean. See
+  [Known Issues and Open Bugs](REPRODUCTION_NOTES.md#known-issues-and-open-bugs).
 
 ## Tests
 
 ```bash
 cd papers/MoE_fraud_detection
-pytest -q -s   # -s avoids a pre-existing pytest-capture teardown quirk in this container
+pytest -q -s   # -s avoids a pytest-capture teardown quirk seen in some environments
 ```
 
-26 tests covering the data pipeline, MoE router math (Youden's J, router
-targets, hard mixture, evaluation metrics), and the `GQCModel` forward pass
-across all three backends (gate/photonic/classical). Note: these tests do
-not currently catch the Youden's-J degenerate-threshold bug described above
-(it only manifests on specific data distributions at CV scale, not in the
-small synthetic fixtures used here) — a regression test for it is a good
-addition alongside the fix.
+29 tests covering the data pipeline, MoE router math (Youden's J, router
+targets, hard mixture, evaluation metrics), the `GQCModel` forward pass
+across all three backends (gate/photonic/classical), the CLI and the latency
+benchmark. Two regression tests in `tests/test_moe.py` cover the Youden's-J
+degenerate-threshold fix.
 
 ## Citation and License
 
