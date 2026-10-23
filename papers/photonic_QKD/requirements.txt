@@ -1,0 +1,6 @@
+# photonic_QKD (PQKD) dependencies; refine during implementation
+torch
+torchvision
+numpy
+merlinquantum
+pytest
