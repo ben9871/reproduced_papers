@@ -1,134 +1,138 @@
-# photonic_QKD: Photonic Quantum-Enhanced Knowledge Distillation (PQKD)
+# Photonic Quantum-Enhanced Knowledge Distillation (PQKD) - Reproduction
 
-Status: planning complete (Phase 1, feasibility `PARTIALLY_FEASIBLE`). No PQKD method code, experiments or results exist yet.
+Status: implementation complete and tested (Phase 2). No experiment results yet; feasibility `PARTIALLY_FEASIBLE` (CPU-only budget, unreported hyperparameters).
 
 ## Reference and Attribution
 
 - Paper: Photonic Quantum-Enhanced Knowledge Distillation (arXiv preprint, 2026)
-- Authors: Kuan-Cheng Chen et al.
-- DOI/ArXiv: https://arxiv.org/abs/2603.14898 (arXiv:2603.14898)
-- Original repository: none published by the authors
-- License and attribution notes: the paper is distributed under CC BY 4.0. Cite the arXiv record above when reusing figures, text or results.
+- Authors: Kuan-Cheng Chen, Shang Yu, Chen-Yu Liu, Samuel Yen-Chi Chen, Huan-Hsin Tseng, Yen Jui Chang, Wei-Hao Huang, Felix Burt, Esperanza Cuenca Gomez, Zohim Chandani, William Clements, Ian Walmsley, Kin K. Leung
+- arXiv: https://arxiv.org/abs/2603.14898 (DOI 10.48550/arXiv.2603.14898)
+- Original repository: none published ("available upon reasonable request")
+- License: the paper is CC BY 4.0. Cite the arXiv record when reusing figures, text or results.
 
-## Overview
+## Original Paper
 
-The paper distils a classical teacher network into a compact student whose dictionary convolutions are conditioned by a shot-limited photonic circuit. The photonic parameters are updated without gradients, and the paper studies shot-noise scaling and EMA smoothing on MNIST, Fashion-MNIST and CIFAR-10.
+PQKD compresses a CNN student during knowledge distillation from a larger teacher. Selected convolutions become **dictionary convolutions**:
 
-- Scope, deviations and environment: to be recorded in `LOG.md` during planning.
-- Related reproduction: `papers/QRKD` (knowledge distillation on MNIST/CIFAR-10). Shared dataset loaders live in `papers/shared/QRKD/datasets.py` and are candidates for reuse.
+- each layer learns only R spatial basis filters B;
+- the channel-mixing tensor M is not learned; it is generated from a global conditioning vector, vec(M) = A z(θ), with a fixed random matrix A.
 
-## How to Run
+The vector z(θ) ∈ R^512 comes from a programmable 16-mode, loop-based photonic interferometer with beam-splitter angles θ (dim θ ∈ {15, 30, 45}):
 
-### Install dependencies
+- S threshold-detection shots are taken;
+- each 16-bit click pattern is split into two 8-bit halves;
+- the two 256-bin histograms are concatenated and standardised.
+
+Training alternates SPSA updates of θ, which are gradient-free and driven by a validation KD objective, with Adam epochs on the student. EMA smoothing of z across epochs is optional.
+
+Datasets: MNIST, Fashion-MNIST and CIFAR-10, each with a 45k/5k train/validation split.
+
+Main claims:
+- **Table 1:** at 1.5× compression, PQKD matches the teacher on MNIST and Fashion-MNIST and lags it on CIFAR-10.
+- **Table 2 / Fig. 2:** there is a smooth compression–accuracy frontier up to about 105× overall compression.
+- **Fig. 4:** the photonic feature's test-accuracy gain follows δ∞ − k/√S, and EMA raises δ∞.
+
+## Reproduction Scope (including Updates and Deviations)
+
+Planned evidence (details in the git-ignored `LOG.md`; nothing has been run beyond smoke tests yet):
+
+- **Table 1 (MNIST first):** teacher (64,128,128) and PQKD (conv1+conv2 compressed, R=4, dim θ=45). Fashion-MNIST and CIFAR-10 follow.
+- **Fair baselines** at the same teacher, data and budget. Selected with `student.variant` / `conditioning.source`:
+
+  | ID | Baseline | What it is |
+  |---|---|---|
+  | B0 | `zero` | the paper's z = 0 control (degenerate: zero kernels) |
+  | B1 | `dense` | dense KD-only student at the same trainable-parameter budget |
+  | B2 | `dictionary_trainable` | M learned directly |
+  | B3 | `random_fixed` / `random_resampled` | Gaussian z |
+  | B4 | `photonic_fixed` | θ frozen |
+  | B5 | `surrogate` | classical iso-parameter generator with the same SPSA |
+  | B6 | `classical_histogram` | independent-mode clicks through the same Φ and S |
+
+- **Shot sweep with and without EMA** (Fig. 4), then the Table 2 operating points.
+
+Updates and deviations:
+
+- **Photonic simulation:** MerLin (`QuantumLayer`, full Fock space, threshold detection), in place of the CUDA-Q ORCA simulator used in the paper. Only MerLin 0.4.2 public API calls are used.
+- **Assumed settings** (not reported in the paper): 8 photons in alternating input modes; S = 200; EMA β = 0.9 on; SPSA (a, c) = (0.05, 0.2) until a predeclared grid sets them.
+- **Standardisation:** μ and σ are fitted on features at random θ. At the paper's initial θ = 0 the interferometer is the identity, so σ would be zero.
+- **Parameter accounting:** each compressed layer has a bias **and a per-output-channel gain** (R·k² + 2·C_out trainable parameters). This is the only accounting that reproduces the paper's reported compression factors.
+- **Compute budget:** first runs are CPU-only with reduced budgets (30 epochs, 3 seeds; paper: 100 epochs, 5 seeds) and are labelled partial. `*_original.json` configs keep the paper budget.
+- **Metrics:** test accuracy is the primary metric. The paper reports validation accuracy, which SPSA also tunes on.
+
+## Install and How to Run
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
-pip install -r requirements.txt
+pip install -r papers/photonic_QKD/requirements.txt
 ```
 
-### Command-line interface
+Every run trains one model. Students need a finished teacher run on the same dataset, widths and split seed.
 
-Main entry point: the repo-level `implementation.py`. The CLI is entirely described in `cli.json`, so updating/adding arguments does not require editing Python code.
+Smoke run (seconds; checks the code path only):
 
 ```bash
-# From inside papers/photonic_QKD
-python ../../implementation.py --help
-
-# From the repo root
-python implementation.py --paper photonic_QKD --help
+python implementation.py --paper photonic_QKD --config configs/smoke_teacher.json
+python implementation.py --paper photonic_QKD --config configs/smoke_student.json --teacher-path papers/photonic_QKD/outdir/<teacher run>
 ```
 
-Example overrides (see `cli.json` for the authoritative list):
-
-- `--config PATH` Load an additional JSON config (merged over `defaults.json`).
-- `--seed INT` Random seed applied via the generic runtime.
-- `--dtype STR` Force a global torch/NumPy dtype (e.g., `float32`, `float64`).
-- `--device STR` Device override (`cpu`, `cuda:0`, `mps`, etc.).
-- `--log-level LEVEL` Logging verbosity (`DEBUG`, `INFO`, ...).
-- `--outdir DIR` Base output directory (default in `defaults.json`).
-- `--epochs INT` Override `training.epochs`.
-- `--batch-size INT` Override `dataset.batch_size`.
-- `--lr FLOAT` Override `training.lr`.
-
-Example runs:
+Reduced runs (defaults: 30 epochs) and paper-budget runs (100 epochs):
 
 ```bash
-# From a JSON config (inside the project)
-python ../../implementation.py --config configs/example.json
-
-# Override some parameters inline
-python ../../implementation.py --config configs/example.json --epochs 50 --lr 1e-3
-
-# Equivalent from the repo root
-python implementation.py --paper photonic_QKD --config configs/example.json --epochs 50 --lr 1e-3
+python implementation.py --paper photonic_QKD --seed 0                                    # teacher, MNIST
+python implementation.py --paper photonic_QKD --config configs/teacher_original.json --seed 0
+python implementation.py --paper photonic_QKD --config configs/pqkd_merlin.json --teacher-path <teacher run dir> --seed 0
+python implementation.py --paper photonic_QKD --config configs/pqkd_original.json --teacher-path <teacher run dir> --seed 0
+python implementation.py --paper photonic_QKD --config configs/baseline_surrogate_classical.json --teacher-path <teacher run dir> --seed 0
 ```
 
-The script saves a snapshot of the resolved config alongside results and logs.
+The same commands work from inside `papers/photonic_QKD` with `python ../../implementation.py --config configs/<name>.json ...`.
 
-### Data location and shared code
-
-- The shared data root defaults to `<repo>/data`; each paper is scoped to a subfolder named after the paper (e.g., `data/photonic_QKD/`). The runner resolves this via `runtime_lib.data_paths.paper_data_dir`, so you usually just pass `--paper` or set `dataset.root` to `null` and downloads land in the right place.
-- Override the base root with `DATA_DIR=/abs/path` or `--data-root /abs/path` when calling `implementation.py`; the paper subfolder is appended automatically.
-- No datasets are bundled. Download or place assets under the resolved paper-specific subfolder.
-- Reusable helpers can live under `papers/shared/<paper>/...`; import them from your paper code to avoid duplication while keeping code on the Python path (e.g., `from papers.shared.<paper>.module import helper`).
-
-### Output directory and generated files
-
-At each run, a timestamped folder is created under the base `outdir` (default: `outdir`):
-
-```
-<outdir>/run_YYYYMMDD-HHMMSS/
-├── config_snapshot.json   # Resolved configuration used for the run
-└── done.txt               # Scaffold artifact (to be replaced by PQKD outputs)
-```
-
-Notes:
-- Change the base output directory with `--outdir` or in `configs/example.json` (key `outdir`).
-- Add your own artifacts in the training code (e.g. checkpoints, metrics, figures). `outdir/` is ignored by Git.
+Each run writes `outdir/run_YYYYMMDD-HHMMSS/` with:
+- `run.log`;
+- `run_status.json`;
+- `config_snapshot.json`;
+- `metrics.json`;
+- `teacher.pt` or `student.pt`;
+- `feature_trace.npz` for conditioned students (raw and EMA z per epoch).
 
 ## Configuration
 
-Place configuration files in `configs/`.
+`configs/defaults.json` holds the paper hyperparameters: batch 64, Adam 1e-3, τ = 3, λ = 0.5, dropout 0.25, 10 SPSA steps per epoch, d = 512, 16 modes. It also holds the assumed values above.
 
-- `defaults.json` defines the default parameter values.
-- `cli.json` declares the CLI arguments, their types, and the config keys they mutate.
-- The shared runtime automatically loads `configs/defaults.json`, `cli.json`, and calls `lib/runner.py::train_and_evaluate`, so keep that entry point in every project.
-- Any config value named `dtype` is normalized into a `(label, torch.dtype)` pair at runtime via `runtime_lib.dtypes`, so you can inspect both the requested string and the resolved `torch.dtype` without duplicating conversion logic.
-- `example.json` shows the structure for a specific experiment.
-- Keys typically include: dataset, model, training, evaluation, logging.
-- Precision control: add a top-level `"dtype"` entry (mirrors `"seed"`) to force the entire pipeline (datasets + models) to run in a specific torch dtype; individual models may still expose a `model.dtype` override if required.
+| Config | Purpose |
+|---|---|
+| `teacher_original.json` | teacher, 100 epochs |
+| `pqkd_merlin.json` / `pqkd_original.json` | PQKD student, 30 / 100 epochs |
+| `baseline_*_{classical,merlin}.json` | baselines B0–B6 |
+| `smoke_*.json` | tiny infrastructure runs |
 
-**Placeholder guard:** If any config value still contains a `<<...>>` placeholder (e.g., `"teacher_path": "<<TEACHER_PATH>>"`), the shared runner aborts early with a clear error. Replace these placeholders with real paths/values before launching a run.
+Student configs contain `teacher.checkpoint: "<<RESULT_PATH>>"`. Pass `--teacher-path`; the runtime refuses to start until it is resolved.
 
-## Results and Analysis
+Main flags (see `cli.json`): `--task`, `--dataset {mnist,fashion_mnist,cifar10,synthetic}`, `--teacher-path`, `--conditioning`, `--shots`, `--ema`, `--theta-dim`, `--spsa-a`, `--spsa-c`, `--epochs`, `--batch-size`, `--lr`. Global flags (`--seed`, `--device`, `--outdir`, `--data-root`, `--config`) come from the shared runtime.
 
-No results yet.
+## Data
 
-## Extensions and Next Steps
+The torchvision datasets live under `data/photonic_QKD/` and download on first use. The train/validation split is a seeded permutation (`dataset.split_seed = 0`) of the canonical training set; the canonical test set is held out. The paper's synthetic Gaussian-blob dataset (`--dataset synthetic`) is generated in memory.
 
-To be filled after the reproduction runs.
+## Results Obtained and Comparison with the Paper
 
-## Reproducibility Notes
+No results yet. Phase 3 runs the teacher, the SPSA grid, PQKD and the baselines.
 
-Planning findings from the arXiv v1 TeX source, to be confirmed in implementation:
+## Limitations
 
-- **Code and splits:** no author code or split indices are published. The 45k/5k train/val splits are regenerated with a fixed seed from the canonical train sets, and the canonical test set is held out.
-- **Unreported hyperparameters:** SPSA step sizes (a, c, θ_max), the shot budget S for Tables 1–2, the input photon pattern, and the feature scale γ. Each is set by a predeclared choice or a small, equally budgeted grid.
-- **Parameter accounting:** the reported compression factors match R·k² + 2·C_out trainable parameters per compressed layer, not the R·k² + C_out stated in the text. The implementation follows the reported numbers.
-- **Attribution baseline:** the paper's photonic-contribution control (z = 0) zeroes every compressed kernel, so it is not a meaningful "no-photonic" student. The paper also describes, but does not report, its own fair controls (dictionary-only, random-feature, fixed-θ). These are run here alongside a classical surrogate with the same parameter and SPSA budget.
-- **Simulator:** the photonic sampler is simulated in MerLin (16-mode loop-based interferometer, Fock space, threshold detection) in place of the CUDA-Q ORCA simulator used in the paper.
-- **Compute:** this machine is CPU-only, so first runs use reduced epochs and seeds and are labelled as partial runs.
+- **CPU-only:** reduced epochs and seeds until a GPU machine is available.
+- **Unreported settings:** SPSA step sizes, shot budget, input photon pattern and the Fig. 4 configuration are not in the paper; the assumed values are listed above.
+- **Simulation only:** no ORCA hardware was used.
 
-## Testing
-
-Run tests from inside the `papers/photonic_QKD/` directory:
+## Tests
 
 ```bash
 cd papers/photonic_QKD
-pytest -q
+python -m pytest -q
 ```
 
-Notes:
-- Tests are scoped to this paper folder and expect the current working directory to be `photonic_QKD/`.
-- If `pytest` is not installed: `pip install pytest`.
+The 46 tests cover the paper's parameter counts and compression factors, the dictionary kernel (Eqs. 6–7), photonic circuit ordering and threshold detection, the feature map, the KD loss, SPSA, every conditioning source, and end-to-end teacher → student runs on the synthetic dataset.
+
+## Citation and License
+
+Cite arXiv:2603.14898. This reproduction's code follows the repository license.

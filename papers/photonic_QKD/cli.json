@@ -2,6 +2,72 @@
   "description": "Photonic Quantum-Enhanced Knowledge Distillation (PQKD) reproduction runner",
   "arguments": [
     {
+      "flags": ["--task"],
+      "help": "Which model this run trains",
+      "type": "str",
+      "choices": ["teacher", "student"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "task"}
+    },
+    {
+      "flags": ["--dataset"],
+      "help": "Dataset key",
+      "type": "str",
+      "choices": ["mnist", "fashion_mnist", "cifar10", "synthetic"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "dataset.name"}
+    },
+    {
+      "flags": ["--teacher-path"],
+      "help": "Teacher run directory or teacher.pt for task=student",
+      "type": "str",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "teacher.checkpoint"}
+    },
+    {
+      "flags": ["--conditioning"],
+      "help": "Conditioning source for dictionary students (photonic = PQKD; others are baselines)",
+      "type": "str",
+      "choices": ["photonic", "photonic_fixed", "surrogate", "random_fixed", "random_resampled", "classical_histogram", "zero"],
+      "default": null,
+      "apply": {"kind": "config_path", "path": "conditioning.source"}
+    },
+    {
+      "flags": ["--shots"],
+      "help": "Shot budget S per feature evaluation",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "conditioning.shots"}
+    },
+    {
+      "flags": ["--ema"],
+      "help": "Enable EMA smoothing of the conditioning feature (true/false)",
+      "type": "bool",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "conditioning.ema.enabled"}
+    },
+    {
+      "flags": ["--theta-dim"],
+      "help": "Photonic parameter budget dim(theta)",
+      "type": "int",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "conditioning.theta_dim"}
+    },
+    {
+      "flags": ["--spsa-a"],
+      "help": "SPSA step size a",
+      "type": "float",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "spsa.a"}
+    },
+    {
+      "flags": ["--spsa-c"],
+      "help": "SPSA perturbation scale c",
+      "type": "float",
+      "default": null,
+      "apply": {"kind": "config_path", "path": "spsa.c"}
+    },
+    {
       "flags": ["--epochs"],
       "help": "Override number of training epochs",
       "type": "int",
@@ -10,14 +76,14 @@
     },
     {
       "flags": ["--batch-size"],
-      "help": "Override dataset batch size",
+      "help": "Override training batch size",
       "type": "int",
       "default": null,
       "apply": {"kind": "config_path", "path": "dataset.batch_size"}
     },
     {
       "flags": ["--lr"],
-      "help": "Override learning rate",
+      "help": "Override Adam learning rate",
       "type": "float",
       "default": null,
       "apply": {"kind": "config_path", "path": "training.lr"}

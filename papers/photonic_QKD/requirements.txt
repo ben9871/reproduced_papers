@@ -1,6 +1,7 @@
-# photonic_QKD (PQKD) dependencies; refine during implementation
-torch
+# photonic_QKD (PQKD) dependencies
+torch>=2.4
 torchvision
 numpy
-merlinquantum
+perceval-quandela>=1.2,<1.3
+merlinquantum>=0.4.2
 pytest
