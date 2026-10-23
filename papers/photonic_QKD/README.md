@@ -1,6 +1,6 @@
 # photonic_QKD: Photonic Quantum-Enhanced Knowledge Distillation (PQKD)
 
-Status: scaffold only. No PQKD method code, experiments or results exist yet.
+Status: planning complete (Phase 1, feasibility `PARTIALLY_FEASIBLE`). No PQKD method code, experiments or results exist yet.
 
 ## Reference and Attribution
 
@@ -111,7 +111,14 @@ To be filled after the reproduction runs.
 
 ## Reproducibility Notes
 
-To be filled during implementation.
+Planning findings from the arXiv v1 TeX source, to be confirmed in implementation:
+
+- **Code and splits:** no author code or split indices are published. The 45k/5k train/val splits are regenerated with a fixed seed from the canonical train sets, and the canonical test set is held out.
+- **Unreported hyperparameters:** SPSA step sizes (a, c, θ_max), the shot budget S for Tables 1–2, the input photon pattern, and the feature scale γ. Each is set by a predeclared choice or a small, equally budgeted grid.
+- **Parameter accounting:** the reported compression factors match R·k² + 2·C_out trainable parameters per compressed layer, not the R·k² + C_out stated in the text. The implementation follows the reported numbers.
+- **Attribution baseline:** the paper's photonic-contribution control (z = 0) zeroes every compressed kernel, so it is not a meaningful "no-photonic" student. The paper also describes, but does not report, its own fair controls (dictionary-only, random-feature, fixed-θ). These are run here alongside a classical surrogate with the same parameter and SPSA budget.
+- **Simulator:** the photonic sampler is simulated in MerLin (16-mode loop-based interferometer, Fock space, threshold detection) in place of the CUDA-Q ORCA simulator used in the paper.
+- **Compute:** this machine is CPU-only, so first runs use reduced epochs and seeds and are labelled as partial runs.
 
 ## Testing
 
