@@ -22,6 +22,9 @@ candidates : list[{"name": str, "args": list[str]}]
     In tie-break priority order when ``tie_break`` is ``"spec_order"``.
 seeds : list[int]
 max_parallel, threads_per_run : int
+run_order : str, optional
+    ``candidate_major`` (default) or ``seed_major``; seed-major interleaves
+    candidates so memory-heavy ones do not all run at once.
 teacher_sweep : str | null
     Completed teacher sweep directory; its seed-matched run is passed as
     ``--teacher-path``.
@@ -105,24 +108,40 @@ class SweepCoordinator:
             else {}
         )
         self.runs: list[dict[str, Any]] = []
-        for candidate in spec["candidates"]:
-            for seed in spec["seeds"]:
-                label = _run_label(candidate["name"], seed)
-                self.runs.append(
-                    {
-                        "run_id": label,
-                        "candidate": candidate["name"],
-                        "seed": seed,
-                        "repetition": spec["seeds"].index(seed),
-                        "status": "PLANNED",
-                        "run_dir": None,
-                        "run_log": None,
-                        "run_status": None,
-                        "config_path": None,
-                        "metrics_path": None,
-                        "command": self._command(candidate, seed),
-                    }
-                )
+        order = spec.get("run_order", "candidate_major")
+        if order not in ("candidate_major", "seed_major"):
+            raise ValueError(
+                f"run_order must be candidate_major or seed_major, got {order!r}"
+            )
+        pairs = (
+            [
+                (candidate, seed)
+                for candidate in spec["candidates"]
+                for seed in spec["seeds"]
+            ]
+            if order == "candidate_major"
+            else [
+                (candidate, seed)
+                for seed in spec["seeds"]
+                for candidate in spec["candidates"]
+            ]
+        )
+        for candidate, seed in pairs:
+            self.runs.append(
+                {
+                    "run_id": _run_label(candidate["name"], seed),
+                    "candidate": candidate["name"],
+                    "seed": seed,
+                    "repetition": spec["seeds"].index(seed),
+                    "status": "PLANNED",
+                    "run_dir": None,
+                    "run_log": None,
+                    "run_status": None,
+                    "config_path": None,
+                    "metrics_path": None,
+                    "command": self._command(candidate, seed),
+                }
+            )
         self.status: dict[str, Any] = {
             "schema_version": SCHEMA_VERSION,
             "sweep_id": spec["sweep_id"],

@@ -68,9 +68,9 @@
   "seeds": [
     0
   ],
-  "max_parallel": 3,
+  "max_parallel": 2,
   "threads_per_run": 4,
-  "teacher_sweep": "<<S1_SWEEP_DIR>>",
+  "teacher_sweep": "papers/photonic_QKD/outdir/sweeps/S1_teacher_mnist_30ep_20261023-145803",
   "selection": {
     "metric": "final_epoch.proxy_objective",
     "direction": "minimize",

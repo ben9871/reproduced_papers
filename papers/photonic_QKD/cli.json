@@ -70,6 +70,23 @@
     },
     {
       "flags": [
+        "--student-variant"
+      ],
+      "help": "Student variant: dictionary (PQKD and conditioning baselines), dictionary_trainable (B2), dense (B1)",
+      "type": "str",
+      "choices": [
+        "dictionary",
+        "dictionary_trainable",
+        "dense"
+      ],
+      "default": null,
+      "apply": {
+        "kind": "config_path",
+        "path": "student.variant"
+      }
+    },
+    {
+      "flags": [
         "--shots"
       ],
       "help": "Shot budget S per feature evaluation",
