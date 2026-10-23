@@ -15,12 +15,13 @@ the same interface and needs no download.
 from __future__ import annotations
 
 import logging
+import math
 from dataclasses import dataclass
 from functools import lru_cache
 from typing import Any
 
 import torch
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import TensorDataset
 
 from runtime_lib.data_paths import paper_data_dir
 
@@ -311,23 +312,72 @@ def load_splits(cfg: dict[str, Any]) -> DatasetSplits:
     )
 
 
+class TensorBatchLoader:
+    """Mini-batch iterator over in-memory tensors, indexed one batch at a time.
+
+    Same semantics as ``DataLoader(TensorDataset(...), batch_size, shuffle)``
+    with ``drop_last=False``: a fresh permutation per epoch when shuffling, the
+    last partial batch kept, fixed order otherwise. Indexing whole batches
+    avoids ``DataLoader``'s per-sample fetch and collate, which cost about 30%
+    of a teacher epoch on CPU.
+
+    Parameters
+    ----------
+    dataset : torch.utils.data.TensorDataset
+        Tensors sharing their first dimension.
+    batch_size : int
+        Samples per batch.
+    shuffle : bool
+        Draw a new permutation at the start of every epoch.
+    seed : int, optional
+        Seed of the permutation generator; required when ``shuffle`` is True.
+        Default value is None.
+    """
+
+    def __init__(
+        self,
+        dataset: TensorDataset,
+        batch_size: int,
+        *,
+        shuffle: bool,
+        seed: int | None = None,
+    ) -> None:
+        if shuffle and seed is None:
+            raise ValueError("A shuffled loader needs a seed")
+        self.tensors = dataset.tensors
+        self.batch_size = batch_size
+        self.shuffle = shuffle
+        self.generator = torch.Generator().manual_seed(seed) if shuffle else None
+        self.n_samples = self.tensors[0].shape[0]
+
+    def __len__(self) -> int:
+        return math.ceil(self.n_samples / self.batch_size)
+
+    def __iter__(self):
+        if self.shuffle:
+            order = torch.randperm(self.n_samples, generator=self.generator)
+            for start in range(0, self.n_samples, self.batch_size):
+                index = order[start : start + self.batch_size]
+                yield tuple(tensor[index] for tensor in self.tensors)
+        else:
+            for start in range(0, self.n_samples, self.batch_size):
+                yield tuple(
+                    tensor[start : start + self.batch_size] for tensor in self.tensors
+                )
+
+
 def make_loader(
     dataset: TensorDataset, batch_size: int, *, shuffle: bool, seed: int | None = None
-) -> DataLoader:
-    """Wrap an in-memory dataset in a single-process loader.
+) -> TensorBatchLoader:
+    """Wrap an in-memory dataset in a :class:`TensorBatchLoader`.
 
     Shuffling uses its own generator so the batch order depends only on
     ``seed`` (paper "Randomness control").
     """
-    generator = (
-        torch.Generator().manual_seed(seed) if shuffle and seed is not None else None
-    )
-    return DataLoader(
-        dataset, batch_size=batch_size, shuffle=shuffle, generator=generator
-    )
+    return TensorBatchLoader(dataset, batch_size, shuffle=shuffle, seed=seed)
 
 
-def build_dataloader(cfg: dict[str, Any], split: str) -> DataLoader:
+def build_dataloader(cfg: dict[str, Any], split: str) -> TensorBatchLoader:
     """Build the loader for one split.
 
     Training batches use ``dataset.batch_size`` (paper: 64) and are shuffled
@@ -343,7 +393,7 @@ def build_dataloader(cfg: dict[str, Any], split: str) -> DataLoader:
 
     Returns
     -------
-    torch.utils.data.DataLoader
+    TensorBatchLoader
         Loader yielding ``(images, labels)``.
     """
     splits = load_splits(cfg)

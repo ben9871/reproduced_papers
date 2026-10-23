@@ -23,9 +23,10 @@ from typing import Any
 
 import torch
 import torch.nn.functional as functional
-from torch.utils.data import DataLoader, TensorDataset
+from torch.utils.data import TensorDataset
 
 from .conditioning import ConditioningSource
+from .data import TensorBatchLoader
 from .models import ThreeBlockCNN
 
 logger = logging.getLogger(__name__)
@@ -51,7 +52,7 @@ def kd_loss(
 
 @torch.no_grad()
 def evaluate(
-    model: torch.nn.Module, loader: DataLoader, device: torch.device
+    model: torch.nn.Module, loader: TensorBatchLoader, device: torch.device
 ) -> dict[str, float]:
     """Top-1 accuracy (%) and mean cross-entropy with the model in eval mode."""
     model.eval()
@@ -96,8 +97,8 @@ class TeacherResult:
 
 def train_teacher(
     model: ThreeBlockCNN,
-    train_loader: DataLoader,
-    val_loader: DataLoader,
+    train_loader: TensorBatchLoader,
+    val_loader: TensorBatchLoader,
     training_cfg: dict[str, Any],
     device: torch.device,
 ) -> TeacherResult:
@@ -216,8 +217,8 @@ class StudentResult:
 def train_student(
     model: ThreeBlockCNN,
     source: ConditioningSource | None,
-    train_loader: DataLoader,
-    val_loader: DataLoader,
+    train_loader: TensorBatchLoader,
+    val_loader: TensorBatchLoader,
     val_proxy_batches: list[tuple[torch.Tensor, torch.Tensor, torch.Tensor]],
     cfg: dict[str, Any],
     device: torch.device,
@@ -232,9 +233,9 @@ def train_student(
     source : ConditioningSource or None
         Conditioning source; ``None`` for students without feature mixing
         (dense KD-only and dictionary-only baselines).
-    train_loader : DataLoader
+    train_loader : TensorBatchLoader
         Yields ``(images, labels, teacher_logits)``.
-    val_loader : DataLoader
+    val_loader : TensorBatchLoader
         Yields ``(images, labels)`` for per-epoch validation.
     val_proxy_batches : list of tuple
         Fixed ``(images, labels, teacher_logits)`` batches for the SPSA
