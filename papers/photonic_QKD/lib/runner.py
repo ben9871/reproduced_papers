@@ -444,13 +444,18 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
         )
     task = _required(cfg, "task", "cfg")
     seed = int(_required(cfg, "seed", "cfg"))
+    # utils/run_sweep.py passes its own run identity so the sweep validator can
+    # match this run to its planned (candidate, seed, repetition) entry.
+    sweep_context = cfg.get("sweep") or {}
+    run_id = sweep_context.get("run_id") or run_dir.name
     status: dict[str, Any] = {
         "schema_version": STATUS_SCHEMA_VERSION,
-        "run_id": run_dir.name,
-        "sweep_id": cfg.get("sweep_id"),
-        "candidate": None,
+        "run_id": run_id,
+        "sweep_id": sweep_context.get("sweep_id"),
+        "candidate": sweep_context.get("candidate"),
+        "candidate_details": None,
         "seed": seed,
-        "repetition": cfg.get("repetition"),
+        "repetition": sweep_context.get("repetition"),
         "status": "RUNNING",
         "started_at": utc_now(),
         "completed_at": None,
@@ -471,14 +476,16 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
     }
     status_path = run_dir / "run_status.json"
     write_json(status_path, status)
-    logger.info("RUN_STARTED | run_id=%s | task=%s | seed=%d", run_dir.name, task, seed)
+    logger.info("RUN_STARTED | run_id=%s | task=%s | seed=%d", run_id, task, seed)
     try:
         if task not in ("teacher", "student"):
             raise ValueError(f"Unknown task {task!r}; expected 'teacher' or 'student'")
         dtype = dtype_torch(cfg.get("dtype"))
         if dtype not in (None, torch.float32):
             raise ValueError(f"Only float32 is supported (paper setting), got {dtype}")
-        status["candidate"] = _candidate(cfg)
+        status["candidate_details"] = _candidate(cfg)
+        if status["candidate"] is None:
+            status["candidate"] = status["candidate_details"]
         device = torch.device(_required(cfg, "device", "cfg"))
         torch.manual_seed(seed)
 
@@ -513,7 +520,7 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
             metrics_sha256=sha256(metrics_path),
         )
         write_json(status_path, status)
-        logger.info("RUN_COMPLETED | run_id=%s", run_dir.name)
+        logger.info("RUN_COMPLETED | run_id=%s", run_id)
     except Exception as exc:
         status.update(
             status="FAILED",
@@ -521,5 +528,5 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
             error={"type": type(exc).__name__, "message": str(exc)},
         )
         write_json(status_path, status)
-        logger.exception("RUN_FAILED | run_id=%s", run_dir.name)
+        logger.exception("RUN_FAILED | run_id=%s", run_id)
         raise
