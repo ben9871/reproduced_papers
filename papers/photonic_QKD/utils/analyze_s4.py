@@ -8,10 +8,10 @@ across seeds.
 
 Usage (from the repository root)::
 
-    python papers/photonic_QKD/utils/analyze_s4.py <S4 sweep dir> --teacher-sweep <S1 sweep dir>
+    python papers/photonic_QKD/utils/analyze_s4.py <S4 sweep dir> [<completion sweep dir> ...]         --teacher-sweep <S1 sweep dir>
 
 Writes ``results/s4_mnist_<scope>.json`` and ``.md`` (``scope`` is
-``complete`` or ``partial``) and a copy in the sweep directory.
+``complete`` or ``partial``) and a copy in the last sweep directory.
 """
 
 from __future__ import annotations
@@ -96,13 +96,31 @@ def load_runs(
     return status, runs
 
 
-def analyse(sweep_dir: Path, teacher_sweep: Path) -> dict[str, Any]:
-    status, runs = load_runs(sweep_dir)
-    spec = json.loads((sweep_dir / "spec.json").read_text())
+def analyse(sweep_dirs: list[Path], teacher_sweep: Path) -> dict[str, Any]:
+    """Merge completed runs of the planned S4 sweep and any completion sweeps.
+
+    The first directory holds the planned spec; coverage is judged against
+    its full candidates x seeds matrix. A (candidate, seed) pair completed in
+    more than one sweep is an error, never silently de-duplicated.
+    """
+    spec = json.loads((sweep_dirs[0] / "spec.json").read_text())
     arm_order = [candidate["name"] for candidate in spec["candidates"]]
-    expected = {(run["candidate"], int(run["seed"])) for run in status["runs"]}
+    expected = {(arm, int(seed)) for arm in arm_order for seed in spec["seeds"]}
+    runs: dict[str, dict[int, dict[str, Any]]] = {}
+    sources: dict[str, str] = {}
+    for sweep_dir in sweep_dirs:
+        _, sweep_runs = load_runs(sweep_dir)
+        for arm, seeds in sweep_runs.items():
+            for seed, metrics in seeds.items():
+                label = f"{arm}__seed{seed}"
+                if label in sources:
+                    raise ValueError(
+                        f"{label} completed in both {sources[label]} and {sweep_dir.name}"
+                    )
+                sources[label] = sweep_dir.name
+                runs.setdefault(arm, {})[seed] = metrics
     observed = {(arm, seed) for arm, seeds in runs.items() for seed in seeds}
-    complete = status["status"] == "COMPLETED" and observed == expected
+    complete = observed == expected
 
     arms = {}
     for arm in arm_order:
@@ -170,8 +188,9 @@ def analyse(sweep_dir: Path, teacher_sweep: Path) -> dict[str, Any]:
     teacher = {name: _stats(values) for name, values in teacher_values.items()}
 
     return {
-        "sweep_id": status["sweep_id"],
-        "sweep_dir": str(sweep_dir),
+        "sweep_id": spec["sweep_id"],
+        "sweep_dirs": [str(path) for path in sweep_dirs],
+        "run_sources": sources,
         "scope": "complete" if complete else "partial",
         "label": "partial RED-tier run (30 epochs, 3 seeds)"
         + ("" if complete else "; INCOMPLETE COVERAGE"),
@@ -321,15 +340,21 @@ def render(report: dict[str, Any]) -> str:
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
-    parser.add_argument("sweep_dir", type=Path)
+    parser.add_argument(
+        "sweep_dirs",
+        type=Path,
+        nargs="+",
+        help="Planned S4 sweep first, then completion sweeps",
+    )
     parser.add_argument("--teacher-sweep", type=Path, required=True)
     args = parser.parse_args()
-    report = analyse(args.sweep_dir.resolve(), args.teacher_sweep.resolve())
+    sweep_dirs = [path.resolve() for path in args.sweep_dirs]
+    report = analyse(sweep_dirs, args.teacher_sweep.resolve())
     text = render(report)
     results_dir = PAPER_DIR / "results"
     results_dir.mkdir(exist_ok=True)
     stem = f"s4_mnist_{report['scope']}"
-    for directory in (results_dir, args.sweep_dir.resolve()):
+    for directory in (results_dir, sweep_dirs[-1]):
         (directory / f"{stem}.json").write_text(
             json.dumps(report, indent=2) + "\n", encoding="utf-8"
         )

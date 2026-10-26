@@ -126,6 +126,20 @@ class SweepCoordinator:
                 for candidate in spec["candidates"]
             ]
         )
+        if spec.get("only_runs"):
+            # Completion sweeps re-plan only the (candidate, seed) pairs an
+            # interrupted sweep did not finish; the spec records which and why.
+            wanted = {(name, int(seed)) for name, seed in spec["only_runs"]}
+            known = {(candidate["name"], seed) for candidate, seed in pairs}
+            if not wanted <= known:
+                raise ValueError(
+                    f"only_runs not in candidates x seeds: {sorted(wanted - known)}"
+                )
+            pairs = [
+                (candidate, seed)
+                for candidate, seed in pairs
+                if (candidate["name"], seed) in wanted
+            ]
         for candidate, seed in pairs:
             self.runs.append(
                 {
