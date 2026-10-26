@@ -60,7 +60,9 @@
         "random_fixed",
         "random_resampled",
         "classical_histogram",
-        "zero"
+        "zero",
+        "photonic_native",
+        "surrogate_native"
       ],
       "default": null,
       "apply": {
@@ -227,6 +229,34 @@
       "apply": {
         "kind": "config_path",
         "path": "sweep.repetition"
+      }
+    },
+    {
+      "flags": [
+        "--theta-init-mode"
+      ],
+      "help": "Initial theta/phi: constant (theta_init, paper: 0) or uniform in [-theta_max, theta_max]",
+      "type": "str",
+      "choices": [
+        "constant",
+        "uniform"
+      ],
+      "default": null,
+      "apply": {
+        "kind": "config_path",
+        "path": "conditioning.theta_init_mode"
+      }
+    },
+    {
+      "flags": [
+        "--resume-from"
+      ],
+      "help": "Run directory of a stopped student run whose checkpoint.pt to continue from",
+      "type": "str",
+      "default": null,
+      "apply": {
+        "kind": "config_path",
+        "path": "resume_from"
       }
     }
   ]

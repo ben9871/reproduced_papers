@@ -11,6 +11,15 @@ Usage (from the repository root)::
 
     python papers/photonic_QKD/utils/run_sweep.py papers/photonic_QKD/sweeps/<spec>.json
     python papers/photonic_QKD/utils/run_sweep.py --summarize <sweep_dir>
+    python papers/photonic_QKD/utils/run_sweep.py --resume <stopped sweep_dir>
+
+Stopping: ``utils/stop_sweep.py`` sends SIGTERM to the PID in
+``coordinator.pid``. The coordinator forwards SIGTERM to its runs (each ends
+FAILED with its last epoch ``checkpoint.pt`` kept), drops runs that never
+started from the run list (listed under ``not_started``), and closes the
+sweep as PARTIAL with a summary, so it still passes sweep validation.
+``--resume`` then starts a completion sweep for the unfinished
+(candidate, seed) pairs, passing ``--resume-from`` to runs with a checkpoint.
 
 Spec keys
 ---------
@@ -42,6 +51,8 @@ import json
 import logging
 import math
 import os
+import re
+import signal
 import subprocess
 import sys
 import time
@@ -63,6 +74,7 @@ from lib.experiment_logging import (  # noqa: E402
 logger = logging.getLogger("pqkd.sweep")
 SCHEMA_VERSION = 1
 POLL_SECONDS = 30
+STOP_GRACE_SECONDS = 300
 
 
 def _dotted(mapping: dict[str, Any], path: str) -> Any:
@@ -199,6 +211,11 @@ class SweepCoordinator:
             if seed not in self.teachers:
                 raise RuntimeError(f"No completed teacher for seed {seed}")
             command += ["--teacher-path", str(self.teachers[seed])]
+        resume_from = self.spec.get("resume_from", {}).get(
+            _run_label(candidate["name"], seed)
+        )
+        if resume_from:
+            command += ["--resume-from", resume_from]
         return command
 
     def _write_status(self) -> None:
@@ -268,7 +285,44 @@ class SweepCoordinator:
                 ),
             )
 
+    def _request_stop(self, signal_number: int, _frame: Any) -> None:
+        if not self.stop_requested:
+            logger.warning("SWEEP_STOP_REQUESTED | signal=%d", signal_number)
+        self.stop_requested = True
+
+    def _stop(
+        self, active: dict[str, tuple[subprocess.Popen, Any]], pending: list
+    ) -> None:
+        """Stop running candidates (each keeps its checkpoint) and close the sweep as PARTIAL."""
+        for process, _console in active.values():
+            process.send_signal(signal.SIGTERM)
+        for run in self.runs:
+            if run["run_id"] not in active:
+                continue
+            process, console = active.pop(run["run_id"])
+            try:
+                return_code = process.wait(timeout=STOP_GRACE_SECONDS)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                return_code = process.wait()
+            console.close()
+            self._finish(run, return_code)
+            if run["status"] == "FAILED":
+                run["failure_reason"] = (
+                    "stopped by user (SIGTERM); resume with run_sweep.py --resume"
+                )
+        never_started = [run["run_id"] for run in pending]
+        self.runs[:] = [run for run in self.runs if run["run_id"] not in never_started]
+        self.status.update(not_started=never_started, stopped=True)
+        logger.warning("SWEEP_STOPPED | not_started=%s", never_started)
+
     def run(self) -> None:
+        (self.sweep_dir / "coordinator.pid").write_text(
+            str(os.getpid()), encoding="utf-8"
+        )
+        self.stop_requested = False
+        signal.signal(signal.SIGTERM, self._request_stop)
+        signal.signal(signal.SIGINT, self._request_stop)
         logger.info(
             "SWEEP_STARTED | sweep_id=%s | expected_runs=%d | max_parallel=%d | threads_per_run=%d | commit=%s | dirty=%s",
             self.spec["sweep_id"],
@@ -285,8 +339,12 @@ class SweepCoordinator:
         pending = list(self.runs)
         active: dict[str, tuple[subprocess.Popen, Any]] = {}
         try:
-            while pending or active:
-                while pending and len(active) < int(self.spec["max_parallel"]):
+            while (pending or active) and not self.stop_requested:
+                while (
+                    pending
+                    and len(active) < int(self.spec["max_parallel"])
+                    and not self.stop_requested
+                ):
                     run = pending.pop(0)
                     outdir = self._outdir(run["run_id"])
                     outdir.mkdir(parents=True, exist_ok=True)
@@ -310,7 +368,10 @@ class SweepCoordinator:
                     time.sleep(
                         2
                     )  # keep runtime timestamps of parallel launches distinct
-                time.sleep(POLL_SECONDS)
+                for _ in range(POLL_SECONDS):
+                    if self.stop_requested:
+                        break
+                    time.sleep(1)
                 for run in self.runs:
                     if run["run_id"] not in active:
                         continue
@@ -323,6 +384,8 @@ class SweepCoordinator:
                     del active[run["run_id"]]
                     self._finish(run, return_code)
                 self._write_status()
+            if self.stop_requested:
+                self._stop(active, pending)
         except BaseException as exc:
             for process, console in active.values():
                 process.terminate()
@@ -335,7 +398,7 @@ class SweepCoordinator:
             write_json(self.sweep_dir / "sweep_status.json", self.status)
             logger.exception("SWEEP_FAILED | sweep_id=%s", self.spec["sweep_id"])
             raise
-        summarize(self.sweep_dir, self.spec, self.status)
+        summarize(self.sweep_dir, self.spec, self.status, stopped=self.stop_requested)
 
 
 def _aggregate(values: list[float]) -> tuple[float, float | None]:
@@ -346,8 +409,14 @@ def _aggregate(values: list[float]) -> tuple[float, float | None]:
     return mean, math.sqrt(variance)
 
 
-def summarize(sweep_dir: Path, spec: dict[str, Any], status: dict[str, Any]) -> None:
-    """Build the result table from ``metrics.json`` files and apply the declared selection rule."""
+def summarize(
+    sweep_dir: Path, spec: dict[str, Any], status: dict[str, Any], stopped: bool = False
+) -> None:
+    """Build the result table from ``metrics.json`` files and apply the declared selection rule.
+
+    A user-stopped sweep is always PARTIAL (never FAILED), even with no
+    completed run, because nothing failed.
+    """
     selection = spec["selection"]
     metric = selection["metric"]
     report_metrics = spec.get("report_metrics", [metric])
@@ -457,8 +526,12 @@ def summarize(sweep_dir: Path, spec: dict[str, Any], status: dict[str, Any]) -> 
     failed = [run for run in status["runs"] if run["status"] == "FAILED"]
     terminal = (
         "COMPLETED"
-        if complete
-        else ("FAILED" if not any(r["successful_runs"] for r in rows) else "PARTIAL")
+        if complete and not stopped
+        else (
+            "FAILED"
+            if not stopped and not any(r["successful_runs"] for r in rows)
+            else "PARTIAL"
+        )
     )
     status.update(
         status=terminal,
@@ -481,11 +554,66 @@ def summarize(sweep_dir: Path, spec: dict[str, Any], status: dict[str, Any]) -> 
     )
 
 
+def resume_spec(stopped_dir: Path) -> dict[str, Any]:
+    """Spec of a completion sweep for the unfinished pairs of ``stopped_dir``.
+
+    Works for a sweep closed by a graceful stop and for one whose coordinator
+    was killed (its status frozen at RUNNING). Every pair not COMPLETED is
+    re-planned; when its latest run directory holds ``checkpoint.pt`` the run
+    continues from it via ``--resume-from``.
+    """
+    spec = json.loads((stopped_dir / "spec.json").read_text())
+    status = json.loads((stopped_dir / "sweep_status.json").read_text())
+    completed = {
+        (run["candidate"], int(run["seed"]))
+        for run in status["runs"]
+        if run["status"] == "COMPLETED"
+    }
+    planned = spec.get("only_runs") or [
+        [candidate["name"], seed]
+        for candidate in spec["candidates"]
+        for seed in spec["seeds"]
+    ]
+    remaining = [
+        [name, int(seed)]
+        for name, seed in planned
+        if (name, int(seed)) not in completed
+    ]
+    if not remaining:
+        raise SystemExit(f"{stopped_dir} has no unfinished runs")
+    resume_from = {}
+    for name, seed in remaining:
+        label = _run_label(name, seed)
+        checkpoints = sorted((stopped_dir / "runs" / label).glob("run_*/checkpoint.pt"))
+        if checkpoints:
+            resume_from[label] = str(checkpoints[-1].parent.resolve())
+    base_id = re.sub(r"_resume\d+$", "", spec["sweep_id"])
+    attempt = int(spec.get("resume_index", 0)) + 1
+    resumed = dict(spec)
+    resumed.update(
+        sweep_id=f"{base_id}_resume{attempt}",
+        resume_index=attempt,
+        resumes=os.path.relpath(stopped_dir.resolve(), REPO_ROOT.resolve())
+        if stopped_dir.resolve().is_relative_to(REPO_ROOT.resolve())
+        else str(stopped_dir.resolve()),
+        only_runs=remaining,
+        resume_from=resume_from,
+        description=f"Resumption {attempt} of {stopped_dir.name}: {len(remaining)} unfinished runs, "
+        f"{len(resume_from)} continue from checkpoints. " + spec.get("description", ""),
+    )
+    return resumed
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__.split("\n")[0])
     parser.add_argument("spec", nargs="?", type=Path, help="Sweep spec JSON")
     parser.add_argument(
         "--summarize", type=Path, help="Re-summarise an existing sweep directory"
+    )
+    parser.add_argument(
+        "--resume",
+        type=Path,
+        help="Start a completion sweep for a stopped or killed sweep",
     )
     args = parser.parse_args(argv)
     if args.summarize:
@@ -495,9 +623,12 @@ def main(argv: list[str] | None = None) -> int:
         configure_logging(sweep_dir / "summarize.log")
         summarize(sweep_dir, spec, status)
         return 0
-    if args.spec is None:
-        parser.error("a spec path or --summarize is required")
-    spec = json.loads(args.spec.read_text())
+    if args.resume:
+        spec = resume_spec(args.resume.resolve())
+    elif args.spec is None:
+        parser.error("a spec path, --summarize or --resume is required")
+    else:
+        spec = json.loads(args.spec.read_text())
     stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
     sweep_dir = PAPER_DIR / "outdir" / "sweeps" / f"{spec['sweep_id']}_{stamp}"
     sweep_dir.mkdir(parents=True)

@@ -105,13 +105,29 @@ class DictionaryConv2d(nn.Module):
         mixing = self.projection @ feature.to(self.projection)
         self.mixing.copy_(mixing.view_as(self.mixing))
 
-    def kernel(self) -> torch.Tensor:
-        """Reconstruct the dense kernel ``W`` of shape ``(C_out, C_in, k, k)``."""
-        kernel = torch.einsum("oir,rxy->oixy", self.mixing, self.basis)
+    def kernel(self, feature: torch.Tensor | None = None) -> torch.Tensor:
+        """Reconstruct the dense kernel ``W`` of shape ``(C_out, C_in, k, k)``.
+
+        With ``feature`` given, ``M = reshape(A z)`` is built inside the graph
+        so gradients reach ``z`` (MerLin-native adaptation); otherwise the
+        stored mixing from :meth:`set_feature` is used.
+        """
+        mixing = self.mixing
+        if feature is not None:
+            if self.mixing_mode != "feature":
+                raise RuntimeError("A feature can only drive mixing='feature' layers")
+            mixing = (self.projection @ feature.to(self.projection)).view_as(
+                self.mixing
+            )
+        kernel = torch.einsum("oir,rxy->oixy", mixing, self.basis)
         return kernel * self.gain.view(-1, 1, 1, 1)
 
-    def forward(self, inputs: torch.Tensor) -> torch.Tensor:
-        return functional.conv2d(inputs, self.kernel(), self.bias, padding=self.padding)
+    def forward(
+        self, inputs: torch.Tensor, feature: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        return functional.conv2d(
+            inputs, self.kernel(feature), self.bias, padding=self.padding
+        )
 
 
 class ThreeBlockCNN(nn.Module):
@@ -208,10 +224,29 @@ class ThreeBlockCNN(nn.Module):
             if isinstance(conv, DictionaryConv2d) and conv.mixing_mode == "feature":
                 conv.set_feature(feature)
 
-    def forward(self, images: torch.Tensor) -> torch.Tensor:
-        hidden = functional.max_pool2d(functional.relu(self.convs[0](images)), 2)
-        hidden = functional.max_pool2d(functional.relu(self.convs[1](hidden)), 2)
-        hidden = self.dropout(functional.relu(self.convs[2](hidden)))
+    def _conv(
+        self, index: int, inputs: torch.Tensor, feature: torch.Tensor | None
+    ) -> torch.Tensor:
+        conv = self.convs[index]
+        if (
+            feature is not None
+            and isinstance(conv, DictionaryConv2d)
+            and conv.mixing_mode == "feature"
+        ):
+            return conv(inputs, feature)
+        return conv(inputs)
+
+    def forward(
+        self, images: torch.Tensor, feature: torch.Tensor | None = None
+    ) -> torch.Tensor:
+        """Logits; ``feature`` (optional) conditions feature-mixed layers in-graph."""
+        hidden = functional.max_pool2d(
+            functional.relu(self._conv(0, images, feature)), 2
+        )
+        hidden = functional.max_pool2d(
+            functional.relu(self._conv(1, hidden, feature)), 2
+        )
+        hidden = self.dropout(functional.relu(self._conv(2, hidden, feature)))
         hidden = functional.adaptive_avg_pool2d(hidden, 1).flatten(1)
         return self.classifier(hidden)
 

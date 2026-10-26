@@ -203,6 +203,27 @@ class TimeBinFeatureMap:
         )
         return counts / shots
 
+    @property
+    def angles(self) -> torch.nn.Parameter:
+        """The MerLin layer's beam-splitter angle parameter (length ``n_angles``)."""
+        return self._angles
+
+    def differentiable_exact_feature(self) -> torch.Tensor:
+        """Infinite-shot ``[h1; h2]`` at the layer's current angles, inside autograd.
+
+        Used by the MerLin-native adaptation: the marginals are sums of exact
+        Fock-state probabilities (``index_add``), so gradients flow from ``z``
+        back to the angles through MerLin's differentiable simulation.
+        """
+        probabilities = self.layer().reshape(-1)
+        first = probabilities.new_zeros(self.bins_per_half).index_add(
+            0, self.first_half_index, probabilities
+        )
+        second = probabilities.new_zeros(self.bins_per_half).index_add(
+            0, self.second_half_index, probabilities
+        )
+        return torch.cat([first, second])
+
     @torch.no_grad()
     def mode_click_probabilities(self, theta: torch.Tensor) -> torch.Tensor:
         """Per-mode click probability ``P(b_j = 1)`` under ``p_theta``."""

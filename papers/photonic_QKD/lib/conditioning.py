@@ -26,6 +26,9 @@ Sources (baseline IDs from LOG.md, Fair Baseline Plan):
   shot budget.
 - ``zero`` (B0): ``z = 0``. This makes every compressed kernel zero; it is the
   paper's Fig. 4 control, kept for metric agreement only.
+- ``photonic_native`` / ``surrogate_native`` (Phase 4 MerLin-native
+  adaptation, arms N1-N3): exact, differentiable features whose parameters
+  are trained by autograd jointly with the student.
 """
 
 from __future__ import annotations
@@ -48,7 +51,10 @@ SOURCES = (
     "random_resampled",
     "classical_histogram",
     "zero",
+    "photonic_native",
+    "surrogate_native",
 )
+THETA_INIT_MODES = ("constant", "uniform")
 
 
 class FeatureStandardiser:
@@ -88,9 +94,20 @@ class ConditioningSource:
 
     name = "base"
     learnable = False
+    differentiable = False
 
     def __init__(self, feature_dim: int) -> None:
         self.feature_dim = feature_dim
+
+    def checkpoint_state(self) -> dict[str, torch.Tensor]:
+        """Mutable state needed to resume training (fixed parts are rebuilt from the seed)."""
+        return {}
+
+    def load_checkpoint_state(self, state: dict[str, torch.Tensor]) -> None:
+        if state:
+            raise ValueError(
+                f"Source {self.name!r} has no checkpoint state, got {sorted(state)}"
+            )
 
     def vector(self) -> torch.Tensor | None:
         """Current learnable parameter vector, or ``None``."""
@@ -143,6 +160,12 @@ class PhotonicSource(ConditioningSource):
         raw = self.feature_map.raw_feature(self.theta, self.shots, generator)
         return self.standardiser(raw).to(torch.float32)
 
+    def checkpoint_state(self) -> dict[str, torch.Tensor]:
+        return {"theta": self.theta.clone()}
+
+    def load_checkpoint_state(self, state: dict[str, torch.Tensor]) -> None:
+        self.theta = state["theta"].to(torch.float64).clone()
+
 
 class SurrogateSource(ConditioningSource):
     """Classical iso-parameter generator ``z = std(cos(G phi + b))`` (B5).
@@ -184,6 +207,12 @@ class SurrogateSource(ConditioningSource):
         raw = self.raw(self.projection, self.offset, self.phi)
         return self.standardiser(raw).to(torch.float32)
 
+    def checkpoint_state(self) -> dict[str, torch.Tensor]:
+        return {"phi": self.phi.clone()}
+
+    def load_checkpoint_state(self, state: dict[str, torch.Tensor]) -> None:
+        self.phi = state["phi"].to(torch.float64).clone()
+
 
 class RandomSource(ConditioningSource):
     """Gaussian ``z ~ N(0, gamma^2 I)``, fixed per run or redrawn per call (B3)."""
@@ -201,6 +230,12 @@ class RandomSource(ConditioningSource):
         if self.resample:
             return self.gamma * torch.randn(self.feature_dim, generator=generator)
         return self._fixed.clone()
+
+    def checkpoint_state(self) -> dict[str, torch.Tensor]:
+        return {"fixed": self._fixed.clone()}
+
+    def load_checkpoint_state(self, state: dict[str, torch.Tensor]) -> None:
+        self._fixed = state["fixed"].clone()
 
 
 class ClassicalHistogramSource(ConditioningSource):
@@ -249,6 +284,105 @@ class ZeroSource(ConditioningSource):
         return self.zero_feature()
 
 
+class NativePhotonicSource(torch.nn.Module, ConditioningSource):
+    """MerLin-native adaptation: exact photonic feature, angles trained by autograd.
+
+    The MerLin layer's beam-splitter angles are an ``nn.Parameter`` optimised
+    jointly with the student (Phase 4, arms N1/N2). The feature is the
+    infinite-shot ``[h1; h2]`` of the same circuit and threshold detection as
+    PQKD, standardised with fixed statistics. This is a simulation-only
+    capability: hardware would need parameter-shift gradients from samples.
+    """
+
+    name = "photonic_native"
+    differentiable = True
+
+    def __init__(
+        self,
+        feature_map: TimeBinFeatureMap,
+        initial_angles: torch.Tensor,
+        standardiser: FeatureStandardiser,
+    ) -> None:
+        torch.nn.Module.__init__(self)
+        ConditioningSource.__init__(self, feature_map.feature_dim)
+        self.feature_map = feature_map
+        self.layer = feature_map.layer
+        self.standardiser = standardiser
+        self.layer.requires_grad_(False)
+        with torch.no_grad():
+            feature_map.angles.copy_(initial_angles.to(feature_map.angles))
+        feature_map.angles.requires_grad_(True)
+
+    @property
+    def parameter_count(self) -> int:
+        return int(self.feature_map.angles.numel())
+
+    def vector(self) -> torch.Tensor:
+        return self.feature_map.angles.detach().clone()
+
+    def differentiable_feature(self) -> torch.Tensor:
+        raw = self.feature_map.differentiable_exact_feature()
+        return self.standardiser(raw).to(torch.float32)
+
+    def feature(self, generator: torch.Generator) -> torch.Tensor:
+        with torch.no_grad():
+            return self.differentiable_feature()
+
+    def checkpoint_state(self) -> dict[str, torch.Tensor]:
+        return {"angles": self.vector()}
+
+    def load_checkpoint_state(self, state: dict[str, torch.Tensor]) -> None:
+        with torch.no_grad():
+            self.feature_map.angles.copy_(state["angles"].to(self.feature_map.angles))
+
+
+class NativeSurrogateSource(torch.nn.Module, ConditioningSource):
+    """Classical counterpart of :class:`NativePhotonicSource` (Phase 4, arm N3).
+
+    ``z = standardise(cos(G phi + b))`` with ``dim(phi) = dim(theta)``, trained
+    by the same optimiser and learning rate; no shots, no photonics.
+    """
+
+    name = "surrogate_native"
+    differentiable = True
+
+    def __init__(
+        self,
+        projection: torch.Tensor,
+        offset: torch.Tensor,
+        initial_phi: torch.Tensor,
+        standardiser: FeatureStandardiser,
+    ) -> None:
+        torch.nn.Module.__init__(self)
+        ConditioningSource.__init__(self, projection.shape[0])
+        self.register_buffer("projection", projection)
+        self.register_buffer("offset", offset)
+        self.phi = torch.nn.Parameter(initial_phi.to(torch.float64).clone())
+        self.standardiser = standardiser
+
+    @property
+    def parameter_count(self) -> int:
+        return int(self.phi.numel())
+
+    def vector(self) -> torch.Tensor:
+        return self.phi.detach().clone()
+
+    def differentiable_feature(self) -> torch.Tensor:
+        raw = SurrogateSource.raw(self.projection, self.offset, self.phi)
+        return self.standardiser(raw).to(torch.float32)
+
+    def feature(self, generator: torch.Generator) -> torch.Tensor:
+        with torch.no_grad():
+            return self.differentiable_feature()
+
+    def checkpoint_state(self) -> dict[str, torch.Tensor]:
+        return {"phi": self.vector()}
+
+    def load_checkpoint_state(self, state: dict[str, torch.Tensor]) -> None:
+        with torch.no_grad():
+            self.phi.copy_(state["phi"].to(self.phi))
+
+
 def _required(section: dict[str, Any], key: str, where: str) -> Any:
     if key not in section:
         raise KeyError(f"Missing required config key {where}.{key}")
@@ -259,6 +393,24 @@ def _uniform(
     shape: tuple[int, ...], bound: float, generator: torch.Generator
 ) -> torch.Tensor:
     return (torch.rand(shape, generator=generator, dtype=torch.float64) * 2 - 1) * bound
+
+
+def _initial_vector(
+    conditioning: dict[str, Any], size: int, bound: float, generator: torch.Generator
+) -> torch.Tensor:
+    """Initial theta/phi: the paper's constant (``theta_init``) or ``U[-bound, bound]``."""
+    mode = _required(conditioning, "theta_init_mode", "conditioning")
+    if mode not in THETA_INIT_MODES:
+        raise ValueError(
+            f"theta_init_mode must be one of {THETA_INIT_MODES}, got {mode!r}"
+        )
+    if mode == "uniform":
+        return _uniform((size,), bound, generator)
+    return torch.full(
+        (size,),
+        float(_required(conditioning, "theta_init", "conditioning")),
+        dtype=torch.float64,
+    )
 
 
 def build_conditioning_source(
@@ -301,7 +453,7 @@ def build_conditioning_source(
         return ZeroSource(feature_dim)
     if source in ("random_fixed", "random_resampled"):
         return RandomSource(feature_dim, gamma, source == "random_resampled", generator)
-    if source == "surrogate":
+    if source in ("surrogate", "surrogate_native"):
         projection = torch.randn(
             feature_dim, theta_dim, generator=generator, dtype=torch.float64
         )
@@ -315,9 +467,9 @@ def build_conditioning_source(
             ]
         )
         standardiser = FeatureStandardiser.fit(reference, gamma, eps)
-        phi = torch.full(
-            (theta_dim,), float(_required(conditioning, "theta_init", "conditioning"))
-        )
+        phi = _initial_vector(conditioning, theta_dim, theta_max, generator)
+        if source == "surrogate_native":
+            return NativeSurrogateSource(projection, offset, phi, standardiser)
         return SurrogateSource(projection, offset, phi, standardiser)
 
     photonic = _required(cfg, "photonic", "cfg")
@@ -348,6 +500,25 @@ def build_conditioning_source(
             feature_map, click_probabilities, shots, standardiser
         )
 
+    if source == "photonic_native":
+        if theta_dim != feature_map.n_angles:
+            raise ValueError(
+                f"photonic_native trains every angle; theta_dim={theta_dim} must equal "
+                f"{feature_map.n_angles} (a multiple of n_modes - 1)"
+            )
+        # Exact (shots=None) reference features: the native feature has no shot noise.
+        reference = torch.stack(
+            [
+                feature_map.raw_feature(
+                    _uniform((theta_dim,), theta_max, generator), None, generator
+                )
+                for _ in range(n_reference)
+            ]
+        )
+        standardiser = FeatureStandardiser.fit(reference, gamma, eps)
+        angles = _initial_vector(conditioning, theta_dim, theta_max, generator)
+        return NativePhotonicSource(feature_map, angles, standardiser)
+
     reference = torch.stack(
         [
             feature_map.raw_feature(
@@ -357,9 +528,7 @@ def build_conditioning_source(
         ]
     )
     standardiser = FeatureStandardiser.fit(reference, gamma, eps)
-    theta = torch.full(
-        (theta_dim,), float(_required(conditioning, "theta_init", "conditioning"))
-    )
+    theta = _initial_vector(conditioning, theta_dim, theta_max, generator)
     return PhotonicSource(
         feature_map, theta, shots, standardiser, learnable=source == "photonic"
     )

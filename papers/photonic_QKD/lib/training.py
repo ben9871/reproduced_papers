@@ -11,14 +11,23 @@ The SPSA objective ``J`` is the KD loss on a fixed set of validation batches
 (the paper allows "negative validation accuracy or equivalently the validation
 distillation loss"). It is evaluated with an instantaneous feature at
 ``theta +- c * Delta``, not the EMA, so that ``J`` responds to ``theta``.
+
+MerLin-native sources (Phase 4 adaptation, ``source.differentiable``) skip
+SPSA: their exact feature is recomputed on every batch and its parameters are
+trained by Adam together with the student through autograd.
+
+Student training writes ``checkpoint.pt`` after every epoch so a stopped run
+can resume from its last completed epoch.
 """
 
 from __future__ import annotations
 
 import copy
 import logging
+import os
 import time
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any
 
 import torch
@@ -214,6 +223,18 @@ class StudentResult:
     feature_trace_used: list[torch.Tensor]
 
 
+def save_checkpoint(path: Path, state: dict[str, Any]) -> None:
+    """Atomically write a training checkpoint (temporary file, then rename)."""
+    temporary = path.with_suffix(path.suffix + ".tmp")
+    torch.save(state, temporary)
+    os.replace(temporary, path)
+
+
+def load_checkpoint(path: Path) -> dict[str, Any]:
+    """Load a checkpoint written by :func:`save_checkpoint`."""
+    return torch.load(path, map_location="cpu", weights_only=False)
+
+
 def train_student(
     model: ThreeBlockCNN,
     source: ConditioningSource | None,
@@ -223,6 +244,8 @@ def train_student(
     cfg: dict[str, Any],
     device: torch.device,
     generator: torch.Generator,
+    checkpoint_path: Path | None = None,
+    resume_state: dict[str, Any] | None = None,
 ) -> StudentResult:
     """Train a student by KD; alternate SPSA updates when the source is learnable.
 
@@ -246,6 +269,12 @@ def train_student(
         Device for the student.
     generator : torch.Generator
         Drives shot sampling, random features and SPSA directions.
+    checkpoint_path : pathlib.Path, optional
+        Where to write the per-epoch checkpoint. Default value is None (no
+        checkpointing).
+    resume_state : dict, optional
+        A checkpoint from :func:`load_checkpoint`; training continues after its
+        last completed epoch. Default value is None.
     """
     training_cfg = cfg["training"]
     spsa_cfg = cfg["spsa"]
@@ -256,7 +285,12 @@ def train_student(
     uses_feature = model.uses_feature
     if uses_feature and source is None:
         raise ValueError("Student has feature-mixed layers but no conditioning source")
+    differentiable = uses_feature and source is not None and source.differentiable
     ema_enabled = bool(ema_cfg["enabled"]) and uses_feature
+    if differentiable and ema_enabled:
+        raise ValueError(
+            "EMA is undefined for a differentiable exact feature; set conditioning.ema.enabled=false"
+        )
     ema_beta = float(ema_cfg["beta"])
     learnable = uses_feature and source is not None and source.learnable
     updates_per_epoch = int(spsa_cfg["updates_per_epoch"]) if learnable else 0
@@ -266,10 +300,20 @@ def train_student(
         float(spsa_cfg["theta_max"]),
         generator,
     )
-    optimizer = torch.optim.Adam(
-        [parameter for parameter in model.parameters() if parameter.requires_grad],
-        lr=float(training_cfg["lr"]),
-    )
+    parameter_groups = [
+        {
+            "params": [p for p in model.parameters() if p.requires_grad],
+            "lr": float(training_cfg["lr"]),
+        }
+    ]
+    if differentiable:
+        parameter_groups.append(
+            {
+                "params": list(source.parameters()),
+                "lr": float(cfg["conditioning"]["native_lr"]),
+            }
+        )
+    optimizer = torch.optim.Adam(parameter_groups)
 
     @torch.no_grad()
     def proxy_objective(feature: torch.Tensor | None) -> float:
@@ -301,15 +345,39 @@ def train_student(
     trace_raw: list[torch.Tensor] = []
     trace_used: list[torch.Tensor] = []
     feature_used: torch.Tensor | None = None
+    first_epoch = 1
+    if resume_state is not None:
+        model.load_state_dict(resume_state["model"])
+        optimizer.load_state_dict(resume_state["optimizer"])
+        if source is not None:
+            source.load_checkpoint_state(resume_state["source"])
+        feature_used = resume_state["feature_used"]
+        history = resume_state["history"]
+        trace_raw = resume_state["trace_raw"]
+        trace_used = resume_state["trace_used"]
+        generator.set_state(resume_state["rng"]["sampling"])
+        train_loader.generator.set_state(resume_state["rng"]["batch_order"])
+        torch.set_rng_state(resume_state["rng"]["torch"])
+        if feature_used is not None:
+            model.set_feature(feature_used.to(device))
+        first_epoch = int(resume_state["epoch"]) + 1
     logger.info(
-        "TRAINING_STARTED | model=student | epochs=%d | optimizer=adam | lr=%g | conditioning=%s | spsa_updates_per_epoch=%d | ema=%s",
+        "TRAINING_STARTED | model=student | epochs=%d | start_epoch=%d | optimizer=adam | lr=%g | conditioning=%s | spsa_updates_per_epoch=%d | ema=%s | differentiable_feature=%s",
         epochs,
+        first_epoch,
         training_cfg["lr"],
         source.name if (source is not None and uses_feature) else "none",
         updates_per_epoch,
         f"beta={ema_beta}" if ema_enabled else "off",
+        differentiable,
     )
-    for epoch in range(1, epochs + 1):
+    if resume_state is not None:
+        logger.info(
+            "TRAIN_RESUME_COMPLETED | restored_epochs=%d | next_epoch=%d",
+            first_epoch - 1,
+            first_epoch,
+        )
+    for epoch in range(first_epoch, epochs + 1):
         started = time.perf_counter()
         spsa_plus, spsa_minus = [], []
         for update in range(1, updates_per_epoch + 1):
@@ -327,7 +395,7 @@ def train_student(
                 objective_minus,
             )
 
-        if uses_feature:
+        if uses_feature and not differentiable:
             feature_raw = source.feature(generator)
             if ema_enabled and feature_used is not None:
                 feature_used = ema_beta * feature_used + (1.0 - ema_beta) * feature_raw
@@ -345,7 +413,13 @@ def train_student(
                 labels.to(device),
                 teacher_logits.to(device),
             )
-            logits = model(images)
+            if differentiable:
+                # Fresh exact feature per batch so gradients reach theta.
+                logits = model(
+                    images, feature=source.differentiable_feature().to(device)
+                )
+            else:
+                logits = model(images)
             loss = kd_loss(logits, teacher_logits, labels, temperature, hard_weight)
             optimizer.zero_grad(set_to_none=True)
             loss.backward()
@@ -354,9 +428,20 @@ def train_student(
             correct += (logits.argmax(dim=1) == labels).sum().item()
             total += labels.numel()
 
+        if differentiable:
+            with torch.no_grad():
+                feature_used = source.differentiable_feature().detach().float()
+            model.set_feature(feature_used.to(device))
+            trace_raw.append(feature_used.clone())
+            trace_used.append(feature_used.clone())
+
         validation = evaluate(model, val_loader, device)
         proxy = proxy_objective(None)
-        vector = source.vector() if (learnable and source is not None) else None
+        vector = (
+            source.vector()
+            if (source is not None and (learnable or differentiable))
+            else None
+        )
         record = {
             "epoch": epoch,
             "train_kd_loss": loss_sum / total,
@@ -387,4 +472,26 @@ def train_student(
             else "n/a",
             record["seconds"],
         )
+        if checkpoint_path is not None:
+            save_checkpoint(
+                checkpoint_path,
+                {
+                    "epoch": epoch,
+                    "model": model.state_dict(),
+                    "optimizer": optimizer.state_dict(),
+                    "source": source.checkpoint_state() if source is not None else {},
+                    "feature_used": feature_used,
+                    "history": history,
+                    "trace_raw": trace_raw,
+                    "trace_used": trace_used,
+                    "rng": {
+                        "sampling": generator.get_state(),
+                        "batch_order": train_loader.generator.get_state(),
+                        "torch": torch.get_rng_state(),
+                    },
+                },
+            )
+            logger.info(
+                "CHECKPOINT_WRITTEN | path=%s | epoch=%d", checkpoint_path.name, epoch
+            )
     return StudentResult(history, feature_used, trace_raw, trace_used)

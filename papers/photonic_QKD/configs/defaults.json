@@ -48,10 +48,12 @@
     "feature_dim": 512,
     "theta_dim": 45,
     "theta_init": 0.0,
+    "theta_init_mode": "constant",
     "shots": 200,
     "gamma": 1.0,
     "std_eps": 0.001,
     "reference_evaluations": 32,
+    "native_lr": 0.001,
     "ema": {
       "enabled": true,
       "beta": 0.9
@@ -95,5 +97,6 @@
   "logging": {
     "level": "info",
     "save_feature_trace": true
-  }
+  },
+  "resume_from": null
 }

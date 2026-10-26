@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 import logging
+import signal
 from pathlib import Path
 from typing import Any
 
@@ -41,9 +42,62 @@ from .models import (
     iso_parameter_widths,
     trainable_parameter_count,
 )
-from .training import evaluate, teacher_logits_for, train_student, train_teacher
+from .training import (
+    evaluate,
+    load_checkpoint,
+    teacher_logits_for,
+    train_student,
+    train_teacher,
+)
 
 logger = logging.getLogger(__name__)
+
+CHECKPOINT_NAME = "checkpoint.pt"
+# Keys that identify a run rather than the experiment; they may differ between
+# a stopped run and its resumption.
+RUN_IDENTITY_KEYS = ("outdir", "sweep", "resume_from", "data_root", "logging")
+
+
+class StopRequestedError(Exception):
+    """Raised by the SIGTERM handler so a stopped run ends as FAILED with its checkpoint kept."""
+
+
+def _raise_stop(signal_number: int, _frame: Any) -> None:
+    raise StopRequestedError(
+        f"stopped by signal {signal_number}; resume with --resume-from"
+    )
+
+
+def _experiment_fingerprint(cfg: dict[str, Any]) -> str:
+    experiment = {
+        key: value for key, value in cfg.items() if key not in RUN_IDENTITY_KEYS
+    }
+    return json.dumps(experiment, sort_keys=True, default=_json_default)
+
+
+def _load_resume_state(previous_run: Path, run_dir: Path) -> dict[str, Any]:
+    """Load the checkpoint of a stopped run after checking it is the same experiment.
+
+    Both runs' ``config_snapshot.json`` files (written the same way by the
+    runtime) must agree on everything except :data:`RUN_IDENTITY_KEYS`.
+    """
+    checkpoint_path = previous_run / CHECKPOINT_NAME
+    if not checkpoint_path.is_file():
+        raise FileNotFoundError(
+            f"No {CHECKPOINT_NAME} in {previous_run}; nothing to resume"
+        )
+    previous_cfg = json.loads((previous_run / "config_snapshot.json").read_text())
+    current_cfg = json.loads((run_dir / "config_snapshot.json").read_text())
+    if _experiment_fingerprint(previous_cfg) != _experiment_fingerprint(current_cfg):
+        raise ValueError(
+            f"{previous_run} was a different experiment configuration; refusing to resume"
+        )
+    state = load_checkpoint(checkpoint_path)
+    logger.info(
+        "RESUMED_FROM | run=%s | completed_epochs=%d", previous_run, state["epoch"]
+    )
+    return state
+
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 STATUS_SCHEMA_VERSION = 1
@@ -267,6 +321,9 @@ def _student_task(
     generator = _sampling_generator(int(cfg["seed"]))
     source = build_conditioning_source(cfg, generator) if model.uses_feature else None
 
+    resume_state = None
+    if cfg.get("resume_from"):
+        resume_state = _load_resume_state(Path(cfg["resume_from"]), run_dir)
     result = train_student(
         model,
         source,
@@ -276,6 +333,8 @@ def _student_task(
         cfg,
         device,
         generator,
+        checkpoint_path=run_dir / CHECKPOINT_NAME,
+        resume_state=resume_state,
     )
 
     logger.info(
@@ -414,6 +473,7 @@ def _candidate(cfg: dict[str, Any]) -> dict[str, Any]:
                 "theta_dim": cfg["conditioning"]["theta_dim"],
                 "shots": cfg["conditioning"]["shots"],
                 "ema": cfg["conditioning"]["ema"]["enabled"],
+                "theta_init_mode": cfg["conditioning"]["theta_init_mode"],
             }
         )
     return candidate
@@ -473,10 +533,14 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
         "metrics_path": "metrics.json",
         "metrics_sha256": None,
         "error": None,
+        "resumed_from": cfg.get("resume_from"),
     }
     status_path = run_dir / "run_status.json"
     write_json(status_path, status)
     logger.info("RUN_STARTED | run_id=%s | task=%s | seed=%d", run_id, task, seed)
+    # A SIGTERM (utils/stop_sweep.py, or the sweep coordinator stopping) ends
+    # the run as FAILED with a traceback; the last epoch checkpoint survives.
+    previous_handler = signal.signal(signal.SIGTERM, _raise_stop)
     try:
         if task not in ("teacher", "student"):
             raise ValueError(f"Unknown task {task!r}; expected 'teacher' or 'student'")
@@ -530,3 +594,5 @@ def train_and_evaluate(cfg: dict[str, Any], run_dir: Path) -> None:
         write_json(status_path, status)
         logger.exception("RUN_FAILED | run_id=%s", run_id)
         raise
+    finally:
+        signal.signal(signal.SIGTERM, previous_handler)
