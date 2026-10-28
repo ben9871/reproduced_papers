@@ -260,6 +260,14 @@ Comparison statuses:
 - **INCOMPARABLE:** B0 (degenerate).
 - **COMMENSURABLE:** everything else.
 
+Evidence labels for the Phase 4 arms:
+- **Advantage evidence:**
+  - N1/N2, because the fair baselines ran under the same conditions: N3 in the same sweep, and photon-free B1/B3f.
+  - P0 against B1/B3f.
+- **Characterization only:**
+  - F1–F4, because no classical baseline ran at S = 25 or in the no-EMA mixing regime.
+  - P0 against the 8-photon PQKD (photon number).
+
 The MerLin arms are a simulated adaptation, not hardware evidence. No quantum or photonic advantage is claimed.
 
 Not yet run: Fashion-MNIST/CIFAR-10 (Table 1), Table 2 / Fig. 2 compression scaling, the full Fig. 4 shot sweep and the robustness study. Fashion-MNIST, where the paper reports PQKD 0.56 pp above the teacher, is the most informative next test of claim A.
