@@ -34,7 +34,7 @@ Main claims:
 
 ## Reproduction Scope (including Updates and Deviations)
 
-Planned evidence (details in the git-ignored `LOG.md`; nothing has been run beyond smoke tests yet):
+Evidence (details in the git-ignored `LOG.md`; results below):
 
 - **Table 1 (MNIST first):** teacher (64,128,128) and PQKD (conv1+conv2 compressed, R=4, dim θ=45). Fashion-MNIST and CIFAR-10 follow.
 - **Fair baselines** at the same teacher, data and budget. Selected with `student.variant` / `conditioning.source`:
@@ -49,7 +49,8 @@ Planned evidence (details in the git-ignored `LOG.md`; nothing has been run beyo
   | B5 | `surrogate` | classical iso-parameter generator with the same SPSA |
   | B6 | `classical_histogram` | independent-mode clicks through the same Φ and S |
 
-- **Shot sweep with and without EMA** (Fig. 4), then the Table 2 operating points.
+- **Phase 4 MerLin adaptation** at 4 photons: θ in a mixing regime with S ∈ {200, 25}, EMA on/off (Fig. 4 claims), and MerLin-native exact-gradient arms with a classical counterpart.
+- Not yet: the full Fig. 4 shot sweep and the Table 2 operating points.
 
 Updates and deviations:
 
@@ -86,6 +87,14 @@ python implementation.py --paper photonic_QKD --config configs/pqkd_original.jso
 python implementation.py --paper photonic_QKD --config configs/baseline_surrogate_classical.json --teacher-path <teacher run dir> --seed 0
 ```
 
+Sweeps (seeded candidate × seed grids, one coordinator; each student run checkpoints every epoch):
+
+```bash
+python papers/photonic_QKD/utils/run_sweep.py papers/photonic_QKD/sweeps/S6_mnist_photonic_regimes_4ph.json
+python papers/photonic_QKD/utils/stop_sweep.py --latest                       # graceful stop, checkpoints kept
+python papers/photonic_QKD/utils/run_sweep.py --resume <stopped sweep dir>    # completion sweep <id>_resumeN
+```
+
 The same commands work from inside `papers/photonic_QKD` with `python ../../implementation.py --config configs/<name>.json ...`.
 
 Each run writes `outdir/run_YYYYMMDD-HHMMSS/` with:
@@ -105,6 +114,10 @@ Each run writes `outdir/run_YYYYMMDD-HHMMSS/` with:
 | `teacher_original.json` | teacher, 100 epochs |
 | `pqkd_merlin.json` / `pqkd_original.json` | PQKD student, 30 / 100 epochs |
 | `baseline_*_{classical,merlin}.json` | baselines B0–B6 |
+| `pqkd_4ph_merlin.json` | Phase 4 P0: PQKD at 4 photons |
+| `photonic_mixing_s{200,25}_{ema,noema}_4ph_merlin.json` | Phase 4 F1–F4 |
+| `native_exact_grad_{random,zero}_4ph_merlin.json`, `native_surrogate_grad_4ph_classical.json` | Phase 4 N1–N3 |
+| `*_merlin.json` without `4ph` (mixing / native) | the same arms at 8 photons (GPU-scale; not run to completion) |
 | `smoke_*.json` | tiny infrastructure runs |
 
 Student configs contain `teacher.checkpoint: "<<RESULT_PATH>>"`. Pass `--teacher-path`; the runtime refuses to start until it is resolved.
@@ -157,13 +170,76 @@ Findings:
 - **Accuracy follows how stable z is across epochs, not where it comes from** (Spearman ρ = −0.90 over 18 runs; see `results/s4_feature_stability.png`).
 - **In these runs the photonic z is almost constant.** The paper's initial θ = 0 makes every beam splitter the identity, and the SPSA step chosen by our predeclared grid moves θ only slightly. So shot noise is practically absent here. The paper's shot-noise and EMA claims (Fig. 4) need θ in a mixing regime and are being tested separately.
 
-Not yet run: Fashion-MNIST/CIFAR-10 (Table 1), Table 2 / Fig. 2 compression scaling, the Fig. 4 shot sweep and the robustness study.
+### Phase 4: MerLin adaptation at 4 photons (simulation first)
+
+Photonic translation status: **`MERLIN_IMPLEMENTATION`**. The paper is already photonic, so swapping the backend to MerLin (above) is only a simulator substitution. Phase 4 asks two further questions on the same circuit family:
+- **F arms (paper-faithful, mixing regime):** θ starts at U[−π, π], so the sampler is genuinely stochastic. θ is trained by SPSA with shots S ∈ {200, 25), with and without EMA. This exercises the paper's shot-noise and EMA claims (Fig. 4), which the θ = 0 regime cannot.
+- **N arms (MerLin-native):** z comes from MerLin's *exact* output distribution, and θ is an `nn.Parameter` trained by autograd jointly with the student on every batch. This is not possible on hardware.
+  - N1 starts from random θ and N2 from θ = 0.
+  - N3 is the classical counterpart: a 45-parameter cos(Gφ + b) generator trained the same way.
+
+All arms run at **4 photons** ([1,0,0,0]×4 in 16 modes, 3,876 Fock states). 8 photons (490,314 states) was too slow and memory-heavy for the CPU laptop, a user decision recorded in `LOG.md`. The paper does not state its photon number. P0 is the paper-faithful PQKD rerun at 4 photons, as the same-photon-number reference.
+
+Source: `results/s6_mnist_4ph_complete.{md,json}` and `results/s6_mnist_4ph_test_accuracy.png`, from `utils/analyze_s6.py` / `utils/plot_s6.py`. They merge the validated sweep `S6_mnist_photonic_regimes_4ph` with its resume sweeps 1–3 (user-requested stop/resume from per-epoch checkpoints); 24/24 runs. Reduced-scope validation: MNIST, 30 epochs, 3 seeds.
+
+![S6 test accuracy](results/s6_mnist_4ph_test_accuracy.png)
+
+| Arm | Test acc % (trained z) | Test acc % (one fresh z) | Δ test vs P0 (paired, pp) |
+|---|---|---|---|
+| P0: PQKD, θ₀ = 0, S = 200, EMA | 99.19 ± 0.09 | 99.20 ± 0.08 | — |
+| F1: mixing θ, S = 200, EMA | 98.78 ± 0.49 | 44.9 ± 47.1 | −0.41 ± 0.56 |
+| F2: mixing θ, S = 200, no EMA | 97.80 ± 2.19 | 97.4 ± 3.0 | −1.40 ± 2.24 |
+| F3: mixing θ, S = 25, EMA | 98.58 ± 0.63 | 12.5 ± 2.9 | −0.61 ± 0.54 (3/3 seeds lower) |
+| F4: mixing θ, S = 25, no EMA | 95.26 ± 1.60 | 47.9 ± 42.7 | −3.93 ± 1.53 (3/3 seeds lower) |
+| N1: exact z, autograd θ, θ₀ random | 99.15 ± 0.08 | 99.15 ± 0.08 | −0.04 ± 0.04 |
+| N2: exact z, autograd θ, θ₀ = 0 | 99.15 ± 0.08 | 99.15 ± 0.08 | −0.04 ± 0.08 |
+| N3: classical surrogate, autograd φ | 99.10 ± 0.02 | 99.10 ± 0.02 | −0.09 ± 0.11 |
+
+Key paired comparisons (predeclared rule: an arm differs only if |mean paired Δ| > its s.d. over seeds):
+
+| Comparison | Δ test acc (pp) | Differs? |
+|---|---|---|
+| N1 − N3 (photonic vs classical, both gradient-trained, 45 params) | +0.05 ± 0.10 | no |
+| N1 − S4 B3f (fixed random z) | −0.02 ± 0.07 | no |
+| N1 − S4 B1 (dense KD, same trainable budget) | −0.13 ± 0.09 | yes, lower on 3/3 seeds |
+| P0 − S4 PQKD at 8 photons | +0.06 ± 0.08 | no |
+| F3 − F4 (EMA at S = 25) | +3.32 ± 1.15 | yes, higher on 3/3 seeds |
+| F1 − F2 (EMA at S = 200) | +0.98 ± 2.31 | no |
+
+Findings:
+- **The photonic module still adds nothing measurable** (claim C9). Even with exact probabilities and true gradients, the photonic z matches a classical 45-parameter generator and a fixed random vector. It stays below the dense KD student.
+- **Shot noise and EMA behave as the paper says, but only as costs.** In the mixing regime, fewer shots lower accuracy, and EMA recovers most of the loss at S = 25. No F arm beats P0, which never leaves the near-identity regime where z is almost deterministic.
+- **EMA-trained students depend on their exact smoothed z.** With one fresh unsmoothed draw, F1 and F3 drop to chance on most seeds (F3 on all 3). The trained model cannot be deployed on new hardware samples without the same smoothing history.
+- **θ = 0 is a stationary point of the exact gradient:** N2's angles stay exactly at 0 (‖θ‖ = 0.00 on every seed). The paper's initialisation therefore never moves under gradient training either.
+- **Changing from 8 to 4 photons changes nothing for PQKD** (P0 vs S4 PQKD).
+
+Hardware-aware reporting (every S6 arm):
+
+| Field | Value |
+|---|---|
+| Computation space | `ComputationSpace.FOCK` (full Fock space; UNBUNCHED would post-select away bunched outcomes) |
+| Detector model | ideal threshold detectors, applied in post-processing as clicks = 1[n > 0] |
+| Photon number / modes | 4 photons, 16 modes |
+| Input state | [1,0,0,0]×4 (one photon every 4 modes, 2 per 8-mode half) |
+| Encoding | none: data never enters the circuit; θ (45 beam-splitter angles, 3 tilings × 15) is the only circuit parameter |
+| Measurement strategy | `MeasurementStrategy.probs(ComputationSpace.FOCK)`, then two 256-bin marginal click histograms (d = 512) |
+| Postselection | none |
+| Simulator or QPU | MerLin CPU simulator, float64, lossless and perfectly indistinguishable photons; **no hardware** |
+| Shots | P0/F1/F2: 200 per feature evaluation; F3/F4: 25; N1/N2: exact (no sampling); N3: no photonics |
+| Gradients | P0/F: SPSA on sampled outcomes (hardware-compatible); N1/N2: exact autograd through MerLin probabilities (simulation-only; hardware would need parameter-shift estimates) |
+| Wall-clock | 1.5–1.8 h per 30-epoch run (3 runs in parallel × 4 CPU threads, laptop); native feature forward + backward 5.9 ms per batch at 4 photons (163–185 ms at 8 photons) |
+| Seeds | 0, 1, 2 (same S1 teachers and data split as Phase 3) |
+
+Scaling: the Fock space grows as C(m + n − 1, n), so the exact N arms are tractable here only because the circuit is small. 8 photons needs a GPU.
+
+Not yet run: Fashion-MNIST/CIFAR-10 (Table 1), Table 2 / Fig. 2 compression scaling, the full Fig. 4 shot sweep and the robustness study.
 
 ## Limitations
 
 - **CPU-only:** reduced epochs and seeds until a GPU machine is available.
 - **Unreported settings:** SPSA step sizes, shot budget, input photon pattern and the Fig. 4 configuration are not in the paper; the assumed values are listed above.
-- **Simulation only:** no ORCA hardware was used.
+- **Simulation only:** no ORCA hardware was used. The N arms' exact gradients are not available on hardware.
+- **Phase 4 at 4 photons:** chosen for CPU memory and time. The paper's photon number is not stated; 8-photon configs exist but need a GPU.
 
 ## Tests
 
@@ -172,7 +248,15 @@ cd papers/photonic_QKD
 python -m pytest -q
 ```
 
-The 46 tests cover the paper's parameter counts and compression factors, the dictionary kernel (Eqs. 6–7), photonic circuit ordering and threshold detection, the feature map, the KD loss, SPSA, every conditioning source, and end-to-end teacher → student runs on the synthetic dataset.
+The 65 tests cover:
+- the paper's parameter counts and compression factors;
+- the dictionary kernel (Eqs. 6–7);
+- photonic circuit ordering and threshold detection, and the feature map;
+- the KD loss and SPSA;
+- every conditioning source, including gradient flow through the MerLin-native sources;
+- per-epoch checkpoints: a stopped and resumed run reproduces an uninterrupted one exactly;
+- sweep resume;
+- end-to-end teacher → student runs on the synthetic dataset.
 
 ## Citation and License
 
