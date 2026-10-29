@@ -86,7 +86,7 @@ Training alternates SPSA updates of θ with Adam epochs on the student. The SPSA
 
 ```text
 papers/photonic_QKD/
-├── README.md, requirements.txt, cli.json, notebook.ipynb (stub; Phase 7)
+├── README.md, requirements.txt, cli.json, notebook.ipynb (executed walkthrough, about 4 min on CPU)
 ├── configs/   defaults.json + teacher / PQKD / baseline / Phase 4 / smoke configs
 ├── lib/       data.py, models.py (dictionary conv, CNNs), photonic.py (MerLin circuit + feature map),
 │              conditioning.py (all z sources), training.py (KD, SPSA, checkpoints), runner.py
@@ -95,7 +95,7 @@ papers/photonic_QKD/
 │              compare_phase5.py, feature_stability.py, export_sweep_summary.py, plot_*.py
 ├── results/   curated tables (.md/.json) and figures referenced below
 ├── tests/     65 tests
-└── models/    empty (.gitkeep); trained weights stay in outdir/
+└── models/    teacher_mnist_s1_seed0/teacher.pt (S1 seed-0 teacher, 0.9 MB; used by the notebook's live run); other weights stay in outdir/
 ```
 
 `outdir/` holds raw runs and is git-ignored. `LOG.md`, `FEEDBACK.md` and `VISITED_URLS.md` are git-ignored working notes.
