@@ -220,6 +220,22 @@ claim a QNN advantage, and none is observed.
 
 Translation status `PARTIAL_MERLIN_TRANSLATION`: the mechanism question (input
 scaling vs initialization) is translated; the Qiskit circuit grid is not.
+Excluded, with reasons:
+- Ansatz family and entanglement (C4, C5): a trainable MZI mesh is already
+  universal on its modes, so the qubit ansatz families collapse to one mesh.
+- Optimizer comparison (C2): the photonic model trains with exact-gradient Adam.
+- LDA vs PCA (C7): a dataset-specific qubit-count question.
+- FakePerth noise (C9): an IBM superconducting noise model.
+
+Photon number and re-uploading depth take the place of the architecture factors.
+
+Rejected mappings:
+- Gate-level dual-rail transpilation: needs postselected two-qubit gates and
+  keeps the syntax, not the role.
+- A qubit-mimicking phase-encoding classifier: replaced, before any run, by
+  the photonic-native design (`LOG.md`, amendment of 2026-10-28).
+- A kernel or reservoir model: it has no trainable ansatz, so the init question
+  disappears.
 Model: `2d` modes for `d` features, `n` in {2, 4} photons, data reuploading
 (trainable MZI mesh, then `depth` x [phase `pi * x_i` on mode `2i`, trainable
 mesh]), per-mode photon expectations under threshold detection
@@ -234,11 +250,47 @@ loss).
 | 4 vs 2 photons, depth 2 vs 1 | within +-0.02, not significant | within +-0.02, not significant |
 
 The predeclared preservation rule is met: the photonic classifier shows the
-same mechanism as the qubit model. MinMax accuracy is 0.90-0.92 (Rice) and
+same mechanism as the qubit model. Cite the significance pattern, not the exact
+effect sizes. A rerun of the same configs and seeds on the same GPU kept every
+verdict but moved individual effects by up to 0.03. CUDA arithmetic is not
+deterministic, and small differences grow during training (see "Reproducibility
+of the committed results" below). MinMax accuracy is 0.90-0.92 (Rice) and
 0.60-0.61 (Glass), above the qubit E-B cells (0.81-0.82, 0.43-0.45) and at the
 level of the classical baselines; this is not a matched comparison (different
 optimizer, parameter count and readout head) and is left to Phase 5.
-Hardware-aware fields and per-run timing are in `LOG.md`.
+Hardware-aware fields (from each run's `metrics.json["hardware"]`):
+
+| Field | Value |
+|---|---|
+| Computation space, detector | `UNBUNCHED`, threshold |
+| Photons, modes, input state | 2 or 4 photons spread over 14 (Rice) or 10 (Glass) modes, e.g. Rice 4 photons `[1,0,0,1,0,0,0,1,0,0,1,0,0,0]` |
+| Encoding | phase `pi * x_i` on mode `2i`, re-uploaded 1 or 2 times between trainable MZI meshes |
+| Measurement, postselection | per-mode photon expectations into a linear head; no postselection |
+| Simulator, shots | MerLin 0.4.1 analytic simulator on an NVIDIA L4; exact expectations, no shots, no loss |
+| Gradients | exact autograd (Adam); not hardware-realizable as is |
+| Seeds, wall-clock | seeds 1-3; 38-131 s training per run (8 runs sharing the GPU), 25 min for all 144 runs |
+
+These are simulator results, not hardware validation. Per-configuration timing
+and parameter counts are in `LOG.md` ("Phase 4 Hardware-Aware Report").
+
+### Reproducibility of the committed results
+
+The sweeps behind every table were first run from an uncommitted working tree,
+so their run records carry commit `e7beb6a` (dirty). To tie the results to code,
+each sweep was rerun on the same machine from a clean checkout of `861a180`,
+the commit that contains them, with identical configs and seeds:
+
+| Sweep | Rerun outcome |
+|---|---|
+| E-B, E-C, E-C2, E-F | Tables identical |
+| E-D (noisy) | Same verdicts; agreement within 0.015 of the committed table |
+| E-P (photonic, GPU) | Same verdicts; individual effects moved by up to 0.03 (predeclared tolerance 0.01 not met) |
+| E-D2 (noisy) | Not rerun: stopped at 7/48 runs by decision. It combines the E-C2 preprocessing with the E-D noise path, and both were rerun successfully |
+
+The noisy runs (E-D, E-D2) use an unseeded Aer sampler, so the same code and
+seeds move a single configuration's accuracy by up to about 0.1 between runs.
+Aggregate agreement is stable. `utils/recompute_check.py` rebuilds every table
+from the raw run metrics and matches to 6.7e-16.
 
 ## Limitations
 
@@ -249,8 +301,13 @@ Hardware-aware fields and per-run timing are in `LOG.md`.
   noiseless Rice grid, within single-configuration run-to-run spread.
 - Glass has 43 validation rows, so its effects have wide intervals (about
   +-0.06 for init effects).
-- All runs record commit `e7beb6a` with uncommitted paper code; the exact code
-  state per sweep is reconstructed from `LOG.md` and each run's config snapshot.
+- The committed results come from runs that record commit `e7beb6a` with
+  uncommitted paper code, so the exact code state of those runs cannot be
+  identified. Clean-commit reruns at `861a180` reproduce E-B, E-C, E-C2, E-D
+  and E-F under the predeclared rules. E-P keeps its verdicts but not its
+  effect sizes within 0.01. E-D2 was not rerun.
+- E-D and E-D2 build the noisy Aer sampler without a seed (`lib/qnn.py`), so
+  noisy runs are not bit-reproducible.
 - Photonic results are simulator-only (no QPU, no photon loss, exact
   expectations).
 
