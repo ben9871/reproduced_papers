@@ -464,6 +464,11 @@ and parameter counts are in `LOG.md` ("Phase 4 Hardware-Aware Report").
   - E-P keeps its verdicts, but not its effect sizes within 0.01.
   - E-D2 was not rerun.
   - The user accepted this as a documented limitation.
+- **Split identity:** the author made the splits with scikit-learn 1.2.2; we
+  did not verify, row by row, that scikit-learn 1.9.1 selects the same rows
+  (the released results carry no row identifiers). Indirect evidence that it
+  does: the raw-input arm matches the released runs within ±0.002, and the
+  per-circuit agreement is at the level of the authors' own replicates.
 - **Unseeded noise:** E-D and E-D2 build the noisy Aer sampler without a seed
   (`lib/qnn.py`), so noisy runs are not bit-reproducible.
 - **Equal-cost optimizers:** not compared; budgets follow the author code.
