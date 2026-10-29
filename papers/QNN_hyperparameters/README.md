@@ -113,6 +113,8 @@ python papers/QNN_hyperparameters/utils/analyze_sweeps.py baselines papers/QNN_h
 python papers/QNN_hyperparameters/utils/analyze_sweeps.py photonic papers/QNN_hyperparameters/outdir/sweeps/E-P_photonic_mechanism
 python papers/QNN_hyperparameters/utils/plot_grid_agreement.py <sweep_dir>... --labels <label>... --init beta --name <figure>
 python papers/QNN_hyperparameters/utils/recompute_check.py --released <E-A run>/released_results_tidy.csv
+python papers/QNN_hyperparameters/utils/compare_systems.py papers/QNN_hyperparameters/outdir/sweeps  # Phase 5 tables
+python papers/QNN_hyperparameters/utils/plot_phase5_comparison.py papers/QNN_hyperparameters/results/phase5_systems.csv
 ```
 
 Each run writes `outdir/run_YYYYMMDD-HHMMSS/` (`config_snapshot.json`,
@@ -272,6 +274,56 @@ Hardware-aware fields (from each run's `metrics.json["hardware"]`):
 
 These are simulator results, not hardware validation. Per-configuration timing
 and parameter counts are in `LOG.md` ("Phase 4 Hardware-Aware Report").
+
+### Fair comparison (Phase 5)
+
+![Phase 5 comparison](results/phase5_comparison.png)
+
+The paper claims no quantum advantage. Its claims compare choices inside a QNN,
+so the fair controls are internal:
+- **C1 (beta initialization):** the paper's control is confounded, because the
+  beta arm alone gets MinMax-scaled inputs and no initialization is applied.
+  E-B is the fair control.
+- **C2 (optimizers):** compared on identical configurations, but at unequal
+  budgets.
+
+For context, the classical baselines (E-F) and the photonic adaptation (E-P)
+run on the same rows and features as the qubit QNN. Protocol, frozen before the
+table: in each family, select the configuration with the best seed-mean
+validation accuracy and report its test accuracy. Two systems count as
+separated only if their means differ by more than one test sample and by more
+than twice the larger seed sd.
+
+| Test accuracy, MinMax | Qubit QNN (E-B) | Classical (E-F) | Photonic MerLin (E-P, adaptation) |
+|---|---|---|---|
+| Rice, selected | 0.876 ± 0.004 (28 params) | 0.901 ± 0.005 (RBF-SVM) | 0.885 ± 0.006 (576 params) |
+| Rice, parameter-matched | 0.876 ± 0.004 (28) | 0.908 ± 0.004 (MLP, 28) | not matched |
+| Glass, selected | 0.473 ± 0.067 (20 params) | 0.567 ± 0.012 (RBF-SVM) | 0.589 ± 0.036 (246 params) |
+
+**Rice:**
+- The 28-parameter MLP beats the 28-parameter QNN by 0.032 (separated).
+- The selected classical model is separated above both quantum systems.
+- The photonic model and the QNN are not separated.
+
+**Glass:** no pair is separated. The test set has 43 rows, and the QNN seed sd
+is 0.067.
+
+**Timing:** on identical configurations, COBYLA trains 2x faster than SPSA
+(Wilcoxon p = 1.7e-13). It stops on its tolerance after 138-163 loss
+evaluations, against SPSA's fixed 351, which supports the paper's speed claim
+at its budgets.
+
+**Claim outcomes:**
+- C1 as stated: unsupported.
+- C3: partially supported (equivalence holds; the range that matters is the
+  input range).
+- C2: partially supported (equal-cost comparison not run).
+- C7: partially supported.
+- No quantum or photonic advantage is observed or claimed. The photonic model
+  has about 10x the QNN's parameters and trains with exact gradients, so its
+  comparison is only partially commensurable.
+
+Tables: `results/phase5_*.csv`, from `utils/compare_systems.py`.
 
 ### Reproducibility of the committed results
 
