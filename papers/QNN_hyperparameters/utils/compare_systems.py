@@ -33,6 +33,7 @@ from QNN_hyperparameters.lib.sweep_analysis import load_sweep  # noqa: E402
 
 RESULTS_DIR = PROJECT_DIR / "results"
 PCA_SIGNS_BEFORE_OPTION = "installed"
+FLOAT_TOLERANCE = 1e-12
 
 # Dataset label per family; E-F names its datasets "<data>-<features>".
 DATASETS = {"rice": "rice-pca", "glass": "glass-lda"}
@@ -280,6 +281,85 @@ def matched_capacity(
     return pd.DataFrame(rows)
 
 
+def selection_sensitivity(
+    families: dict[str, pd.DataFrame], identity: dict
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Candidates within one validation sample of each family's best, and how the separations move.
+
+    The frozen protocol has no selection tie rule (amendment of 2026-10-29,
+    LOG.md). One validation sample (1/n_val) is the smallest accuracy
+    difference the validation split can resolve, so every candidate within it
+    of the best is treated as near-tied, and each family pair is re-scored
+    with the frozen separation rule for every near-tied combination.
+    """
+
+    near_tied_rows, sensitivity_rows = [], []
+    for data in DATASETS:
+        sizes = json.loads(identity[f"{data}/minmax"][1])
+        one_val_sample, one_test_sample = 1.0 / sizes["val"], 1.0 / sizes["test"]
+        candidates = {}
+        for name, frame in families.items():
+            spec = FAMILIES[name]
+            subset = frame[
+                (frame["data"] == spec["data_column_value"](data))
+                & (frame["scaling"] == "minmax")
+            ]
+            ranking = select_by_validation(subset, spec["config_columns"])
+            best = ranking["val_mean"].iloc[0]
+            near = ranking[
+                ranking["val_mean"] >= best - one_val_sample - FLOAT_TOLERANCE
+            ]
+            candidates[name] = near
+            for row in near.itertuples():
+                near_tied_rows.append(
+                    {
+                        "data": data,
+                        "system": name,
+                        "configuration": ", ".join(
+                            f"{column}={getattr(row, column)}"
+                            for column in spec["config_columns"]
+                        ),
+                        "val_mean": row.val_mean,
+                        "val_gap_to_best": best - row.val_mean,
+                        # Seed means of identical accuracies can differ by float rounding.
+                        "exact_tie_with_best": bool(
+                            abs(best - row.val_mean) < FLOAT_TOLERANCE
+                        ),
+                        "test_mean": row.test_mean,
+                        "test_sd": row.test_sd,
+                    }
+                )
+        names = list(candidates)
+        for index, first in enumerate(names):
+            for second in names[index + 1 :]:
+                outcomes = []
+                for a in candidates[first].itertuples():
+                    for b in candidates[second].itertuples():
+                        difference = a.test_mean - b.test_mean
+                        threshold = max(
+                            one_test_sample, 2.0 * max(a.test_sd, b.test_sd)
+                        )
+                        outcomes.append(
+                            (abs(difference) > threshold, np.sign(difference))
+                        )
+                sensitivity_rows.append(
+                    {
+                        "data": data,
+                        "system_a": first,
+                        "system_b": second,
+                        "combinations": len(outcomes),
+                        "separated_a_higher": sum(
+                            sep and sign > 0 for sep, sign in outcomes
+                        ),
+                        "separated_b_higher": sum(
+                            sep and sign < 0 for sep, sign in outcomes
+                        ),
+                        "not_separated": sum(not sep for sep, _ in outcomes),
+                    }
+                )
+    return pd.DataFrame(near_tied_rows), pd.DataFrame(sensitivity_rows)
+
+
 def optimizer_timing(qubit: pd.DataFrame) -> pd.DataFrame:
     """C2 timing: COBYLA vs SPSA paired over identical E-B configurations and seeds."""
 
@@ -324,6 +404,7 @@ def main() -> None:
     matched = matched_capacity(
         families["qubit QNN (E-B)"], families["classical (E-F)"], test_sizes
     )
+    near_tied, sensitivity = selection_sensitivity(families, identity)
 
     RESULTS_DIR.mkdir(exist_ok=True)
     outputs = {
@@ -331,11 +412,15 @@ def main() -> None:
         "separation": RESULTS_DIR / "phase5_separation.csv",
         "matched_capacity": RESULTS_DIR / "phase5_matched_capacity.csv",
         "optimizer_timing": RESULTS_DIR / "phase5_optimizer_timing.csv",
+        "near_tied_selection": RESULTS_DIR / "phase5_near_tied_selection.csv",
+        "separation_sensitivity": RESULTS_DIR / "phase5_separation_sensitivity.csv",
     }
     table.to_csv(outputs["systems"], index=False)
     separation.to_csv(outputs["separation"], index=False)
     matched.to_csv(outputs["matched_capacity"], index=False)
     timing.to_csv(outputs["optimizer_timing"], index=False)
+    near_tied.to_csv(outputs["near_tied_selection"], index=False)
+    sensitivity.to_csv(outputs["separation_sensitivity"], index=False)
     summary = {
         "protocol": "LOG.md, Phase 5 Comparison Plan (2026-10-29T11:30Z)",
         "data_identity": identity,
@@ -350,6 +435,8 @@ def main() -> None:
         print(separation.to_string(index=False))
         print(matched.to_string(index=False))
         print(timing.to_string(index=False))
+        print(near_tied.to_string(index=False))
+        print(sensitivity.to_string(index=False))
     print(json.dumps(summary, indent=2))
 
 

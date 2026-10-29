@@ -31,6 +31,8 @@
     "systems": "phase5_systems.csv",
     "separation": "phase5_separation.csv",
     "matched_capacity": "phase5_matched_capacity.csv",
-    "optimizer_timing": "phase5_optimizer_timing.csv"
+    "optimizer_timing": "phase5_optimizer_timing.csv",
+    "near_tied_selection": "phase5_near_tied_selection.csv",
+    "separation_sensitivity": "phase5_separation_sensitivity.csv"
   }
 }

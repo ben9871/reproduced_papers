@@ -287,6 +287,188 @@ def baseline_table():
     yield "E-F baselines", table, RESULTS / "E-F_baselines_baselines_vs_qnn.csv"
 
 
+PHASE5_FAMILIES = {
+    "qubit QNN (E-B)": (
+        "E-B_mechanism",
+        ["data", "scaling", "init", "circuit", "optimizer", "seed"],
+        ["init", "circuit", "optimizer"],
+    ),
+    "classical (E-F)": (
+        "E-F_baselines",
+        ["data", "scaling", "model", "seed"],
+        ["model"],
+    ),
+    "photonic MerLin (E-P, adaptation)": (
+        "E-P_photonic_mechanism",
+        ["data", "scaling", "init", "photons", "depth", "seed"],
+        ["init", "photons", "depth"],
+    ),
+}
+PHASE5_DATASETS = {"rice": "rice-pca", "glass": "glass-lda"}
+
+
+def phase5_split_sizes() -> dict[str, dict[str, int]]:
+    """Validation and test sizes per dataset, read from one E-B run status each."""
+
+    sizes = {}
+    for data in PHASE5_DATASETS:
+        status_path = next(
+            (SWEEPS / "E-B_mechanism" / "runs").glob(f"{data}_minmax_*/run_status.json")
+        )
+        sizes[data] = json.loads(status_path.read_text())["dataset"]["splits"]
+    return sizes
+
+
+def phase5_candidates(name: str, data: str, scaling: str) -> pd.DataFrame:
+    """Seed-aggregated configurations, best validation mean first.
+
+    Exact ties (within 1e-12) break on the configuration fields in
+    alphabetical order, which is the order the reported selection resolves.
+    """
+
+    sweep, fields, config = PHASE5_FAMILIES[name]
+    runs = load_runs(sweep, fields)
+    if "model" in runs:
+        runs["model"] = runs["model"].map(MODEL_NAMES)
+    label = PHASE5_DATASETS[data] if sweep == "E-F_baselines" else data
+    runs = runs[(runs["data"] == label) & (runs["scaling"] == scaling)]
+    table = (
+        runs.groupby(config)
+        .agg(
+            runs=("val_accuracy", "count"),
+            val_mean=("val_accuracy", "mean"),
+            test_mean=("test_accuracy", "mean"),
+            test_sd=("test_accuracy", "std"),
+        )
+        .reset_index()
+    )
+    table["configuration"] = table[config].apply(
+        lambda row: ", ".join(f"{column}={row[column]}" for column in config), axis=1
+    )
+    table["val_rank_key"] = table["val_mean"].round(12)
+    table = table.sort_values(
+        ["val_rank_key", *config], ascending=[False, *[True] * len(config)]
+    )
+    return table.reset_index(drop=True), runs
+
+
+def phase5_tables():
+    sizes = phase5_split_sizes()
+    systems, near_rows, separation_rows, sensitivity_rows, matched_rows = (
+        [],
+        [],
+        [],
+        [],
+        [],
+    )
+    for data in PHASE5_DATASETS:
+        one_val, one_test = 1 / sizes[data]["val"], 1 / sizes[data]["test"]
+        selected, near = {}, {}
+        for scaling in ("minmax", "raw"):
+            for name in PHASE5_FAMILIES:
+                ranking, runs = phase5_candidates(name, data, scaling)
+                best = ranking.iloc[0]
+                systems.append(
+                    {
+                        "data": data,
+                        "scaling": scaling,
+                        "system": name,
+                        "runs_observed": len(runs),
+                        "selected_val_mean": best["val_mean"],
+                        "selected_test_mean": best["test_mean"],
+                        "selected_test_sd": best["test_sd"],
+                        "grid_test_mean": runs["test_accuracy"].mean(),
+                        "grid_test_sd": runs["test_accuracy"].std(),
+                    }
+                )
+                if scaling == "minmax":
+                    selected[name] = best
+                    near[name] = ranking[
+                        ranking["val_mean"] >= best["val_mean"] - one_val - 1e-12
+                    ]
+                    for row in near[name].itertuples():
+                        near_rows.append(
+                            {
+                                "data": data,
+                                "system": name,
+                                "configuration": row.configuration,
+                                "val_mean": row.val_mean,
+                                "test_mean": row.test_mean,
+                                "test_sd": row.test_sd,
+                            }
+                        )
+        names = list(PHASE5_FAMILIES)
+        for index, first in enumerate(names):
+            for second in names[index + 1 :]:
+                a, b = selected[first], selected[second]
+                difference = a["test_mean"] - b["test_mean"]
+                threshold = max(one_test, 2 * max(a["test_sd"], b["test_sd"]))
+                separation_rows.append(
+                    {
+                        "data": data,
+                        "system_a": first,
+                        "system_b": second,
+                        "test_mean_a_minus_b": difference,
+                        "separated": int(abs(difference) > threshold),
+                    }
+                )
+                counts = {"higher_a": 0, "higher_b": 0, "none": 0}
+                for x in near[first].itertuples():
+                    for y in near[second].itertuples():
+                        gap = x.test_mean - y.test_mean
+                        if abs(gap) <= max(one_test, 2 * max(x.test_sd, y.test_sd)):
+                            counts["none"] += 1
+                        else:
+                            counts["higher_a" if gap > 0 else "higher_b"] += 1
+                sensitivity_rows.append(
+                    {
+                        "data": data,
+                        "system_a": first,
+                        "system_b": second,
+                        "combinations": sum(counts.values()),
+                        "separated_a_higher": counts["higher_a"],
+                        "separated_b_higher": counts["higher_b"],
+                        "not_separated": counts["none"],
+                    }
+                )
+        _, classical_runs = phase5_candidates("classical (E-F)", data, "minmax")
+        mlp = classical_runs[classical_runs["model"] == "mlp"]["test_accuracy"]
+        qubit = selected["qubit QNN (E-B)"]
+        matched_rows.append(
+            {
+                "data": data,
+                "qubit_test_mean": qubit["test_mean"],
+                "mlp_test_mean": mlp.mean(),
+                "mlp_minus_qubit": mlp.mean() - qubit["test_mean"],
+                "separated": int(
+                    abs(mlp.mean() - qubit["test_mean"])
+                    > max(one_test, 2 * max(mlp.std(), qubit["test_sd"]))
+                ),
+            }
+        )
+    yield "Phase 5 systems", pd.DataFrame(systems), RESULTS / "phase5_systems.csv"
+    yield (
+        "Phase 5 separation",
+        pd.DataFrame(separation_rows),
+        RESULTS / "phase5_separation.csv",
+    )
+    yield (
+        "Phase 5 matched capacity",
+        pd.DataFrame(matched_rows),
+        RESULTS / "phase5_matched_capacity.csv",
+    )
+    yield (
+        "Phase 5 near-tied selection",
+        pd.DataFrame(near_rows),
+        RESULTS / "phase5_near_tied_selection.csv",
+    )
+    yield (
+        "Phase 5 separation sensitivity",
+        pd.DataFrame(sensitivity_rows),
+        RESULTS / "phase5_separation_sensitivity.csv",
+    )
+
+
 def compare(name, recomputed, reported_path) -> float:
     """Print per-column max |recomputed - reported|; return the overall max."""
 
@@ -301,6 +483,10 @@ def compare(name, recomputed, reported_path) -> float:
             "optimizer",
             "scaling",
             "model",
+            "system",
+            "system_a",
+            "system_b",
+            "configuration",
         )
         if column in recomputed.columns
     ]
@@ -317,8 +503,13 @@ def compare(name, recomputed, reported_path) -> float:
         for column in recomputed.columns
         if column not in keys and f"{column}_reported" in merged
     ]
+    # Reported boolean flags (e.g. ``separated``) compare as 0/1.
     gaps = {
-        column: (merged[column] - merged[f"{column}_reported"]).abs().max()
+        column: (
+            merged[column].astype(float) - merged[f"{column}_reported"].astype(float)
+        )
+        .abs()
+        .max()
         for column in numeric
     }
     worst = max(gaps.values())
@@ -347,6 +538,7 @@ def main() -> None:
         *effects_tables(),
         *grid_tables(released),
         *baseline_table(),
+        *phase5_tables(),
     ):
         worst = max(worst, compare(name, recomputed, reported_path))
     verdict = "MATCH" if worst <= args.tolerance else "MISMATCH"
