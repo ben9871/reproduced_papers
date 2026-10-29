@@ -119,7 +119,7 @@ def plot_stability(stability: dict, extra: Path | None) -> list[Path]:
     axis.set_ylabel("final-epoch test accuracy (%)")
     axis.set_title(
         "Accuracy follows z stability, not z origin (partial RED-tier, 3 seeds)\n"
-        f"Spearman ρ(step, acc) = {stability['spearman_step_vs_test_accuracy']:.2f}, n = {stability["n_runs"]} runs, B0 excluded",
+        f"Spearman ρ(step, acc) = {stability['spearman_step_vs_test_accuracy']:.2f}, n = {stability['n_runs']} runs, B0 excluded",
         fontsize=9,
     )
     paths = _save(figure, "s4_feature_stability.png", extra)
