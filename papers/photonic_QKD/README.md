@@ -68,7 +68,8 @@ Training alternates SPSA updates of θ with Adam epochs on the student. The SPSA
 **Deviations from the paper:**
 - **Simulator:** MerLin replaces the CUDA-Q ORCA simulator.
   - The MerLin setup is `QuantumLayer` over the full Fock space, with threshold detection applied in post-processing.
-  - Code uses only MerLin 0.4.2 public API calls. The runs used a pre-release MerLin build with the same API (`merlinquantum 0.5.0.dev0`).
+  - MerLin version: **`merlinquantum==0.4.2`**, pinned in `requirements.txt`.
+  - The unit tests (65 passed), all smoke configurations and the notebook run on PyPI 0.4.2.
 - **Assumed settings (not reported in the paper):**
   - Phase 3 input: 8 photons in alternating modes, S = 200, EMA β = 0.9.
   - SPSA (a, c): set by predeclared grids, (0.01, 0.2) for photonic and (0.05, 0.2) for the classical surrogate.
@@ -106,13 +107,14 @@ papers/photonic_QKD/
 pip install -r papers/photonic_QKD/requirements.txt
 ```
 
-Each run trains one model. A student needs a finished teacher run on the same dataset, widths and split seed.
+Each run trains one model. A student needs a finished teacher run on the same dataset, widths and split seed. **A relative `--teacher-path` is resolved against `papers/photonic_QKD/`, even when the command is run from the repo root.** Use `outdir/<teacher run>` or an absolute path.
 
 **Smoke** (seconds; code path only):
 
 ```bash
 python implementation.py --paper photonic_QKD --config configs/smoke_teacher.json
-python implementation.py --paper photonic_QKD --config configs/smoke_student.json --teacher-path papers/photonic_QKD/outdir/<teacher run>
+python implementation.py --paper photonic_QKD --config configs/smoke_student.json --teacher-path outdir/<teacher run>
+python implementation.py --paper photonic_QKD --config configs/smoke_student.json --teacher-path models/teacher_mnist_s1_seed0   # committed teacher, no teacher run needed
 ```
 
 **Reduced runs** (30 epochs, as reported here) and **paper-budget runs** (100 epochs):
@@ -180,7 +182,7 @@ It also holds the assumed values listed above. `cli.json` is the authoritative f
 | mixing / native configs without `4ph` | the same arms at 8 photons (GPU-scale; not run to completion) |
 | `smoke_*.json` | tiny infrastructure runs |
 
-Student configs contain `teacher.checkpoint: "<<RESULT_PATH>>"` on purpose, because a student must be paired with the teacher of the same seed. Pass `--teacher-path`; the runtime refuses to start until it is resolved. For a quick MNIST run, use the committed seed-0 teacher: `--teacher-path papers/photonic_QKD/models/teacher_mnist_s1_seed0`. The sweeps pass each seed's S1 teacher automatically.
+Student configs contain `teacher.checkpoint: "<<RESULT_PATH>>"` on purpose, because a student must be paired with the teacher of the same seed. Pass `--teacher-path`; the runtime refuses to start until it is resolved. For a quick MNIST run, use the committed seed-0 teacher: `--teacher-path models/teacher_mnist_s1_seed0` (paper-relative). The sweeps pass each seed's S1 teacher automatically.
 
 **Main flags:**
 - **Paper-specific:** `--task`, `--dataset {mnist,fashion_mnist,cifar10,synthetic}`, `--teacher-path`, `--conditioning`, `--student-variant`, `--shots`, `--ema`, `--theta-dim`, `--theta-init-mode`, `--spsa-a`, `--spsa-c`, `--epochs`, `--batch-size`, `--lr`, `--resume-from`.
@@ -369,7 +371,9 @@ The Fock space grows as C(m + n − 1, n). The exact N arms are tractable only b
 
 - **Budget:** CPU only, MNIST only, 30 epochs and 3 seeds (paper: 100 epochs, 5 seeds). All results are partial RED-tier.
 - **Unreported settings:** SPSA steps, shot budget, input photon pattern and the Fig. 4 configuration are absent from the paper. The values used are assumed or set by predeclared grids.
-- **Simulation only:** no ORCA hardware. The MerLin runs used a pre-release build (`0.5.0.dev0`) with the 0.4.2 public API, and bitwise equality with PyPI 0.4.2 is not verified.
+- **Simulation only:** no ORCA hardware.
+- **MerLin build:** the long sweeps were executed with a development build of MerLin that exposes the identical 0.4.2 API with a faster backend.
+  - Its photonic outputs were checked against PyPI 0.4.2: Fock-state ordering and shot samples are identical, and exact probabilities, features and gradients agree to float64 rounding (≤ 2e-16), at 8 and 4 photons.
 - **Phase 4 photon number:** 4 photons; the 8-photon arms need a GPU.
 - **Not run:** Fashion-MNIST/CIFAR-10, Table 2 / Fig. 2, the full Fig. 4 shot sweep (only S ∈ {25, 200}), EMA variance ratio, robustness. Fashion-MNIST is the most informative next test of claim A, because there the paper reports PQKD 0.56 pp above the teacher.
 

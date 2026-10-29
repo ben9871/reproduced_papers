@@ -29,7 +29,7 @@ Training covered two variants:
 - sampled SPSA, the paper's method;
 - exact autograd through the MerLin probabilities, a simulation-only variant.
 
-The code used only the MerLin 0.4.2 public API. The runs used a pre-release build (`merlinquantum 0.5.0.dev0`) with the same public API. The `measurement/`, `builder/` and `core/` modules cited below are byte-identical between the 0.4.2 wheel and that build.
+The reproduction targets MerLin 0.4.2 (`merlinquantum==0.4.2`); its tests and smoke configurations run on the PyPI release. The `measurement/`, `builder/` and `core/` modules cited below were read in the 0.4.2 wheel.
 
 These items affect any MerLin user who models threshold detectors, reports versions, or trains sampled circuits.
 
