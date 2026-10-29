@@ -372,8 +372,6 @@ The Fock space grows as C(m + n − 1, n). The exact N arms are tractable only b
 - **Budget:** CPU only, MNIST only, 30 epochs and 3 seeds (paper: 100 epochs, 5 seeds). All results are partial RED-tier.
 - **Unreported settings:** SPSA steps, shot budget, input photon pattern and the Fig. 4 configuration are absent from the paper. The values used are assumed or set by predeclared grids.
 - **Simulation only:** no ORCA hardware.
-- **MerLin build:** the long sweeps were executed with a development build of MerLin that exposes the identical 0.4.2 API with a faster backend.
-  - Its photonic outputs were checked against PyPI 0.4.2: Fock-state ordering and shot samples are identical, and exact probabilities, features and gradients agree to float64 rounding (≤ 2e-16), at 8 and 4 photons.
 - **Phase 4 photon number:** 4 photons; the 8-photon arms need a GPU.
 - **Not run:** Fashion-MNIST/CIFAR-10, Table 2 / Fig. 2, the full Fig. 4 shot sweep (only S ∈ {25, 200}), EMA variance ratio, robustness. Fashion-MNIST is the most informative next test of claim A, because there the paper reports PQKD 0.56 pp above the teacher.
 
