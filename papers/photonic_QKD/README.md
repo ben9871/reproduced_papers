@@ -180,7 +180,7 @@ It also holds the assumed values listed above. `cli.json` is the authoritative f
 | mixing / native configs without `4ph` | the same arms at 8 photons (GPU-scale; not run to completion) |
 | `smoke_*.json` | tiny infrastructure runs |
 
-Student configs contain `teacher.checkpoint: "<<RESULT_PATH>>"`. Pass `--teacher-path`; the runtime refuses to start until it is resolved.
+Student configs contain `teacher.checkpoint: "<<RESULT_PATH>>"` on purpose, because a student must be paired with the teacher of the same seed. Pass `--teacher-path`; the runtime refuses to start until it is resolved. For a quick MNIST run, use the committed seed-0 teacher: `--teacher-path papers/photonic_QKD/models/teacher_mnist_s1_seed0`. The sweeps pass each seed's S1 teacher automatically.
 
 **Main flags:**
 - **Paper-specific:** `--task`, `--dataset {mnist,fashion_mnist,cifar10,synthetic}`, `--teacher-path`, `--conditioning`, `--student-variant`, `--shots`, `--ema`, `--theta-dim`, `--theta-init-mode`, `--spsa-a`, `--spsa-c`, `--epochs`, `--batch-size`, `--lr`, `--resume-from`.
