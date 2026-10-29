@@ -29,3 +29,7 @@ torch>=2.2 ; sys_platform != "linux"
 merlinquantum==0.4.1
 # merlinquantum 0.4.1 does not cap Perceval; 1.3.x removes perceval.runtime.session.
 perceval-quandela>=1.2,<1.3
+# Executing notebook.ipynb headlessly (Phase 7).
+nbformat>=5.10
+nbclient>=0.10
+ipykernel>=6.29
